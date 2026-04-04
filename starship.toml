@@ -1,11 +1,11 @@
 format = """
+$env_var\
 $directory\
 $git_branch\
 $git_status\
 $fill\
 $cmd_duration\
 $line_break\
-$env_var_DEVBOX\
 $character"""
 
 [directory]
@@ -26,7 +26,7 @@ min_time = 2000
 format = "[$duration]($style)"
 
 [env_var.DEVBOX]
-format = "[📦 devbox]($style) "
+format = "[📦](yellow) "
 
 [character]
 success_symbol = "[>](green)"
