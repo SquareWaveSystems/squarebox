@@ -139,8 +139,12 @@ COPY --chown=dev:dev setup.sh /home/dev/setup.sh
 COPY --chown=dev:dev setup-checksums.txt /home/dev/setup-checksums.txt
 COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
 
+COPY scripts/devbox-update.sh /usr/local/bin/devbox-update
+RUN chmod +x /usr/local/bin/devbox-update
+
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
-	&& mkdir -p /workspace && chown dev:dev /workspace
+	&& mkdir -p /workspace && chown dev:dev /workspace \
+	&& chown dev:dev /usr/local/bin
 
 USER dev
 

@@ -147,8 +147,28 @@ Volume mounts:
 Update
 ------
 
+There are two ways to update tools, depending on whether you want a quick
+in-place update or a full rebuild.
+
+### Quick update (from inside the container)
+
+The `devbox-update` command checks all GitHub-released tools against latest
+versions and updates them in-place — no rebuild required. Your container state,
+SDKs, and config are preserved.
+
+    devbox-update              # show available updates (dry run)
+    devbox-update --apply      # download and install all updates
+    devbox-update lazygit      # update a single tool
+    devbox-update --list       # list all tools and current versions
+
+Set `GITHUB_TOKEN` to avoid API rate limits.
+
+### Full rebuild (from the host)
+
 Pulls the latest changes, rebuilds the image, and replaces the container.
 Your code in ~/tui-devbox-workspace is safe since it lives on the host.
+Setup selections (AI tool, SDKs, GitHub auth) are persisted in the workspace
+volume and restored automatically.
 
     devbox-update
 
