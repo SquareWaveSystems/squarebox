@@ -1,6 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SETUP_CHECKSUMS="${HOME}/setup-checksums.txt"
+
+# Verify SHA256 checksum of a downloaded file against the checksums file.
+# Usage: verify_checksum <file> <artifact-name>
+verify_checksum() {
+	local file="$1" name="$2"
+	local expected actual
+	expected=$(grep -E "^[0-9a-f]{64}  ${name}$" "$SETUP_CHECKSUMS" | awk '{print $1}')
+	if [ -z "$expected" ]; then
+		echo "ERROR: No checksum entry found for '${name}' in ${SETUP_CHECKSUMS}" >&2
+		return 1
+	fi
+	actual=$(sha256sum "$file" | awk '{print $1}')
+	if [ "$actual" != "$expected" ]; then
+		echo "CHECKSUM MISMATCH for ${name}" >&2
+		echo "  expected: ${expected}" >&2
+		echo "  actual:   ${actual}" >&2
+		return 1
+	fi
+}
+
 echo "=== TUI Devbox Setup ==="
 echo
 
@@ -59,15 +80,23 @@ fi
 
 if [ "$ai_choice" = "claude" ] || [ "$ai_choice" = "both" ]; then
 	echo "Installing Claude Code..."
+	# Trust boundary: the Claude Code install script manages its own binary
+	# fetching and verification. We rely on HTTPS for script integrity.
 	curl -fsSL https://claude.ai/install.sh | bash
 fi
 
+# Pinned versions — update via: scripts/update-versions.sh
+OPENCODE_VERSION="1.3.13"
+
 if [ "$ai_choice" = "opencode" ] || [ "$ai_choice" = "both" ]; then
-	echo "Installing OpenCode..."
+	echo "Installing OpenCode v${OPENCODE_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then OCARCH="arm64"; else OCARCH="x64"; fi
-	curl -fsSL "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-${OCARCH}.tar.gz" | tar xz -C /tmp
+	curl -fsSLo /tmp/opencode.tar.gz "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OCARCH}.tar.gz"
+	verify_checksum /tmp/opencode.tar.gz "opencode-linux-${OCARCH}.tar.gz"
+	tar xzf /tmp/opencode.tar.gz -C /tmp
 	find /tmp -name 'opencode' -type f -executable -exec mv {} ~/.local/bin/opencode \;
+	rm -f /tmp/opencode.tar.gz
 fi
 
 # Set aliases based on selection
@@ -117,14 +146,20 @@ fi
 # SDK path setup file
 > ~/.devbox-sdk-paths
 
+# Pinned versions — update via: scripts/update-versions.sh
+NVM_VERSION="0.40.3"
+GO_VERSION="go1.26.1"
+
 install_node() {
-	echo "Installing Node.js (via nvm)..."
-	curl -fsSo /tmp/nvm-install.sh https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh
+	echo "Installing Node.js (via nvm v${NVM_VERSION})..."
+	curl -fsSo /tmp/nvm-install.sh "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
+	verify_checksum /tmp/nvm-install.sh "nvm-install-v${NVM_VERSION}.sh"
 	bash /tmp/nvm-install.sh
 	rm /tmp/nvm-install.sh
 	export NVM_DIR="$HOME/.nvm"
 	# shellcheck source=/dev/null
 	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+	# Node.js binary verification is handled by nvm
 	nvm install --lts
 	cat <<'PATHS' >> ~/.devbox-sdk-paths
 export NVM_DIR="$HOME/.nvm"
@@ -134,6 +169,8 @@ PATHS
 
 install_python() {
 	echo "Installing Python (via uv)..."
+	# Trust boundary: the uv install script manages its own binary fetching
+	# and verification. We rely on HTTPS for script integrity.
 	curl -fsSL https://astral.sh/uv/install.sh | bash
 	cat <<'PATHS' >> ~/.devbox-sdk-paths
 export PATH="$HOME/.local/bin:$PATH"
@@ -141,11 +178,13 @@ PATHS
 }
 
 install_go() {
-	echo "Installing Go..."
+	echo "Installing Go ${GO_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then GOARCH="arm64"; else GOARCH="amd64"; fi
-	GO_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1)
-	curl -fsSL "https://go.dev/dl/${GO_VERSION}.linux-${GOARCH}.tar.gz" | tar xz -C ~/.local
+	curl -fsSLo /tmp/go.tar.gz "https://go.dev/dl/${GO_VERSION}.linux-${GOARCH}.tar.gz"
+	verify_checksum /tmp/go.tar.gz "${GO_VERSION}.linux-${GOARCH}.tar.gz"
+	tar xzf /tmp/go.tar.gz -C ~/.local
+	rm /tmp/go.tar.gz
 	cat <<'PATHS' >> ~/.devbox-sdk-paths
 export GOROOT="$HOME/.local/go"
 export GOPATH="$HOME/go"
@@ -155,6 +194,8 @@ PATHS
 
 install_dotnet() {
 	echo "Installing .NET..."
+	# Trust boundary: the .NET install script manages its own binary fetching
+	# and verification. We rely on HTTPS for script integrity.
 	curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS
 	cat <<'PATHS' >> ~/.devbox-sdk-paths
 export DOTNET_ROOT="$HOME/.dotnet"

@@ -20,7 +20,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 2. External APT Repos (GitHub CLI, Eza) + Binary Tools
 
-ARG DELTA_VERSION=0.18.2
+# Pinned tool versions — update via: scripts/update-versions.sh
+ARG DELTA_VERSION=0.19.2
+ARG YQ_VERSION=4.52.5
+ARG LAZYGIT_VERSION=0.60.0
+ARG XH_VERSION=0.25.3
+ARG YAZI_VERSION=26.1.22
+ARG STARSHIP_VERSION=1.24.2
+ARG GH_DASH_VERSION=4.23.2
+ARG GLOW_VERSION=2.1.1
+ARG FRESH_VERSION=0.2.21
+ARG EDIT_VERSION=1.2.1
+ARG EDIT_ASSET_VERSION=1.2.0
+
+# Checksum verification infrastructure
+COPY checksums.txt /tmp/checksums.txt
+COPY scripts/verify-checksum.sh /usr/local/bin/verify-checksum
+RUN chmod +x /usr/local/bin/verify-checksum
 
 RUN mkdir -p -m 755 /etc/apt/keyrings \
 	&& ARCH=$(dpkg --print-architecture) \
@@ -40,11 +56,14 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 	&& rm -rf /var/lib/apt/lists/* \
 	# Purge build-only dependency
 	&& apt-get purge -y --auto-remove gnupg \
-	# Delta & Yq (arch-aware debs)
+	# Delta (arch-aware deb)
 	&& curl -fsSLo /tmp/delta.deb "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_${ARCH}.deb" \
+	&& verify-checksum /tmp/delta.deb "git-delta_${DELTA_VERSION}_${ARCH}.deb" \
 	&& dpkg -i /tmp/delta.deb \
 	&& rm /tmp/delta.deb \
-	&& curl -fsSLo /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_${ARCH}" \
+	# Yq (arch-aware binary)
+	&& curl -fsSLo /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_${ARCH}" \
+	&& verify-checksum /usr/local/bin/yq "yq_linux_${ARCH}" \
 	&& chmod +x /usr/local/bin/yq
 
 # 3. Binary Tools (arch-aware, single layer)
@@ -53,41 +72,54 @@ RUN apt-get update && apt-get install -y --no-install-recommends zstd && rm -rf 
 	&& ARCH=$(uname -m) \
 	&& if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; LARCH="arm64"; GOARCH="arm64"; else ZARCH="x86_64"; LARCH="x86_64"; GOARCH="amd64"; fi \
 	# Lazygit
-	&& LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
-	&& curl -fsSLo /tmp/lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_${LARCH}.tar.gz" \
+	&& curl -fsSLo /tmp/lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_${LARCH}.tar.gz" \
+	&& verify-checksum /tmp/lazygit.tar.gz "lazygit_${LAZYGIT_VERSION}_Linux_${LARCH}.tar.gz" \
 	&& tar xf /tmp/lazygit.tar.gz -C /tmp lazygit \
 	&& install /tmp/lazygit /usr/local/bin \
 	&& rm /tmp/lazygit /tmp/lazygit.tar.gz \
 	# xh
-	&& XH_VERSION=$(curl -s "https://api.github.com/repos/ducaale/xh/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
-	&& curl -fsSL "https://github.com/ducaale/xh/releases/download/v${XH_VERSION}/xh-v${XH_VERSION}-${ZARCH}-unknown-linux-musl.tar.gz" | tar xz --strip-components=1 -C /usr/local/bin "xh-v${XH_VERSION}-${ZARCH}-unknown-linux-musl/xh" \
+	&& curl -fsSLo /tmp/xh.tar.gz "https://github.com/ducaale/xh/releases/download/v${XH_VERSION}/xh-v${XH_VERSION}-${ZARCH}-unknown-linux-musl.tar.gz" \
+	&& verify-checksum /tmp/xh.tar.gz "xh-v${XH_VERSION}-${ZARCH}-unknown-linux-musl.tar.gz" \
+	&& tar xzf /tmp/xh.tar.gz --strip-components=1 -C /usr/local/bin "xh-v${XH_VERSION}-${ZARCH}-unknown-linux-musl/xh" \
+	&& rm /tmp/xh.tar.gz \
 	# Yazi
-	&& curl -fsSLo /tmp/yazi.zip "https://github.com/sxyazi/yazi/releases/latest/download/yazi-${ZARCH}-unknown-linux-musl.zip" \
+	&& curl -fsSLo /tmp/yazi.zip "https://github.com/sxyazi/yazi/releases/download/v${YAZI_VERSION}/yazi-${ZARCH}-unknown-linux-musl.zip" \
+	&& verify-checksum /tmp/yazi.zip "yazi-${ZARCH}-unknown-linux-musl.zip" \
 	&& unzip -q /tmp/yazi.zip -d /tmp \
 	&& mv /tmp/yazi-${ZARCH}-unknown-linux-musl/yazi /usr/local/bin/ \
 	&& mv /tmp/yazi-${ZARCH}-unknown-linux-musl/ya /usr/local/bin/ \
 	&& rm -rf /tmp/yazi* \
-	# Starship
-	&& curl -fsSL https://starship.rs/install.sh | sh -s -- -y -b /usr/local/bin \
+	# Starship (direct binary instead of curl|sh installer)
+	&& curl -fsSLo /tmp/starship.tar.gz "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-${ZARCH}-unknown-linux-musl.tar.gz" \
+	&& verify-checksum /tmp/starship.tar.gz "starship-${ZARCH}-unknown-linux-musl.tar.gz" \
+	&& tar xf /tmp/starship.tar.gz -C /usr/local/bin starship \
+	&& rm /tmp/starship.tar.gz \
 	# gh-dash
-	&& GH_DASH_VERSION=$(curl -s "https://api.github.com/repos/dlvhdr/gh-dash/releases/latest" | grep -Po '"tag_name": "\K[^"]*') \
-	&& curl -fsSLo /usr/local/bin/gh-dash "https://github.com/dlvhdr/gh-dash/releases/download/${GH_DASH_VERSION}/gh-dash_${GH_DASH_VERSION}_linux-${GOARCH}" \
+	&& curl -fsSLo /usr/local/bin/gh-dash "https://github.com/dlvhdr/gh-dash/releases/download/v${GH_DASH_VERSION}/gh-dash_v${GH_DASH_VERSION}_linux-${GOARCH}" \
+	&& verify-checksum /usr/local/bin/gh-dash "gh-dash_v${GH_DASH_VERSION}_linux-${GOARCH}" \
 	&& chmod +x /usr/local/bin/gh-dash \
 	# Glow
-	&& GLOW_VERSION=$(curl -s "https://api.github.com/repos/charmbracelet/glow/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
-	&& curl -fsSL "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_${LARCH}.tar.gz" | tar xz -C /tmp \
+	&& curl -fsSLo /tmp/glow.tar.gz "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_${LARCH}.tar.gz" \
+	&& verify-checksum /tmp/glow.tar.gz "glow_${GLOW_VERSION}_Linux_${LARCH}.tar.gz" \
+	&& tar xzf /tmp/glow.tar.gz -C /tmp \
 	&& find /tmp -name 'glow' -type f -executable -exec mv {} /usr/local/bin/glow \; \
+	&& rm -f /tmp/glow.tar.gz \
 	# Fresh
-	&& curl -fsSLo /tmp/fresh.tar.gz "https://github.com/sinelaw/fresh/releases/latest/download/fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz" \
+	&& curl -fsSLo /tmp/fresh.tar.gz "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz" \
+	&& verify-checksum /tmp/fresh.tar.gz "fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz" \
 	&& tar xf /tmp/fresh.tar.gz -C /tmp \
 	&& find /tmp -name 'fresh' -type f -executable -exec mv {} /usr/local/bin/fresh \; \
 	&& rm -rf /tmp/fresh* \
-	# Edit (Microsoft) - asset filename version may differ from tag, so resolve URL via API
-	&& EDIT_URL=$(curl -s "https://api.github.com/repos/microsoft/edit/releases/latest" | grep -Po '"browser_download_url": "\K[^"]*'"${ZARCH}-linux-gnu"'[^"]*') \
-	&& curl -fsSL "$EDIT_URL" | zstd -d | tar x -C /tmp \
+	# Edit (asset version may differ from tag — pinned separately)
+	&& curl -fsSLo /tmp/edit.tar.zst "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst" \
+	&& verify-checksum /tmp/edit.tar.zst "edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst" \
+	&& zstd -d /tmp/edit.tar.zst -o /tmp/edit.tar \
+	&& tar xf /tmp/edit.tar -C /tmp \
 	&& find /tmp -name 'edit' -type f -executable -exec mv {} /usr/local/bin/edit \; \
-	# Purge build-only dependency
-	&& apt-get purge -y --auto-remove zstd && rm -rf /var/lib/apt/lists/*
+	&& rm -f /tmp/edit.tar.zst /tmp/edit.tar \
+	# Purge build-only dependency & clean up checksums
+	&& apt-get purge -y --auto-remove zstd && rm -rf /var/lib/apt/lists/* \
+	&& rm -f /tmp/checksums.txt
 
 # 4. User Setup
 
@@ -104,6 +136,7 @@ RUN printf '[core]\n\tpager = delta\n[interactive]\n\tdiffFilter = delta --color
 # 6. Setup script
 
 COPY --chown=dev:dev setup.sh /home/dev/setup.sh
+COPY --chown=dev:dev setup-checksums.txt /home/dev/setup-checksums.txt
 COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
