@@ -46,6 +46,13 @@ if [ "$ALIASES_ADDED" = true ]; then
 	echo "Added devbox aliases to $SHELL_RC — restart your shell or run: source $SHELL_RC"
 fi
 
+# Ensure starship config exists
+if [ ! -f ~/.config/starship.toml ]; then
+	mkdir -p ~/.config
+	cp "$INSTALL_DIR/starship.toml" ~/.config/starship.toml
+	echo "Created default starship config at ~/.config/starship.toml"
+fi
+
 # Create and enter container
 mkdir -p ~/.config/git ~/tui-devbox-workspace
 
@@ -54,6 +61,7 @@ docker create -it --name "$CONTAINER_NAME" \
 	-v ~/tui-devbox-workspace:/workspace \
 	-v ~/.ssh:/home/dev/.ssh:ro \
 	-v ~/.config/git:/home/dev/.config/git \
+	-v ~/.config/starship.toml:/home/dev/.config/starship.toml:ro \
 	"$IMAGE_NAME" > /dev/null
 
 if [ -t 0 ]; then

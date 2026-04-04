@@ -91,7 +91,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends zstd && rm -rf 
 
 # 4. User Setup
 
-RUN useradd -m -s /bin/bash dev \
+RUN userdel -r ubuntu 2>/dev/null || true \
+	&& useradd -m -s /bin/bash -u 1000 dev \
 	&& mkdir -p /home/dev/.claude /home/dev/.config/lazygit \
 	&& chown -R dev:dev /home/dev
 
@@ -104,7 +105,8 @@ RUN printf '[core]\n\tpager = delta\n[interactive]\n\tdiffFilter = delta --color
 
 COPY --chown=dev:dev setup.sh /home/dev/setup.sh
 
-RUN chown -R dev:dev /home/dev/.config /home/dev/.claude
+RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
+	&& mkdir -p /workspace && chown dev:dev /workspace
 
 USER dev
 

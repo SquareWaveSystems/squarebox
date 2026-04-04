@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== TUI Devbox First-Run Setup ==="
+echo "=== TUI Devbox Setup ==="
 echo
 
 # Git identity
@@ -15,11 +15,23 @@ if [ -z "$(git config --global user.email 2>/dev/null)" ]; then
 	git config --global user.email "$email"
 fi
 
+# Restore GitHub CLI config from persistent storage if available
+GH_PERSIST="/workspace/.devbox/gh"
+if [ -d "$GH_PERSIST" ] && [ ! -d ~/.config/gh ]; then
+	mkdir -p ~/.config
+	cp -r "$GH_PERSIST" ~/.config/gh
+fi
+
 # GitHub CLI
 if ! gh auth status &>/dev/null; then
 	echo
 	echo "Logging into GitHub..."
-	gh auth login
+	BROWSER=echo gh auth login
+	# Persist gh config for future rebuilds
+	mkdir -p "$GH_PERSIST"
+	cp -r ~/.config/gh/* "$GH_PERSIST"/
+else
+	echo "GitHub CLI: already authenticated"
 fi
 
 # AI coding assistant
