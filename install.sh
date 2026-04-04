@@ -26,13 +26,24 @@ if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
 	docker rm "$CONTAINER_NAME"
 fi
 
-# Add shell alias
+# Add shell aliases
 SHELL_RC="${HOME}/.bashrc"
 [ -f "${HOME}/.zshrc" ] && SHELL_RC="${HOME}/.zshrc"
 
+ALIASES_ADDED=false
+
 if ! grep -q 'alias devbox=' "$SHELL_RC" 2>/dev/null; then
 	echo "alias devbox='docker start -ai devbox'" >> "$SHELL_RC"
-	echo "Added 'devbox' alias to $SHELL_RC — restart your shell or run: source $SHELL_RC"
+	ALIASES_ADDED=true
+fi
+
+if ! grep -q 'alias devbox-update=' "$SHELL_RC" 2>/dev/null; then
+	echo "alias devbox-update='~/tui-devbox/install.sh'" >> "$SHELL_RC"
+	ALIASES_ADDED=true
+fi
+
+if [ "$ALIASES_ADDED" = true ]; then
+	echo "Added devbox aliases to $SHELL_RC — restart your shell or run: source $SHELL_RC"
 fi
 
 # Create and enter container

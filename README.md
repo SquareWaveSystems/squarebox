@@ -110,18 +110,14 @@ Volume mounts:
 - ~/.ssh -> /home/dev/.ssh (read-only): SSH keys for git
 - ~/.config/git -> /home/dev/.config/git: shared git config
 
-Nuke and rebuild
-----------------
+Update
+------
 
-Destroys the container and rebuilds from scratch. Your code in ~/tui-devbox-workspace is safe
-since it lives on the host.
+Pulls the latest changes, rebuilds the image, and replaces the container.
+Your code in ~/tui-devbox-workspace is safe since it lives on the host.
 
-    docker stop devbox 2>/dev/null
-    docker rm devbox
-    cd ~/tui-devbox
-    docker build -t devbox .
-    docker run -it --name devbox \
-      -v ~/tui-devbox-workspace:/workspace \
-      -v ~/.ssh:/home/dev/.ssh:ro \
-      -v ~/.config/git:/home/dev/.config/git \
-      devbox
+    devbox-update
+
+Or equivalently, re-run the install script:
+
+    ~/tui-devbox/install.sh
