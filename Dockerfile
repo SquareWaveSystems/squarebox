@@ -77,7 +77,7 @@ RUN ARCH=$(uname -m) \
 	# Glow
 	&& GLOW_VERSION=$(curl -s "https://api.github.com/repos/charmbracelet/glow/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
 	&& curl -fsSL "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_${LARCH}.tar.gz" | tar xz -C /tmp \
-	&& mv /tmp/glow /usr/local/bin/ \
+	&& find /tmp -name 'glow' -type f -executable -exec mv {} /usr/local/bin/glow \; \
 	# Fresh
 	&& curl -fsSLo /tmp/fresh.tar.gz "https://github.com/sinelaw/fresh/releases/latest/download/fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz" \
 	&& tar xf /tmp/fresh.tar.gz -C /tmp \
@@ -86,10 +86,10 @@ RUN ARCH=$(uname -m) \
 	# Edit (Microsoft)
 	&& EDIT_VERSION=$(curl -s "https://api.github.com/repos/microsoft/edit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
 	&& curl -fsSL "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/edit-${EDIT_VERSION}-${ZARCH}-linux-gnu.tar.zst" | zstd -d | tar x -C /tmp \
-	&& mv /tmp/edit /usr/local/bin/ \
+	&& find /tmp -name 'edit' -type f -executable -exec mv {} /usr/local/bin/edit \; \
 	# OpenCode
 	&& curl -fsSL "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-${OCARCH}.tar.gz" | tar xz -C /tmp \
-	&& mv /tmp/opencode /usr/local/bin/
+	&& find /tmp -name 'opencode' -type f -executable -exec mv {} /usr/local/bin/opencode \;
 
 # 4. User Setup
 
