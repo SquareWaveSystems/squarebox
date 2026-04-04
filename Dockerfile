@@ -103,9 +103,8 @@ RUN useradd -m -s /bin/bash dev \
 RUN printf '[core]\n\tpager = delta\n[interactive]\n\tdiffFilter = delta --color-only\n[delta]\n\tnavigate = true\n\tdark = true\n[merge]\n\tconflictstyle = zdiff3\n' > /etc/gitconfig \
 	&& printf 'git:\n  paging:\n    colorArg: always\n    pager: delta --dark --paging=never\n' > /home/dev/.config/lazygit/config.yml
 
-# 6. Claude Code Global CLAUDE.md (optional)
+# 6. Setup script
 
-COPY --chown=dev:dev CLAUDE.md* /home/dev/.claude/
 COPY --chown=dev:dev setup.sh /home/dev/setup.sh
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude
