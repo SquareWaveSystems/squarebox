@@ -5,7 +5,7 @@ $git_status\
 $fill\
 $cmd_duration\
 $line_break\
-$container\
+$env_var_DEVBOX\
 $character"""
 
 [directory]
@@ -25,8 +25,8 @@ symbol = " "
 min_time = 2000
 format = "[$duration]($style)"
 
-[container]
-format = "[$symbol]($style) "
+[env_var.DEVBOX]
+format = "[📦 devbox]($style) "
 
 [character]
 success_symbol = "[>](green)"

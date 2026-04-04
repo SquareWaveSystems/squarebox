@@ -104,6 +104,7 @@ RUN printf '[core]\n\tpager = delta\n[interactive]\n\tdiffFilter = delta --color
 # 6. Setup script
 
 COPY --chown=dev:dev setup.sh /home/dev/setup.sh
+COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 	&& mkdir -p /workspace && chown dev:dev /workspace
@@ -111,6 +112,7 @@ RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 USER dev
 
 ENV HOME=/home/dev
+ENV DEVBOX=1
 
 # 7. Shell Config
 
