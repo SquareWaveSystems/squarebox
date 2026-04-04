@@ -85,9 +85,11 @@ RUN ARCH=$(uname -m) \
 	&& rm -rf /tmp/fresh* \
 	# Edit (Microsoft)
 	&& EDIT_VERSION=$(curl -s "https://api.github.com/repos/microsoft/edit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
-	&& curl -fsSL "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/edit-${EDIT_VERSION}-${ZARCH}-linux-gnu.tar.zst" | zstd -d | tar x -C /usr/local/bin edit \
+	&& curl -fsSL "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/edit-${EDIT_VERSION}-${ZARCH}-linux-gnu.tar.zst" | zstd -d | tar x -C /tmp \
+	&& mv /tmp/edit /usr/local/bin/ \
 	# OpenCode
-	&& curl -fsSL "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-${OCARCH}.tar.gz" | tar xz -C /usr/local/bin
+	&& curl -fsSL "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-${OCARCH}.tar.gz" | tar xz -C /tmp \
+	&& mv /tmp/opencode /usr/local/bin/
 
 # 4. User Setup
 
