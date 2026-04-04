@@ -54,6 +54,7 @@ TUI Tools
 * `glow` - Markdown renderer/pager for the terminal
 * `fresh` - VS Code-like terminal text editor with LSP, file explorer, fuzzy finder
 * `edit` - Microsoft's lightweight terminal text editor
+* `opencode` - Open-source AI coding agent TUI (supports 75+ models)
 
 Recommended Workflows
 ---------------------

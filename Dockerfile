@@ -5,7 +5,6 @@ FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
 	git \
 	curl \
-	wget \
 	unzip \
 	jq \
 	zstd \
@@ -31,27 +30,29 @@ ARG DELTA_VERSION=0.18.2
 RUN mkdir -p -m 755 /etc/apt/keyrings \
 	&& ARCH=$(dpkg --print-architecture) \
 	# GitHub CLI
-	&& wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+	&& curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
 	&& chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
 	&& echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
 	# Eza
-	&& wget -qO- https://raw.githubusercontent.com/eza-community/eza/main/deb.asc | gpg --dearmor -o /etc/apt/keyrings/gierens.gpg \
+	&& curl -fsSL https://raw.githubusercontent.com/eza-community/eza/main/deb.asc | gpg --dearmor -o /etc/apt/keyrings/gierens.gpg \
 	&& echo "deb [signed-by=/etc/apt/keyrings/gierens.gpg] http://deb.gierens.de stable main" | tee /etc/apt/sources.list.d/gierens.list \
 	# Install from repos
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends gh eza \
 	&& rm -rf /var/lib/apt/lists/* \
+	# Purge build-only dependency
+	&& apt-get purge -y --auto-remove gnupg \
 	# Delta & Yq (arch-aware debs)
-	&& wget -q "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_${ARCH}.deb" \
-	&& dpkg -i git-delta_${DELTA_VERSION}_${ARCH}.deb \
-	&& rm git-delta_${DELTA_VERSION}_${ARCH}.deb \
-	&& wget -q "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_${ARCH}" -O /usr/local/bin/yq \
+	&& curl -fsSLo /tmp/delta.deb "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_${ARCH}.deb" \
+	&& dpkg -i /tmp/delta.deb \
+	&& rm /tmp/delta.deb \
+	&& curl -fsSLo /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_${ARCH}" \
 	&& chmod +x /usr/local/bin/yq
 
 # 3. Binary Tools (arch-aware, single layer)
 
 RUN ARCH=$(uname -m) \
-	&& if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; LARCH="arm64"; GOARCH="arm64"; else ZARCH="x86_64"; LARCH="x86_64"; GOARCH="amd64"; fi \
+	&& if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; LARCH="arm64"; GOARCH="arm64"; OCARCH="arm64"; else ZARCH="x86_64"; LARCH="x86_64"; GOARCH="amd64"; OCARCH="x64"; fi \
 	# Lazygit
 	&& LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
 	&& curl -fsSLo /tmp/lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_${LARCH}.tar.gz" \
@@ -83,7 +84,9 @@ RUN ARCH=$(uname -m) \
 	&& rm -rf /tmp/fresh* \
 	# Edit (Microsoft)
 	&& EDIT_VERSION=$(curl -s "https://api.github.com/repos/microsoft/edit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
-	&& curl -fsSL "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/edit-${EDIT_VERSION}-${ZARCH}-linux-gnu.tar.zst" | zstd -d | tar x -C /usr/local/bin edit
+	&& curl -fsSL "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/edit-${EDIT_VERSION}-${ZARCH}-linux-gnu.tar.zst" | zstd -d | tar x -C /usr/local/bin edit \
+	# OpenCode
+	&& curl -fsSL "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-${OCARCH}.tar.gz" | tar xz -C /usr/local/bin
 
 # 4. User Setup
 
@@ -105,8 +108,7 @@ RUN cat <<'EOFGIT' > /etc/gitconfig
 [merge]
 	conflictstyle = zdiff3
 EOFGIT
-
-RUN cat <<'EOFCFG' > /home/dev/.config/lazygit/config.yml
+cat <<'EOFCFG' > /home/dev/.config/lazygit/config.yml
 git:
   paging:
     colorArg: always
@@ -145,15 +147,5 @@ if [ ! -f ~/.devbox-setup-done ]; then
 	~/setup.sh && touch ~/.devbox-setup-done
 fi
 EOFRC
-
-# 9. Cleanup (final layer optimization)
-
-USER root
-
-RUN apt-get clean \
-	&& rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-	&& rm -rf /usr/share/doc /usr/share/man /usr/share/info
-
-USER dev
 
 WORKDIR /workspace
