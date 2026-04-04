@@ -39,7 +39,15 @@ Items are ordered by priority within each section. Sections are ordered by prior
 - [ ] Test SDK installation flow end-to-end
 - [ ] Test behavior when GitHub API is rate-limited
 
-## P4 — TBD / Minor
+## P4 — Features & Polish
+
+- [ ] **Add tmux** — preconfigured terminal multiplexer with a sensible default layout (editor, terminal, lazygit panes) and keybindings
+- [ ] **Custom colour theme** — ship a unified terminal colour palette (e.g. Catppuccin or Tokyo Night) so bat, delta, fzf, eza, starship, and tmux all look coordinated out of the box
+- [ ] **Dotfile portability** — let users mount or bootstrap their own dotfiles (starship.toml, tmux.conf, aliases, etc.) via a `~/.devbox/` convention, with sensible merge/override behaviour against the defaults
+- [ ] **Versioned releases with changelogs** — publish GitHub Releases with semantic version tags and changelogs so users can pin to a known-good version and see what changed
+- [ ] **Animated GIF demo** — create a terminal recording (VHS or asciinema) showcasing the tools and workflow for the README
+
+## P5 — TBD / Minor
 
 - [x] Add a `.dockerignore` to exclude `.git/` and other unnecessary context from Docker builds
 - [ ] Support multiple concurrent container instances
