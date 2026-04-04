@@ -5,7 +5,7 @@ Items are ordered by priority within each section. Sections are ordered by prior
 ## P0 — Security (fix first)
 
 - [x] **Pin all binary versions and add SHA256 checksum verification** for every download in Dockerfile and setup.sh
-- [ ] **Audit and document the trust model for `curl | bash` install path** — users piping install.sh into their shell need to understand what it does; mitigate MITM and compromised-repo risks
+- [x] **Audit and document the trust model for `curl | bash` install path** — users piping install.sh into their shell need to understand what it does; mitigate MITM and compromised-repo risks
 
 ## P1 — Reliability (fix next)
 
@@ -42,6 +42,4 @@ Items are ordered by priority within each section. Sections are ordered by prior
 ## P4 — TBD / Minor
 
 - [x] Add a `.dockerignore` to exclude `.git/` and other unnecessary context from Docker builds
-- [ ] Make container name configurable (currently hardcoded as `devbox` everywhere)
-- [ ] Add mechanism to update tools inside a running container without full rebuild
 - [ ] Support multiple concurrent container instances

@@ -120,18 +120,12 @@ Security
 --------
 
 All binary tools are pinned to specific versions and verified against SHA256
-checksums at build time. If a downloaded binary doesn't match its expected
-checksum, the build fails immediately with a clear error message. This protects
-against compromised releases and man-in-the-middle attacks.
+checksums at build time. Third-party install scripts (Claude Code, uv, .NET)
+manage their own binary verification.
 
-Checksums are maintained in `checksums.txt` (Dockerfile tools) and
-`setup-checksums.txt` (setup.sh tools), covering both x86_64 and aarch64
-architectures. To update all tool versions and recompute checksums:
-
-    ./scripts/update-versions.sh
-
-Third-party install scripts (Claude Code, uv, .NET) manage their own binary
-verification — see comments in `setup.sh` for trust boundary details.
+For the full trust model — what `install.sh` does on your machine, how each
+layer is verified, and how to inspect the script before running it — see
+[SECURITY.md](SECURITY.md).
 
 How it works
 ------------
