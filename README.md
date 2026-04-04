@@ -116,6 +116,23 @@ is never lost even if the container is deleted.
 The install script also adds a `devbox` alias to your shell, so after the first
 run you can just type `devbox` to jump back in.
 
+Security
+--------
+
+All binary tools are pinned to specific versions and verified against SHA256
+checksums at build time. If a downloaded binary doesn't match its expected
+checksum, the build fails immediately with a clear error message. This protects
+against compromised releases and man-in-the-middle attacks.
+
+Checksums are maintained in `checksums.txt` (Dockerfile tools) and
+`setup-checksums.txt` (setup.sh tools), covering both x86_64 and aarch64
+architectures. To update all tool versions and recompute checksums:
+
+    ./scripts/update-versions.sh
+
+Third-party install scripts (Claude Code, uv, .NET) manage their own binary
+verification — see comments in `setup.sh` for trust boundary details.
+
 How it works
 ------------
 
