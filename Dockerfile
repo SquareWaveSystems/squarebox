@@ -76,7 +76,8 @@ RUN ARCH=$(uname -m) \
 	&& chmod +x /usr/local/bin/gh-dash \
 	# Glow
 	&& GLOW_VERSION=$(curl -s "https://api.github.com/repos/charmbracelet/glow/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
-	&& curl -fsSL "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_${LARCH}.tar.gz" | tar xz -C /usr/local/bin glow \
+	&& curl -fsSL "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_${LARCH}.tar.gz" | tar xz -C /tmp \
+	&& mv /tmp/glow /usr/local/bin/ \
 	# Fresh
 	&& curl -fsSLo /tmp/fresh.tar.gz "https://github.com/sinelaw/fresh/releases/latest/download/fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz" \
 	&& tar xf /tmp/fresh.tar.gz -C /tmp \
