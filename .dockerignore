@@ -1,0 +1,12 @@
+.git
+.github
+.claude
+.gitignore
+.dockerignore
+README.md
+CLAUDE.md
+TASKS.md
+*.swp
+*.swo
+*~
+.DS_Store
