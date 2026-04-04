@@ -1,0 +1,25 @@
+{
+  "name": "TUI Devbox",
+  "build": {
+    "context": "..",
+    "dockerfile": "../Dockerfile"
+  },
+  "workspaceFolder": "/workspace",
+  "remoteUser": "dev",
+  "containerEnv": {
+    "DEVCONTAINER": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "mhutchie.git-graph",
+        "eamodio.gitlens",
+        "timonwong.shellcheck",
+        "foxundermoon.shell-format"
+      ]
+    }
+  }
+}

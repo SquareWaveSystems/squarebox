@@ -178,7 +178,11 @@ export EDITOR='edit'
 export PATH="$HOME/.local/bin:$PATH"
 # First-run setup
 if [ ! -f ~/.devbox-setup-done ]; then
-	~/setup.sh && touch ~/.devbox-setup-done
+	if [ -n "${DEVCONTAINER:-}" ]; then
+		touch ~/.devbox-setup-done
+	else
+		~/setup.sh && touch ~/.devbox-setup-done
+	fi
 fi
 EOFRC
 

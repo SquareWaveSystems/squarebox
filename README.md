@@ -86,6 +86,17 @@ This clones the repo, builds the Docker image, and drops you into the container.
 On first login, a setup script runs automatically to configure git, GitHub CLI,
 your choice of AI coding assistant, and language SDKs.
 
+### Devcontainer / Codespaces
+
+Open this repo in VS Code with the
+[Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers),
+or launch it in [GitHub Codespaces](https://github.com/features/codespaces).
+The included `.devcontainer/devcontainer.json` builds the full TUI Devbox image
+automatically.
+
+The interactive first-run setup is skipped in devcontainer mode. To configure
+AI tools or SDKs, run `~/setup.sh` from the integrated terminal.
+
 SDKs
 ----
 
