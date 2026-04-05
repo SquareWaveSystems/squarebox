@@ -21,6 +21,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Verify image loaded
+        run: docker image inspect devbox:test > /dev/null
+
       - name: Image size breakdown
         run: |
           docker run --rm devbox:test bash -c '
