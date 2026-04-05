@@ -29,19 +29,18 @@ your choice of AI coding assistant, and language SDKs.
 Start
 -----
 
-    docker start -ai squarebox
-
-When you exit the shell, the container stops but is not removed. All changes inside
-the container (installed packages, config files, shell history) persist between
-sessions. Think of it as a VM that suspends on exit and resumes on start.
-
-Your code lives on the host at ~/squarebox-workspace and is mounted into the container, so it
-is never lost even if the container is deleted.
-
-The install script also adds a `sqrbx` alias to your shell, so after the first
-run you can just type:
-
     sqrbx
+
+The install script adds shell aliases so you don't need to remember Docker
+commands. `sqrbx` starts the container (equivalent to `docker start -ai squarebox`).
+
+When you exit the shell, the container stops but is not removed. All changes
+inside the container (installed packages, config files, shell history) persist
+between sessions. Think of it as a VM that suspends on exit and resumes on
+start.
+
+Your code lives on the host at ~/squarebox-workspace and is mounted into the
+container, so it is never lost even if the container is deleted.
 
 How it works
 ------------
@@ -155,14 +154,13 @@ container rebuilds.
 Update
 ------
 
-There are two ways to update tools, depending on whether you want a quick
-in-place update or a full rebuild.
-
 ### Quick update (from inside the container)
 
-The `sqrbx-update` command checks all GitHub-released tools against latest
-versions and updates them in-place — no rebuild required. Your container state,
-SDKs, and config are preserved.
+    sqrbx-update
+
+Checks all GitHub-released tools against latest versions and updates them
+in-place — no rebuild required. Your container state, SDKs, and config are
+preserved.
 
     sqrbx-update              # show available updates (dry run)
     sqrbx-update --apply      # download and install all updates
@@ -173,21 +171,17 @@ Set `GITHUB_TOKEN` to avoid API rate limits.
 
 ### Full rebuild (from the host)
 
+    sqrbx-rebuild
+
 Pulls the latest changes, rebuilds the image, and replaces the container.
 Your code in ~/squarebox-workspace is safe since it lives on the host.
 Setup selections (AI tool, SDKs, GitHub auth) are persisted in the workspace
 volume and restored automatically.
 
-    sqrbx-rebuild
-
-Or equivalently, re-run the install script:
-
-    ~/squarebox/install.sh
-
-Image size
+Disk usage
 ----------
 
-The base image (all CLI/TUI tools, no optional components) is **~400 MB**.
+The base image (all CLI/TUI tools, no optional components) is **~400 MB** on disk.
 
 First-run selections add to that:
 
