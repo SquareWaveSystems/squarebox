@@ -8,18 +8,5 @@
   "remoteUser": "dev",
   "containerEnv": {
     "DEVCONTAINER": "1"
-  },
-  "customizations": {
-    "vscode": {
-      "settings": {
-        "terminal.integrated.defaultProfile.linux": "bash"
-      },
-      "extensions": [
-        "mhutchie.git-graph",
-        "eamodio.gitlens",
-        "timonwong.shellcheck",
-        "foxundermoon.shell-format"
-      ]
-    }
   }
 }
