@@ -11,6 +11,7 @@ set -euo pipefail
 #   devbox-update --help       Show this help
 
 INSTALL_DIR="/usr/local/bin"
+mkdir -p "$HOME/.local/bin"
 
 AUTH_HEADER=()
 if [ -n "${GITHUB_TOKEN:-}" ]; then

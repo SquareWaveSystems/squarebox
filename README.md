@@ -58,7 +58,7 @@ Installed during first-run setup. Nano is always available as the default editor
 
 | Name | Tier | Language | Description |
 |------|------|----------|-------------|
-| [micro](https://github.com/zyedidia/micro) | Simple | Go | Modern, intuitive terminal editor |
+| [micro](https://github.com/micro-editor/micro) | Simple | Go | Modern, intuitive terminal editor |
 | [edit](https://github.com/microsoft/edit) | Simple | Rust | Terminal text editor (Microsoft) |
 | [fresh](https://github.com/sinelaw/fresh) | Full | Rust | Modern terminal text editor |
 | [helix](https://github.com/helix-editor/helix) | Full | Rust | Modal editor (Kakoune-inspired) |

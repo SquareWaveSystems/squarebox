@@ -150,6 +150,7 @@ alias eff='$EDITOR "$(ff)"'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
+export EDITOR='nano'
 [ -f ~/.devbox-ai-aliases ] && source ~/.devbox-ai-aliases
 [ -f ~/.devbox-editor-aliases ] && source ~/.devbox-editor-aliases
 [ -f ~/.devbox-sdk-paths ] && source ~/.devbox-sdk-paths
@@ -158,7 +159,6 @@ alias gcm='git commit -m'
 alias gcam='git commit -a -m'
 alias gcad='git commit -a --amend'
 alias lg='lazygit'
-export EDITOR='nano'
 export PATH="$HOME/.local/bin:$PATH"
 # First-run setup
 if [ ! -f ~/.devbox-setup-done ]; then
