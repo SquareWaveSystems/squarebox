@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# squarebox-update — update SquareBox tools in-place from GitHub releases.
+# sqrbx-update — update SquareBox tools in-place from GitHub releases.
 #
 # Usage:
-#   squarebox-update              Show available updates (dry run)
-#   squarebox-update --apply      Download and install updates
-#   squarebox-update <tool>       Update a single tool
-#   squarebox-update --list       List all managed tools and versions
-#   squarebox-update --help       Show this help
+#   sqrbx-update              Show available updates (dry run)
+#   sqrbx-update --apply      Download and install updates
+#   sqrbx-update <tool>       Update a single tool
+#   sqrbx-update --list       List all managed tools and versions
+#   sqrbx-update --help       Show this help
 
 INSTALL_DIR="/usr/local/bin"
 mkdir -p "$HOME/.local/bin"
@@ -264,14 +264,14 @@ TOOL_DISPLAY_NAMES=(delta yq lazygit xh yazi starship gh-dash glow micro fresh e
 
 usage() {
 	cat <<-EOF
-	${BOLD}squarebox-update${RESET} — update SquareBox tools from GitHub releases
+	${BOLD}sqrbx-update${RESET} — update SquareBox tools from GitHub releases
 
 	${BOLD}Usage:${RESET}
-	  squarebox-update              Show available updates (dry run)
-	  squarebox-update --apply      Download and install all available updates
-	  squarebox-update <tool>       Update a single tool (e.g. lazygit, starship)
-	  squarebox-update --list       List all managed tools and current versions
-	  squarebox-update --help       Show this help
+	  sqrbx-update              Show available updates (dry run)
+	  sqrbx-update --apply      Download and install all available updates
+	  sqrbx-update <tool>       Update a single tool (e.g. lazygit, starship)
+	  sqrbx-update --list       List all managed tools and current versions
+	  sqrbx-update --help       Show this help
 
 	${BOLD}Tools:${RESET}
 	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, micro, fresh, edit, helix, nvim, opencode
@@ -335,11 +335,11 @@ update_tool() {
 	latest_clean=$(echo "$latest" | sed 's/^v//')
 
 	printf "  ${CYAN}Updating %s to %s...${RESET}" "$display" "$latest_clean"
-	if "${tool}_install" "$latest_clean" &>/tmp/squarebox-update-log.txt; then
+	if "${tool}_install" "$latest_clean" &>/tmp/sqrbx-update-log.txt; then
 		printf " ${GREEN}done${RESET}\n"
 	else
 		printf " ${RED}failed${RESET}\n"
-		echo "    See /tmp/squarebox-update-log.txt for details" >&2
+		echo "    See /tmp/sqrbx-update-log.txt for details" >&2
 	fi
 }
 
@@ -436,7 +436,7 @@ main() {
 
 	if [ "$mode" = "check" ]; then
 		echo
-		echo "Run ${BOLD}squarebox-update --apply${RESET} to install updates."
+		echo "Run ${BOLD}sqrbx-update --apply${RESET} to install updates."
 		echo
 		return
 	fi
