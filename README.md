@@ -11,6 +11,32 @@ environment they can spin up on any machine with Docker. Useful as a daily
 driver, a sandbox for trying out TUI tools, or a starting point for your own
 container-based dev setup.
 
+Prerequisites
+-------------
+
+- [Docker](https://docs.docker.com/get-docker/)
+- [Git](https://git-scm.com/)
+
+Install
+-------
+
+    curl -fsSL https://raw.githubusercontent.com/BrettKinny/squarebox/main/install.sh | bash
+
+This clones the repo, builds the Docker image, and drops you into the container.
+On first login, a setup script runs automatically to configure git, GitHub CLI,
+your choice of AI coding assistant, and language SDKs.
+
+### Devcontainer / Codespaces
+
+Open this repo in VS Code with the
+[Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers),
+or launch it in [GitHub Codespaces](https://github.com/features/codespaces).
+The included `.devcontainer/devcontainer.json` builds the full SquareBox image
+automatically.
+
+The interactive first-run setup is skipped in devcontainer mode. To configure
+AI tools or SDKs, run `~/setup.sh` from the integrated terminal.
+
 CLI Tools
 ---------
 
@@ -90,32 +116,6 @@ Inspired by [Omarchy](https://omarchy.com).
 | `lg` | `lazygit` | Launch lazygit |
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
-
-Prerequisites
--------------
-
-- [Docker](https://docs.docker.com/get-docker/)
-- [Git](https://git-scm.com/)
-
-Install
--------
-
-    curl -fsSL https://raw.githubusercontent.com/BrettKinny/squarebox/main/install.sh | bash
-
-This clones the repo, builds the Docker image, and drops you into the container.
-On first login, a setup script runs automatically to configure git, GitHub CLI,
-your choice of AI coding assistant, and language SDKs.
-
-### Devcontainer / Codespaces
-
-Open this repo in VS Code with the
-[Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers),
-or launch it in [GitHub Codespaces](https://github.com/features/codespaces).
-The included `.devcontainer/devcontainer.json` builds the full SquareBox image
-automatically.
-
-The interactive first-run setup is skipped in devcontainer mode. To configure
-AI tools or SDKs, run `~/setup.sh` from the integrated terminal.
 
 SDKs (optional)
 ---------------
