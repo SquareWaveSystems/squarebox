@@ -139,53 +139,41 @@ fi
 } > ~/.squarebox-ai-aliases
 
 # Text editors
-SIMPLE_EDITOR_CONFIG="/workspace/.squarebox/simple-editor"
-FULL_EDITOR_CONFIG="/workspace/.squarebox/full-editor"
+EDITOR_CONFIG="/workspace/.squarebox/editors"
 
-if [ -f "$SIMPLE_EDITOR_CONFIG" ]; then
-	simple_editor=$(cat "$SIMPLE_EDITOR_CONFIG")
-	[ -n "$simple_editor" ] && echo "Installing simple editor: $simple_editor (from previous selection)"
+if [ -f "$EDITOR_CONFIG" ]; then
+	editor_list=$(cat "$EDITOR_CONFIG")
+	[ -n "$editor_list" ] && echo "Installing editors: $editor_list (from previous selection)"
 else
 	if $INTERACTIVE; then
 		echo
-		echo "Choose a simple text editor (or press Enter to skip — nano is always available):"
-		echo "  1) micro"
-		echo "  2) edit (Microsoft)"
-		read -rp "Selection [1/2/skip]: " simple_sel
-		case "$simple_sel" in
-			1) simple_editor="micro" ;;
-			2) simple_editor="edit" ;;
-			*) simple_editor="" ;;
-		esac
+		echo "Select text editors to install (comma-separated, or 'all', or press Enter to skip):"
+		echo "  Nano is always available as the default editor."
+		echo "  1) micro    — modern, intuitive terminal editor"
+		echo "  2) edit     — terminal text editor (Microsoft)"
+		echo "  3) fresh    — modern terminal text editor"
+		echo "  4) helix    — modal editor (Kakoune-inspired)"
+		echo "  5) nvim     — Neovim"
+		read -rp "Selection [1,2,3,4,5/all/skip]: " editor_selection
+		editor_list=""
+		if [ "$editor_selection" = "all" ]; then
+			editor_list="micro,edit,fresh,helix,nvim"
+		elif [ -n "$editor_selection" ]; then
+			for item in $(echo "$editor_selection" | tr ',' ' '); do
+				case "$item" in
+					1) editor_list="${editor_list:+$editor_list,}micro" ;;
+					2) editor_list="${editor_list:+$editor_list,}edit" ;;
+					3) editor_list="${editor_list:+$editor_list,}fresh" ;;
+					4) editor_list="${editor_list:+$editor_list,}helix" ;;
+					5) editor_list="${editor_list:+$editor_list,}nvim" ;;
+				esac
+			done
+		fi
 	else
-		echo "Skipping simple editor selection (non-interactive)"
-		simple_editor=""
+		echo "Skipping editor selection (non-interactive)"
+		editor_list=""
 	fi
-	echo "$simple_editor" > "$SIMPLE_EDITOR_CONFIG"
-fi
-
-if [ -f "$FULL_EDITOR_CONFIG" ]; then
-	full_editor=$(cat "$FULL_EDITOR_CONFIG")
-	[ -n "$full_editor" ] && echo "Installing full editor: $full_editor (from previous selection)"
-else
-	if $INTERACTIVE; then
-		echo
-		echo "Choose a full text editor (or press Enter to skip):"
-		echo "  1) fresh"
-		echo "  2) helix"
-		echo "  3) nvim (Neovim)"
-		read -rp "Selection [1/2/3/skip]: " full_sel
-		case "$full_sel" in
-			1) full_editor="fresh" ;;
-			2) full_editor="helix" ;;
-			3) full_editor="nvim" ;;
-			*) full_editor="" ;;
-		esac
-	else
-		echo "Skipping full editor selection (non-interactive)"
-		full_editor=""
-	fi
-	echo "$full_editor" > "$FULL_EDITOR_CONFIG"
+	echo "$editor_list" > "$EDITOR_CONFIG"
 fi
 
 install_micro() {
@@ -250,28 +238,18 @@ install_nvim() {
 	rm -f /tmp/nvim.tar.gz
 }
 
-case "$simple_editor" in
-	micro) install_micro ;;
-	edit) install_edit ;;
-esac
-
-case "$full_editor" in
-	fresh) install_fresh ;;
-	helix) install_helix ;;
-	nvim) install_nvim ;;
-esac
-
-# Set editor aliases based on selection
 editor_cmd=""
-if [ -n "$simple_editor" ]; then
-	editor_cmd="$simple_editor"
-else
-	case "$full_editor" in
-		fresh) editor_cmd="fresh" ;;
-		helix) editor_cmd="hx" ;;
-		nvim) editor_cmd="nvim" ;;
+for editor in $(echo "$editor_list" | tr ',' ' '); do
+	case "$editor" in
+		micro) install_micro; [ -z "$editor_cmd" ] && editor_cmd="micro" ;;
+		edit) install_edit; [ -z "$editor_cmd" ] && editor_cmd="edit" ;;
+		fresh) install_fresh; [ -z "$editor_cmd" ] && editor_cmd="fresh" ;;
+		helix) install_helix; [ -z "$editor_cmd" ] && editor_cmd="hx" ;;
+		nvim) install_nvim; [ -z "$editor_cmd" ] && editor_cmd="nvim" ;;
 	esac
-fi
+done
+
+# Set EDITOR to the first selected editor
 {
 	if [ -n "$editor_cmd" ]; then
 		echo "export EDITOR='$editor_cmd'"
