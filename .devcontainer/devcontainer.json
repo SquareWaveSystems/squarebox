@@ -1,0 +1,12 @@
+{
+  "name": "SquareBox",
+  "build": {
+    "context": "..",
+    "dockerfile": "../Dockerfile"
+  },
+  "workspaceFolder": "/workspace",
+  "remoteUser": "dev",
+  "containerEnv": {
+    "DEVCONTAINER": "1"
+  }
+}

@@ -10,3 +10,18 @@ af9133ceb5d9957265d730456554aa7c38aabc8ff3827394a23d3feac8fe7ef2  opencode-linux
 # Go 1.26.1
 031f088e5d955bab8657ede27ad4e3bc5b7c1ba281f05f245bcc304f327c987a  go1.26.1.linux-amd64.tar.gz
 a290581cfe4fe28ddd737dde3095f3dbeb7f2e4065cab4eae44dfc53b760c2f7  go1.26.1.linux-arm64.tar.gz
+# Micro 2.0.15
+dfa1b6ae53e4e0b063b54224fd2b6b0a3c3159ea09d042a3a8f5cd001844d44c  micro-2.0.15-linux64.tar.gz
+5ca127857bf5500be3879f1a70b27556e737a49da04a1be5334de9e8e8781ad9  micro-2.0.15-linux-arm64.tar.gz
+# Edit 1.2.1 (asset version 1.2.0)
+aee9f2f21ebc90cc1dbfb20ee93d3aa03d325127a8e3f7f91dd02c5a9e0a7b25  edit-1.2.0-x86_64-linux-gnu.tar.zst
+4e320240586ecc5cdfdcff0488647879077027506c68c919ccdd2754642d0fbb  edit-1.2.0-aarch64-linux-gnu.tar.zst
+# Fresh 0.2.21
+211a8b3ae3f4269632372956efc767a86d9157cc917af7db2faa2cd72bd73076  fresh-editor-x86_64-unknown-linux-musl.tar.gz
+88ee9658e93e6ac7293ec573c959d72978cc9d9c2bbad71c9e0f79aed6c6b5cc  fresh-editor-aarch64-unknown-linux-musl.tar.gz
+# Helix 25.07.1
+3f08e63ecd388fff657ad39722f88bb03dcf326f1f2da2700d99e1dc40ab2e8b  helix-25.07.1-x86_64-linux.tar.xz
+ce23fa8d395e633e3e54c052012f11965d91d8d5c2bfa659685f50430b4f8175  helix-25.07.1-aarch64-linux.tar.xz
+# Neovim 0.12.0
+160b69125defb16e60b283b69be112fd4850d67ac8f9a752328c20ad43ec34af  nvim-linux-x86_64.tar.gz
+89024e7be2ef3c8f08e9c002b1eb3e3b36672ee44bd6343cf2d168d38b3736b2  nvim-linux-arm64.tar.gz

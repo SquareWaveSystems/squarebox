@@ -11,6 +11,7 @@ set -euo pipefail
 #   squarebox-update --help       Show this help
 
 INSTALL_DIR="/usr/local/bin"
+mkdir -p "$HOME/.local/bin"
 
 AUTH_HEADER=()
 if [ -n "${GITHUB_TOKEN:-}" ]; then
@@ -148,7 +149,21 @@ glow_install() {
 	rm -rf "$tmp"
 }
 
-# --- fresh ---
+# --- micro (user-installed, in ~/.local/bin) ---
+micro_repo="micro-editor/micro"
+micro_current() { micro --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
+micro_latest() { strip_v "$(gh_latest_tag "$micro_repo")"; }
+micro_install() {
+	local ver="$1"
+	local march; if [ "$ZARCH" = "aarch64" ]; then march="-arm64"; else march="64"; fi
+	local tmp=$(mktemp -d)
+	curl -fsSLo "$tmp/micro.tar.gz" "https://github.com/${micro_repo}/releases/download/v${ver}/micro-${ver}-linux${march}.tar.gz"
+	tar xzf "$tmp/micro.tar.gz" --strip-components=1 -C "$tmp"
+	install "$tmp/micro" "$HOME/.local/bin/micro"
+	rm -rf "$tmp"
+}
+
+# --- fresh (user-installed, in ~/.local/bin) ---
 fresh_repo="sinelaw/fresh"
 fresh_current() { fresh --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
 fresh_latest() { strip_v "$(gh_latest_tag "$fresh_repo")"; }
@@ -157,11 +172,11 @@ fresh_install() {
 	local tmp=$(mktemp -d)
 	curl -fsSLo "$tmp/fresh.tar.gz" "https://github.com/${fresh_repo}/releases/download/v${ver}/fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
 	tar xf "$tmp/fresh.tar.gz" -C "$tmp"
-	find "$tmp" -name 'fresh' -type f -executable -exec install {} "${INSTALL_DIR}/fresh" \;
+	find "$tmp" -name 'fresh' -type f -executable -exec install {} "$HOME/.local/bin/fresh" \;
 	rm -rf "$tmp"
 }
 
-# --- edit ---
+# --- edit (user-installed, in ~/.local/bin) ---
 edit_repo="microsoft/edit"
 edit_current() { edit --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
 edit_latest() { strip_v "$(gh_latest_tag "$edit_repo")"; }
@@ -185,11 +200,46 @@ edit_install() {
 	fi
 	zstd -d "$tmp/edit.tar.zst" -o "$tmp/edit.tar"
 	tar xf "$tmp/edit.tar" -C "$tmp"
-	find "$tmp" -name 'edit' -type f -executable -exec install {} "${INSTALL_DIR}/edit" \;
+	find "$tmp" -name 'edit' -type f -executable -exec install {} "$HOME/.local/bin/edit" \;
 	rm -rf "$tmp"
 	if [ "${CLEANUP_ZSTD:-}" = "1" ]; then
 		sudo apt-get purge -y -qq --auto-remove zstd
 	fi
+}
+
+# --- helix (user-installed, in ~/.local/bin) ---
+helix_repo="helix-editor/helix"
+helix_current() { hx --version 2>/dev/null | awk '{print $2}' || echo "not installed"; }
+helix_latest() { gh_latest_tag "$helix_repo"; }
+helix_install() {
+	local ver="$1"
+	local tmp=$(mktemp -d)
+	if ! command -v xz &>/dev/null; then
+		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
+	fi
+	curl -fsSLo "$tmp/helix.tar.xz" "https://github.com/${helix_repo}/releases/download/${ver}/helix-${ver}-${ZARCH}-linux.tar.xz"
+	tar xJf "$tmp/helix.tar.xz" -C "$tmp"
+	install "$tmp/helix-${ver}-${ZARCH}-linux/hx" "$HOME/.local/bin/hx"
+	mkdir -p "$HOME/.config/helix"
+	rm -rf "$HOME/.config/helix/runtime"
+	mv "$tmp/helix-${ver}-${ZARCH}-linux/runtime" "$HOME/.config/helix/runtime"
+	rm -rf "$tmp"
+}
+
+# --- nvim (user-installed, in ~/.local) ---
+nvim_repo="neovim/neovim"
+nvim_current() { nvim --version 2>/dev/null | head -1 | awk '{print $2}' | sed 's/^v//' || echo "not installed"; }
+nvim_latest() { strip_v "$(gh_latest_tag "$nvim_repo")"; }
+nvim_install() {
+	local ver="$1"
+	local narch; if [ "$ZARCH" = "aarch64" ]; then narch="arm64"; else narch="x86_64"; fi
+	local tmp=$(mktemp -d)
+	curl -fsSLo "$tmp/nvim.tar.gz" "https://github.com/${nvim_repo}/releases/download/v${ver}/nvim-linux-${narch}.tar.gz"
+	tar xzf "$tmp/nvim.tar.gz" -C "$tmp"
+	rm -rf "$HOME/.local/nvim"
+	mv "$tmp/nvim-linux-${narch}" "$HOME/.local/nvim"
+	ln -sf "$HOME/.local/nvim/bin/nvim" "$HOME/.local/bin/nvim"
+	rm -rf "$tmp"
 }
 
 # --- opencode (user-installed, in ~/.local/bin) ---
@@ -207,8 +257,8 @@ opencode_install() {
 
 # ── Tool registry ──────────────────────────────────────────────────
 
-TOOLS=(delta yq lazygit xh yazi starship ghdash glow fresh edit opencode)
-TOOL_DISPLAY_NAMES=(delta yq lazygit xh yazi starship gh-dash glow fresh edit opencode)
+TOOLS=(delta yq lazygit xh yazi starship ghdash glow micro fresh edit helix nvim opencode)
+TOOL_DISPLAY_NAMES=(delta yq lazygit xh yazi starship gh-dash glow micro fresh edit helix nvim opencode)
 
 # ── Main logic ──────────────────────────────────────────────────────
 
@@ -224,7 +274,7 @@ usage() {
 	  squarebox-update --help       Show this help
 
 	${BOLD}Tools:${RESET}
-	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, fresh, edit, opencode
+	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, micro, fresh, edit, helix, nvim, opencode
 
 	${DIM}Set GITHUB_TOKEN to avoid API rate limits.${RESET}
 	EOF
