@@ -203,14 +203,12 @@ install_edit() {
 	echo "Installing Edit v${EDIT_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
-	sudo apt-get update -qq && sudo apt-get install -y -qq zstd >/dev/null 2>&1
 	curl -fsSLo /tmp/edit.tar.zst "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst"
 	verify_checksum /tmp/edit.tar.zst "edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst"
 	zstd -d /tmp/edit.tar.zst -o /tmp/edit.tar
 	tar xf /tmp/edit.tar -C /tmp
 	find /tmp -name 'edit' -type f -executable -exec mv {} ~/.local/bin/edit \;
 	rm -f /tmp/edit.tar.zst /tmp/edit.tar
-	sudo apt-get purge -y -qq --auto-remove zstd >/dev/null 2>&1
 }
 
 install_fresh() {
