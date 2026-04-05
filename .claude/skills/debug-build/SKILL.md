@@ -17,7 +17,7 @@ Loop up to `max_attempts` times:
 
 1. **Run the build** using Bash:
    ```
-   docker build -t devbox . 2>&1
+   docker build -t squarebox . 2>&1
    ```
    If the build succeeds (exit code 0), announce success and stop.
 

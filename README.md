@@ -1,5 +1,5 @@
-TUI Devbox
-==========
+SquareBox
+=========
 
 A containerised development environment packed with modern CLI/TUI tools and
 AI coding assistants. One install script gives you a ready-to-go terminal
@@ -80,7 +80,7 @@ Prerequisites
 Install
 -------
 
-    curl -fsSL https://raw.githubusercontent.com/BrettKinny/tui-devbox/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/BrettKinny/squarebox/main/install.sh | bash
 
 This clones the repo, builds the Docker image, and drops you into the container.
 On first login, a setup script runs automatically to configure git, GitHub CLI,
@@ -104,17 +104,17 @@ container rebuilds.
 Start
 -----
 
-    docker start -ai devbox
+    docker start -ai squarebox
 
 When you exit the shell, the container stops but is not removed. All changes inside
 the container (installed packages, config files, shell history) persist between
 sessions. Think of it as a VM that suspends on exit and resumes on start.
 
-Your code lives on the host at ~/tui-devbox-workspace and is mounted into the container, so it
+Your code lives on the host at ~/squarebox-workspace and is mounted into the container, so it
 is never lost even if the container is deleted.
 
-The install script also adds a `devbox` alias to your shell, so after the first
-run you can just type `devbox` to jump back in.
+The install script also adds a `squarebox` alias to your shell, so after the first
+run you can just type `squarebox` to jump back in.
 
 Security
 --------
@@ -140,7 +140,7 @@ difference:
 
 Volume mounts:
 
-- ~/tui-devbox-workspace -> /workspace: your code (lives on host, survives container deletion)
+- ~/squarebox-workspace -> /workspace: your code (lives on host, survives container deletion)
 - ~/.ssh -> /home/dev/.ssh (read-only): SSH keys for git
 - ~/.config/git -> /home/dev/.config/git: shared git config
 
@@ -152,41 +152,41 @@ in-place update or a full rebuild.
 
 ### Quick update (from inside the container)
 
-The `devbox-update` command checks all GitHub-released tools against latest
+The `squarebox-update` command checks all GitHub-released tools against latest
 versions and updates them in-place — no rebuild required. Your container state,
 SDKs, and config are preserved.
 
-    devbox-update              # show available updates (dry run)
-    devbox-update --apply      # download and install all updates
-    devbox-update lazygit      # update a single tool
-    devbox-update --list       # list all tools and current versions
+    squarebox-update              # show available updates (dry run)
+    squarebox-update --apply      # download and install all updates
+    squarebox-update lazygit      # update a single tool
+    squarebox-update --list       # list all tools and current versions
 
 Set `GITHUB_TOKEN` to avoid API rate limits.
 
 ### Full rebuild (from the host)
 
 Pulls the latest changes, rebuilds the image, and replaces the container.
-Your code in ~/tui-devbox-workspace is safe since it lives on the host.
+Your code in ~/squarebox-workspace is safe since it lives on the host.
 Setup selections (AI tool, SDKs, GitHub auth) are persisted in the workspace
 volume and restored automatically.
 
-    devbox-update
+    squarebox-update
 
 Or equivalently, re-run the install script:
 
-    ~/tui-devbox/install.sh
+    ~/squarebox/install.sh
 
 Uninstall
 ---------
 
-    docker stop devbox 2>/dev/null; docker rm devbox
-    docker rmi devbox
-    rm -rf ~/tui-devbox
+    docker stop squarebox 2>/dev/null; docker rm squarebox
+    docker rmi squarebox
+    rm -rf ~/squarebox
 
 Remove the aliases from your shell config (~/.bashrc or ~/.zshrc):
 
-    sed -i '/alias devbox=/d' ~/.bashrc ~/.zshrc 2>/dev/null
-    sed -i '/alias devbox-update=/d' ~/.bashrc ~/.zshrc 2>/dev/null
+    sed -i '/alias squarebox=/d' ~/.bashrc ~/.zshrc 2>/dev/null
+    sed -i '/alias squarebox-update=/d' ~/.bashrc ~/.zshrc 2>/dev/null
 
-Your code in ~/tui-devbox-workspace is left untouched. Delete it manually if
+Your code in ~/squarebox-workspace is left untouched. Delete it manually if
 you no longer need it.

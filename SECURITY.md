@@ -5,13 +5,13 @@
 Before piping anything to bash, you should know exactly what it does. The
 install script performs these actions on your **host** system:
 
-1. Clones this repo to `~/tui-devbox` (or pulls if it already exists)
-2. Creates `~/tui-devbox-workspace` and `~/.config/git` directories
-3. Builds a Docker image tagged `devbox` from the Dockerfile
-4. Creates a Docker container named `devbox` with volume mounts for your
-   workspace (`~/tui-devbox-workspace`), SSH keys (`~/.ssh`, read-only),
+1. Clones this repo to `~/squarebox` (or pulls if it already exists)
+2. Creates `~/squarebox-workspace` and `~/.config/git` directories
+3. Builds a Docker image tagged `squarebox` from the Dockerfile
+4. Creates a Docker container named `squarebox` with volume mounts for your
+   workspace (`~/squarebox-workspace`), SSH keys (`~/.ssh`, read-only),
    and git config (`~/.config/git`)
-5. Appends two shell aliases (`devbox`, `devbox-update`) to your `~/.bashrc`
+5. Appends two shell aliases (`squarebox`, `squarebox-update`) to your `~/.bashrc`
    or `~/.zshrc`
 6. Starts the container interactively
 
@@ -23,7 +23,7 @@ your home directory.
 If you prefer to inspect the script before running it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BrettKinny/tui-devbox/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/BrettKinny/squarebox/main/install.sh -o install.sh
 less install.sh        # read it
 bash install.sh        # run it
 ```

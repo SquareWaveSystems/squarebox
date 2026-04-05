@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# devbox-update — update TUI Devbox tools in-place from GitHub releases.
+# squarebox-update — update SquareBox tools in-place from GitHub releases.
 #
 # Usage:
-#   devbox-update              Show available updates (dry run)
-#   devbox-update --apply      Download and install updates
-#   devbox-update <tool>       Update a single tool
-#   devbox-update --list       List all managed tools and versions
-#   devbox-update --help       Show this help
+#   squarebox-update              Show available updates (dry run)
+#   squarebox-update --apply      Download and install updates
+#   squarebox-update <tool>       Update a single tool
+#   squarebox-update --list       List all managed tools and versions
+#   squarebox-update --help       Show this help
 
 INSTALL_DIR="/usr/local/bin"
 
@@ -214,14 +214,14 @@ TOOL_DISPLAY_NAMES=(delta yq lazygit xh yazi starship gh-dash glow fresh edit op
 
 usage() {
 	cat <<-EOF
-	${BOLD}devbox-update${RESET} — update TUI Devbox tools from GitHub releases
+	${BOLD}squarebox-update${RESET} — update SquareBox tools from GitHub releases
 
 	${BOLD}Usage:${RESET}
-	  devbox-update              Show available updates (dry run)
-	  devbox-update --apply      Download and install all available updates
-	  devbox-update <tool>       Update a single tool (e.g. lazygit, starship)
-	  devbox-update --list       List all managed tools and current versions
-	  devbox-update --help       Show this help
+	  squarebox-update              Show available updates (dry run)
+	  squarebox-update --apply      Download and install all available updates
+	  squarebox-update <tool>       Update a single tool (e.g. lazygit, starship)
+	  squarebox-update --list       List all managed tools and current versions
+	  squarebox-update --help       Show this help
 
 	${BOLD}Tools:${RESET}
 	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, fresh, edit, opencode
@@ -285,11 +285,11 @@ update_tool() {
 	latest_clean=$(echo "$latest" | sed 's/^v//')
 
 	printf "  ${CYAN}Updating %s to %s...${RESET}" "$display" "$latest_clean"
-	if "${tool}_install" "$latest_clean" &>/tmp/devbox-update-log.txt; then
+	if "${tool}_install" "$latest_clean" &>/tmp/squarebox-update-log.txt; then
 		printf " ${GREEN}done${RESET}\n"
 	else
 		printf " ${RED}failed${RESET}\n"
-		echo "    See /tmp/devbox-update-log.txt for details" >&2
+		echo "    See /tmp/squarebox-update-log.txt for details" >&2
 	fi
 }
 
@@ -340,7 +340,7 @@ main() {
 	fi
 
 	echo
-	echo "${BOLD}TUI Devbox Tool Updater${RESET}"
+	echo "${BOLD}SquareBox Tool Updater${RESET}"
 	echo
 
 	if [ "$mode" = "list" ]; then
@@ -386,7 +386,7 @@ main() {
 
 	if [ "$mode" = "check" ]; then
 		echo
-		echo "Run ${BOLD}devbox-update --apply${RESET} to install updates."
+		echo "Run ${BOLD}squarebox-update --apply${RESET} to install updates."
 		echo
 		return
 	fi

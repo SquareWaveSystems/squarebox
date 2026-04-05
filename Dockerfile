@@ -139,8 +139,8 @@ COPY --chown=dev:dev setup.sh /home/dev/setup.sh
 COPY --chown=dev:dev setup-checksums.txt /home/dev/setup-checksums.txt
 COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
 
-COPY scripts/devbox-update.sh /usr/local/bin/devbox-update
-RUN chmod +x /usr/local/bin/devbox-update
+COPY scripts/squarebox-update.sh /usr/local/bin/squarebox-update
+RUN chmod +x /usr/local/bin/squarebox-update
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 	&& mkdir -p /workspace && chown dev:dev /workspace \
@@ -149,7 +149,7 @@ RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 USER dev
 
 ENV HOME=/home/dev
-ENV DEVBOX=1
+ENV SQUAREBOX=1
 
 # 7. Shell Config
 
@@ -167,8 +167,8 @@ alias eff='$EDITOR "$(ff)"'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
-[ -f ~/.devbox-ai-aliases ] && source ~/.devbox-ai-aliases
-[ -f ~/.devbox-sdk-paths ] && source ~/.devbox-sdk-paths
+[ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
+[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
 alias g='git'
 alias gcm='git commit -m'
 alias gcam='git commit -a -m'
@@ -177,8 +177,8 @@ alias lg='lazygit'
 export EDITOR='edit'
 export PATH="$HOME/.local/bin:$PATH"
 # First-run setup
-if [ ! -f ~/.devbox-setup-done ]; then
-	~/setup.sh && touch ~/.devbox-setup-done
+if [ ! -f ~/.squarebox-setup-done ]; then
+	~/setup.sh && touch ~/.squarebox-setup-done
 fi
 EOFRC
 
