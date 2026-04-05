@@ -1,5 +1,5 @@
 {
-  "name": "TUI Devbox",
+  "name": "SquareBox",
   "build": {
     "context": "..",
     "dockerfile": "../Dockerfile"

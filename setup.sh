@@ -22,7 +22,7 @@ verify_checksum() {
 	fi
 }
 
-echo "=== TUI Devbox Setup ==="
+echo "=== SquareBox Setup ==="
 echo
 
 # Detect interactive terminal
@@ -47,7 +47,7 @@ if [ -z "$(git config --global user.email 2>/dev/null)" ]; then
 fi
 
 # Restore GitHub CLI config from persistent storage if available
-GH_PERSIST="/workspace/.devbox/gh"
+GH_PERSIST="/workspace/.squarebox/gh"
 if [ -d "$GH_PERSIST" ] && [ ! -d ~/.config/gh ]; then
 	mkdir -p ~/.config
 	cp -r "$GH_PERSIST" ~/.config/gh
@@ -70,8 +70,8 @@ else
 fi
 
 # AI coding assistant
-AI_CONFIG="/workspace/.devbox/ai-tool"
-mkdir -p /workspace/.devbox ~/.local/bin
+AI_CONFIG="/workspace/.squarebox/ai-tool"
+mkdir -p /workspace/.squarebox ~/.local/bin
 
 if [ -f "$AI_CONFIG" ]; then
 	ai_choice=$(cat "$AI_CONFIG")
@@ -136,11 +136,11 @@ fi
 		echo "alias claude-yolo='claude --dangerously-skip-permissions'"
 		echo "alias opencode-yolo='opencode --dangerously-skip-permissions'"
 	fi
-} > ~/.devbox-ai-aliases
+} > ~/.squarebox-ai-aliases
 
 # Text editors
-SIMPLE_EDITOR_CONFIG="/workspace/.devbox/simple-editor"
-FULL_EDITOR_CONFIG="/workspace/.devbox/full-editor"
+SIMPLE_EDITOR_CONFIG="/workspace/.squarebox/simple-editor"
+FULL_EDITOR_CONFIG="/workspace/.squarebox/full-editor"
 
 if [ -f "$SIMPLE_EDITOR_CONFIG" ]; then
 	simple_editor=$(cat "$SIMPLE_EDITOR_CONFIG")
@@ -278,10 +278,10 @@ fi
 	if [ -n "$editor_cmd" ]; then
 		echo "export EDITOR='$editor_cmd'"
 	fi
-} > ~/.devbox-editor-aliases
+} > ~/.squarebox-editor-aliases
 
 # SDKs
-SDK_CONFIG="/workspace/.devbox/sdks"
+SDK_CONFIG="/workspace/.squarebox/sdks"
 
 if [ -f "$SDK_CONFIG" ]; then
 	sdk_list=$(cat "$SDK_CONFIG")
@@ -316,7 +316,7 @@ else
 fi
 
 # SDK path setup file
-> ~/.devbox-sdk-paths
+> ~/.squarebox-sdk-paths
 
 # Pinned versions — update via: scripts/update-versions.sh
 NVM_VERSION="0.40.3"
@@ -333,7 +333,7 @@ install_node() {
 	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 	# Node.js binary verification is handled by nvm
 	nvm install --lts
-	cat <<'PATHS' >> ~/.devbox-sdk-paths
+	cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 PATHS
@@ -344,7 +344,7 @@ install_python() {
 	# Trust boundary: the uv install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
 	curl -fsSL https://astral.sh/uv/install.sh | bash
-	cat <<'PATHS' >> ~/.devbox-sdk-paths
+	cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export PATH="$HOME/.local/bin:$PATH"
 PATHS
 }
@@ -357,7 +357,7 @@ install_go() {
 	verify_checksum /tmp/go.tar.gz "${GO_VERSION}.linux-${GOARCH}.tar.gz"
 	tar xzf /tmp/go.tar.gz -C ~/.local
 	rm /tmp/go.tar.gz
-	cat <<'PATHS' >> ~/.devbox-sdk-paths
+	cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export GOROOT="$HOME/.local/go"
 export GOPATH="$HOME/go"
 export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
@@ -369,7 +369,7 @@ install_dotnet() {
 	# Trust boundary: the .NET install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
 	curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS
-	cat <<'PATHS' >> ~/.devbox-sdk-paths
+	cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export DOTNET_ROOT="$HOME/.dotnet"
 export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
 PATHS

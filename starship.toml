@@ -25,7 +25,7 @@ symbol = " "
 min_time = 2000
 format = "[$duration]($style)"
 
-[env_var.DEVBOX]
+[env_var.SQUAREBOX]
 format = "[📦](yellow) "
 
 [character]

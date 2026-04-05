@@ -122,8 +122,8 @@ COPY --chown=dev:dev setup.sh /home/dev/setup.sh
 COPY --chown=dev:dev setup-checksums.txt /home/dev/setup-checksums.txt
 COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
 
-COPY scripts/devbox-update.sh /usr/local/bin/devbox-update
-RUN chmod +x /usr/local/bin/devbox-update
+COPY scripts/squarebox-update.sh /usr/local/bin/squarebox-update
+RUN chmod +x /usr/local/bin/squarebox-update
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 	&& mkdir -p /workspace && chown dev:dev /workspace \
@@ -132,7 +132,7 @@ RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 USER dev
 
 ENV HOME=/home/dev
-ENV DEVBOX=1
+ENV SQUAREBOX=1
 
 # 7. Shell Config
 
@@ -151,9 +151,9 @@ alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 export EDITOR='nano'
-[ -f ~/.devbox-ai-aliases ] && source ~/.devbox-ai-aliases
-[ -f ~/.devbox-editor-aliases ] && source ~/.devbox-editor-aliases
-[ -f ~/.devbox-sdk-paths ] && source ~/.devbox-sdk-paths
+[ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
+[ -f ~/.squarebox-editor-aliases ] && source ~/.squarebox-editor-aliases
+[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
 alias g='git'
 alias gcm='git commit -m'
 alias gcam='git commit -a -m'
@@ -161,11 +161,11 @@ alias gcad='git commit -a --amend'
 alias lg='lazygit'
 export PATH="$HOME/.local/bin:$PATH"
 # First-run setup
-if [ ! -f ~/.devbox-setup-done ]; then
+if [ ! -f ~/.squarebox-setup-done ]; then
 	if [ -n "${DEVCONTAINER:-}" ]; then
-		touch ~/.devbox-setup-done
+		touch ~/.squarebox-setup-done
 	else
-		~/setup.sh && touch ~/.devbox-setup-done
+		~/setup.sh && touch ~/.squarebox-setup-done
 	fi
 fi
 EOFRC

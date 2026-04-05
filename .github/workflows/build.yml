@@ -17,7 +17,7 @@ jobs:
           context: .
           push: false
           load: true
-          tags: devbox:test
+          tags: squarebox:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -26,21 +26,21 @@ jobs:
 
       - name: Container creates successfully
         run: |
-          docker create --name devbox-test \
+          docker create --name squarebox-test \
             -v /tmp/workspace:/workspace \
-            devbox:test
+            squarebox:test
 
       - name: All tools exist
         run: |
-          docker run --rm devbox:test bash -c '
+          docker run --rm squarebox:test bash -c '
             for cmd in bat curl delta eza fd fzf gh gh-dash glow jq lazygit nano rg starship xh yazi yq zoxide; do
               which "$cmd" || { echo "MISSING: $cmd"; exit 1; }
             done
           '
 
       - name: Shell config loads without errors
-        run: docker run --rm devbox:test bash -lc 'echo ok'
+        run: docker run --rm squarebox:test bash -lc 'echo ok'
 
       - name: Cleanup
         if: always()
-        run: docker rm -f devbox-test 2>/dev/null || true
+        run: docker rm -f squarebox-test 2>/dev/null || true
