@@ -25,6 +25,7 @@ CLI Tools
 | [gh](https://github.com/cli/cli) | Go | GitHub CLI |
 | [glow](https://github.com/charmbracelet/glow) | Go | Terminal markdown renderer |
 | [jq](https://github.com/jqlang/jq) | C | JSON processor |
+| [nano](https://nano-editor.org) | C | Default text editor |
 | [ripgrep](https://github.com/BurntSushi/ripgrep) | Rust | Fast recursive grep |
 | [starship](https://github.com/starship/starship) | Rust | Cross-shell prompt |
 | [xh](https://github.com/ducaale/xh) | Rust | Friendly HTTP client |
@@ -36,13 +37,32 @@ TUI Tools
 
 | Name | Language | Description |
 |------|----------|-------------|
-| [Claude Code](https://github.com/anthropics/claude-code) | TypeScript | AI coding assistant |
-| [opencode](https://github.com/anomalyco/opencode) | Go | AI coding TUI |
-| [edit](https://github.com/microsoft/edit) | Rust | Terminal text editor (Microsoft) |
-| [fresh](https://github.com/sinelaw/fresh) | Rust | Terminal text editor |
 | [gh-dash](https://github.com/dlvhdr/gh-dash) | Go | GitHub dashboard for the terminal |
 | [lazygit](https://github.com/jesseduffield/lazygit) | Go | Git terminal UI |
 | [yazi](https://github.com/sxyazi/yazi) | Rust | Terminal file manager |
+
+AI Coding Assistants (optional)
+-------------------------------
+
+Installed during first-run setup — choose one or both:
+
+| Name | Language | Description |
+|------|----------|-------------|
+| [Claude Code](https://github.com/anthropics/claude-code) | TypeScript | AI coding assistant |
+| [opencode](https://github.com/anomalyco/opencode) | Go | AI coding TUI |
+
+Text Editors (optional)
+-----------------------
+
+Installed during first-run setup. Nano is always available as the default editor.
+
+| Name | Tier | Language | Description |
+|------|------|----------|-------------|
+| [micro](https://github.com/micro-editor/micro) | Simple | Go | Modern, intuitive terminal editor |
+| [edit](https://github.com/microsoft/edit) | Simple | Rust | Terminal text editor (Microsoft) |
+| [fresh](https://github.com/sinelaw/fresh) | Full | Rust | Modern terminal text editor |
+| [helix](https://github.com/helix-editor/helix) | Full | Rust | Modal editor (Kakoune-inspired) |
+| [nvim](https://github.com/neovim/neovim) | Full | C/Lua | Neovim |
 
 Aliases
 -------
@@ -97,10 +117,10 @@ automatically.
 The interactive first-run setup is skipped in devcontainer mode. To configure
 AI tools or SDKs, run `~/setup.sh` from the integrated terminal.
 
-SDKs
-----
+SDKs (optional)
+---------------
 
-The following SDKs are available during first-run setup:
+Selected during first-run setup — choose any combination, all, or none:
 
 | SDK | Installed via |
 |-----|---------------|

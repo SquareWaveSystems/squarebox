@@ -26,9 +26,3 @@ fed6b0ae90ce2c32ac029c2ce891cd2ad1a1cdd9a12d21fb14ed25d18dae658b  gh-dash_v4.23.
 # Glow 2.1.1
 59106b08be69b2a0bda1178327bbb7accd584e7c113ba3d2f5ef6e48ff3ac27f  glow_2.1.1_Linux_x86_64.tar.gz
 ab12a703cc6efd06caf24860344a2e8bc2518055fdd986f98eb761c47917ef3d  glow_2.1.1_Linux_arm64.tar.gz
-# Fresh 0.2.21
-211a8b3ae3f4269632372956efc767a86d9157cc917af7db2faa2cd72bd73076  fresh-editor-x86_64-unknown-linux-musl.tar.gz
-88ee9658e93e6ac7293ec573c959d72978cc9d9c2bbad71c9e0f79aed6c6b5cc  fresh-editor-aarch64-unknown-linux-musl.tar.gz
-# Edit 1.2.1 (asset version 1.2.0)
-aee9f2f21ebc90cc1dbfb20ee93d3aa03d325127a8e3f7f91dd02c5a9e0a7b25  edit-1.2.0-x86_64-linux-gnu.tar.zst
-4e320240586ecc5cdfdcff0488647879077027506c68c919ccdd2754642d0fbb  edit-1.2.0-aarch64-linux-gnu.tar.zst

@@ -60,6 +60,18 @@ GH_DASH_VERSION=$(strip_v "$GH_DASH_TAG")
 GLOW_TAG=$(gh_latest_tag charmbracelet/glow)
 GLOW_VERSION=$(strip_v "$GLOW_TAG")
 
+# --- setup.sh tools ---
+
+OPENCODE_TAG=$(gh_latest_tag anomalyco/opencode)
+OPENCODE_VERSION=$(strip_v "$OPENCODE_TAG")
+
+GO_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1)
+
+NVM_VERSION="0.40.3"
+
+MICRO_TAG=$(gh_latest_tag micro-editor/micro)
+MICRO_VERSION=$(strip_v "$MICRO_TAG")
+
 FRESH_TAG=$(gh_latest_tag sinelaw/fresh)
 FRESH_VERSION=$(strip_v "$FRESH_TAG")
 
@@ -70,17 +82,13 @@ EDIT_ASSET_X86=$(curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/repos/mi
 	| jq -r '.assets[].name' | grep 'x86_64-linux-gnu')
 EDIT_ASSET_ARM=$(curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/repos/microsoft/edit/releases/latest" \
 	| jq -r '.assets[].name' | grep 'aarch64-linux-gnu')
-# Extract the embedded version from asset filename (e.g. edit-1.2.0-x86_64-linux-gnu.tar.zst -> 1.2.0)
 EDIT_ASSET_VERSION=$(echo "$EDIT_ASSET_X86" | sed -E 's/^edit-([0-9]+\.[0-9]+\.[0-9]+)-.*/\1/')
 
-# --- setup.sh tools ---
+HELIX_TAG=$(gh_latest_tag helix-editor/helix)
+HELIX_VERSION="$HELIX_TAG"
 
-OPENCODE_TAG=$(gh_latest_tag anomalyco/opencode)
-OPENCODE_VERSION=$(strip_v "$OPENCODE_TAG")
-
-GO_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1)
-
-NVM_VERSION="0.40.3"
+NVIM_TAG=$(gh_latest_tag neovim/neovim)
+NVIM_VERSION=$(strip_v "$NVIM_TAG")
 
 echo
 echo "Versions:"
@@ -92,11 +100,14 @@ echo "  Yazi:     ${YAZI_VERSION}"
 echo "  Starship: ${STARSHIP_VERSION}"
 echo "  gh-dash:  ${GH_DASH_VERSION}"
 echo "  Glow:     ${GLOW_VERSION}"
-echo "  Fresh:    ${FRESH_VERSION}"
-echo "  Edit:     ${EDIT_VERSION} (asset: ${EDIT_ASSET_VERSION})"
 echo "  OpenCode: ${OPENCODE_VERSION}"
 echo "  Go:       ${GO_VERSION}"
 echo "  NVM:      ${NVM_VERSION}"
+echo "  Micro:    ${MICRO_VERSION}"
+echo "  Fresh:    ${FRESH_VERSION}"
+echo "  Edit:     ${EDIT_VERSION} (asset: ${EDIT_ASSET_VERSION})"
+echo "  Helix:    ${HELIX_VERSION}"
+echo "  Neovim:   ${NVIM_VERSION}"
 echo
 
 echo "Downloading artifacts and computing checksums..."
@@ -158,14 +169,6 @@ echo "# Glow ${GLOW_VERSION}" >> "${REPO_ROOT}/checksums.txt"
 emit "glow x86_64" "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_x86_64.tar.gz" "glow_${GLOW_VERSION}_Linux_x86_64.tar.gz"
 emit "glow arm64" "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_arm64.tar.gz" "glow_${GLOW_VERSION}_Linux_arm64.tar.gz"
 
-echo "# Fresh ${FRESH_VERSION}" >> "${REPO_ROOT}/checksums.txt"
-emit "fresh x86_64" "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-x86_64-unknown-linux-musl.tar.gz" "fresh-editor-x86_64-unknown-linux-musl.tar.gz"
-emit "fresh aarch64" "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-aarch64-unknown-linux-musl.tar.gz" "fresh-editor-aarch64-unknown-linux-musl.tar.gz"
-
-echo "# Edit ${EDIT_VERSION} (asset version ${EDIT_ASSET_VERSION})" >> "${REPO_ROOT}/checksums.txt"
-emit "edit x86_64" "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/${EDIT_ASSET_X86}" "${EDIT_ASSET_X86}"
-emit "edit aarch64" "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/${EDIT_ASSET_ARM}" "${EDIT_ASSET_ARM}"
-
 # --- setup-checksums.txt ---
 
 cat > "${REPO_ROOT}/setup-checksums.txt" << HEADER
@@ -186,6 +189,26 @@ echo "# Go ${GO_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
 emit_setup "go amd64" "https://go.dev/dl/${GO_VERSION}.linux-amd64.tar.gz" "${GO_VERSION}.linux-amd64.tar.gz"
 emit_setup "go arm64" "https://go.dev/dl/${GO_VERSION}.linux-arm64.tar.gz" "${GO_VERSION}.linux-arm64.tar.gz"
 
+echo "# Micro ${MICRO_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
+emit_setup "micro linux64" "https://github.com/micro-editor/micro/releases/download/v${MICRO_VERSION}/micro-${MICRO_VERSION}-linux64.tar.gz" "micro-${MICRO_VERSION}-linux64.tar.gz"
+emit_setup "micro arm64" "https://github.com/micro-editor/micro/releases/download/v${MICRO_VERSION}/micro-${MICRO_VERSION}-linux-arm64.tar.gz" "micro-${MICRO_VERSION}-linux-arm64.tar.gz"
+
+echo "# Edit ${EDIT_VERSION} (asset version ${EDIT_ASSET_VERSION})" >> "${REPO_ROOT}/setup-checksums.txt"
+emit_setup "edit x86_64" "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/${EDIT_ASSET_X86}" "${EDIT_ASSET_X86}"
+emit_setup "edit aarch64" "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/${EDIT_ASSET_ARM}" "${EDIT_ASSET_ARM}"
+
+echo "# Fresh ${FRESH_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
+emit_setup "fresh x86_64" "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-x86_64-unknown-linux-musl.tar.gz" "fresh-editor-x86_64-unknown-linux-musl.tar.gz"
+emit_setup "fresh aarch64" "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-aarch64-unknown-linux-musl.tar.gz" "fresh-editor-aarch64-unknown-linux-musl.tar.gz"
+
+echo "# Helix ${HELIX_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
+emit_setup "helix x86_64" "https://github.com/helix-editor/helix/releases/download/${HELIX_VERSION}/helix-${HELIX_VERSION}-x86_64-linux.tar.xz" "helix-${HELIX_VERSION}-x86_64-linux.tar.xz"
+emit_setup "helix aarch64" "https://github.com/helix-editor/helix/releases/download/${HELIX_VERSION}/helix-${HELIX_VERSION}-aarch64-linux.tar.xz" "helix-${HELIX_VERSION}-aarch64-linux.tar.xz"
+
+echo "# Neovim ${NVIM_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
+emit_setup "nvim x86_64" "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-x86_64.tar.gz" "nvim-linux-x86_64.tar.gz"
+emit_setup "nvim arm64" "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-arm64.tar.gz" "nvim-linux-arm64.tar.gz"
+
 # --- Update Dockerfile ARGs ---
 
 echo
@@ -204,9 +227,6 @@ update_arg YAZI_VERSION "$YAZI_VERSION"
 update_arg STARSHIP_VERSION "$STARSHIP_VERSION"
 update_arg GH_DASH_VERSION "$GH_DASH_VERSION"
 update_arg GLOW_VERSION "$GLOW_VERSION"
-update_arg FRESH_VERSION "$FRESH_VERSION"
-update_arg EDIT_VERSION "$EDIT_VERSION"
-update_arg EDIT_ASSET_VERSION "$EDIT_ASSET_VERSION"
 
 # --- Update setup.sh versions ---
 
@@ -215,6 +235,12 @@ echo "Updating setup.sh..."
 sed -i "s|^OPENCODE_VERSION=.*|OPENCODE_VERSION=\"${OPENCODE_VERSION}\"|" "${REPO_ROOT}/setup.sh"
 sed -i "s|^GO_VERSION=.*|GO_VERSION=\"${GO_VERSION}\"|" "${REPO_ROOT}/setup.sh"
 sed -i "s|^NVM_VERSION=.*|NVM_VERSION=\"${NVM_VERSION}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^MICRO_VERSION=.*|MICRO_VERSION=\"${MICRO_VERSION}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^EDIT_VERSION=.*|EDIT_VERSION=\"${EDIT_VERSION}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^EDIT_ASSET_VERSION=.*|EDIT_ASSET_VERSION=\"${EDIT_ASSET_VERSION}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^FRESH_VERSION=.*|FRESH_VERSION=\"${FRESH_VERSION}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^HELIX_VERSION=.*|HELIX_VERSION=\"${HELIX_VERSION}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^NVIM_VERSION=.*|NVIM_VERSION=\"${NVIM_VERSION}\"|" "${REPO_ROOT}/setup.sh"
 
 echo
 echo "Done. Review changes with: git diff"

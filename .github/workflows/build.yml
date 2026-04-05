@@ -33,7 +33,7 @@ jobs:
       - name: All tools exist
         run: |
           docker run --rm devbox:test bash -c '
-            for cmd in bat curl delta edit eza fd fresh fzf gh gh-dash glow jq lazygit rg starship xh yazi yq zoxide; do
+            for cmd in bat curl delta eza fd fzf gh gh-dash glow jq lazygit nano rg starship xh yazi yq zoxide; do
               which "$cmd" || { echo "MISSING: $cmd"; exit 1; }
             done
           '

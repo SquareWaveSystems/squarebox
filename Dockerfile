@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	ripgrep \
 	bat \
 	fzf \
+	nano \
 	zoxide \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& ln -s $(which fdfind) /usr/local/bin/fd \
@@ -29,9 +30,6 @@ ARG YAZI_VERSION=26.1.22
 ARG STARSHIP_VERSION=1.24.2
 ARG GH_DASH_VERSION=4.23.2
 ARG GLOW_VERSION=2.1.1
-ARG FRESH_VERSION=0.2.21
-ARG EDIT_VERSION=1.2.1
-ARG EDIT_ASSET_VERSION=1.2.0
 
 # Checksum verification infrastructure
 COPY checksums.txt /tmp/checksums.txt
@@ -68,8 +66,7 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 
 # 3. Binary Tools (arch-aware, single layer)
 
-RUN apt-get update && apt-get install -y --no-install-recommends zstd && rm -rf /var/lib/apt/lists/* \
-	&& ARCH=$(uname -m) \
+RUN ARCH=$(uname -m) \
 	&& if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; LARCH="arm64"; GOARCH="arm64"; else ZARCH="x86_64"; LARCH="x86_64"; GOARCH="amd64"; fi \
 	# Lazygit
 	&& curl -fsSLo /tmp/lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_${LARCH}.tar.gz" \
@@ -104,21 +101,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends zstd && rm -rf 
 	&& tar xzf /tmp/glow.tar.gz -C /tmp \
 	&& find /tmp -name 'glow' -type f -executable -exec mv {} /usr/local/bin/glow \; \
 	&& rm -f /tmp/glow.tar.gz \
-	# Fresh
-	&& curl -fsSLo /tmp/fresh.tar.gz "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz" \
-	&& verify-checksum /tmp/fresh.tar.gz "fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz" \
-	&& tar xf /tmp/fresh.tar.gz -C /tmp \
-	&& find /tmp -name 'fresh' -type f -executable -exec mv {} /usr/local/bin/fresh \; \
-	&& rm -rf /tmp/fresh* \
-	# Edit (asset version may differ from tag — pinned separately)
-	&& curl -fsSLo /tmp/edit.tar.zst "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst" \
-	&& verify-checksum /tmp/edit.tar.zst "edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst" \
-	&& zstd -d /tmp/edit.tar.zst -o /tmp/edit.tar \
-	&& tar xf /tmp/edit.tar -C /tmp \
-	&& find /tmp -name 'edit' -type f -executable -exec mv {} /usr/local/bin/edit \; \
-	&& rm -f /tmp/edit.tar.zst /tmp/edit.tar \
-	# Purge build-only dependency & clean up checksums
-	&& apt-get purge -y --auto-remove zstd && rm -rf /var/lib/apt/lists/* \
+	# Clean up checksums
 	&& rm -f /tmp/checksums.txt
 
 # 4. User Setup
@@ -167,14 +150,15 @@ alias eff='$EDITOR "$(ff)"'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
+export EDITOR='nano'
 [ -f ~/.devbox-ai-aliases ] && source ~/.devbox-ai-aliases
+[ -f ~/.devbox-editor-aliases ] && source ~/.devbox-editor-aliases
 [ -f ~/.devbox-sdk-paths ] && source ~/.devbox-sdk-paths
 alias g='git'
 alias gcm='git commit -m'
 alias gcam='git commit -a -m'
 alias gcad='git commit -a --amend'
 alias lg='lazygit'
-export EDITOR='edit'
 export PATH="$HOME/.local/bin:$PATH"
 # First-run setup
 if [ ! -f ~/.devbox-setup-done ]; then

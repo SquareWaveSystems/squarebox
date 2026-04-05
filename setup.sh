@@ -106,6 +106,12 @@ fi
 
 # Pinned versions — update via: scripts/update-versions.sh
 OPENCODE_VERSION="1.3.13"
+MICRO_VERSION="2.0.15"
+EDIT_VERSION="1.2.1"
+EDIT_ASSET_VERSION="1.2.0"
+FRESH_VERSION="0.2.21"
+HELIX_VERSION="25.07.1"
+NVIM_VERSION="0.12.0"
 
 if [ "$ai_choice" = "opencode" ] || [ "$ai_choice" = "both" ]; then
 	echo "Installing OpenCode v${OPENCODE_VERSION}..."
@@ -131,6 +137,148 @@ fi
 		echo "alias opencode-yolo='opencode --dangerously-skip-permissions'"
 	fi
 } > ~/.devbox-ai-aliases
+
+# Text editors
+SIMPLE_EDITOR_CONFIG="/workspace/.devbox/simple-editor"
+FULL_EDITOR_CONFIG="/workspace/.devbox/full-editor"
+
+if [ -f "$SIMPLE_EDITOR_CONFIG" ]; then
+	simple_editor=$(cat "$SIMPLE_EDITOR_CONFIG")
+	[ -n "$simple_editor" ] && echo "Installing simple editor: $simple_editor (from previous selection)"
+else
+	if $INTERACTIVE; then
+		echo
+		echo "Choose a simple text editor (or press Enter to skip — nano is always available):"
+		echo "  1) micro"
+		echo "  2) edit (Microsoft)"
+		read -rp "Selection [1/2/skip]: " simple_sel
+		case "$simple_sel" in
+			1) simple_editor="micro" ;;
+			2) simple_editor="edit" ;;
+			*) simple_editor="" ;;
+		esac
+	else
+		echo "Skipping simple editor selection (non-interactive)"
+		simple_editor=""
+	fi
+	echo "$simple_editor" > "$SIMPLE_EDITOR_CONFIG"
+fi
+
+if [ -f "$FULL_EDITOR_CONFIG" ]; then
+	full_editor=$(cat "$FULL_EDITOR_CONFIG")
+	[ -n "$full_editor" ] && echo "Installing full editor: $full_editor (from previous selection)"
+else
+	if $INTERACTIVE; then
+		echo
+		echo "Choose a full text editor (or press Enter to skip):"
+		echo "  1) fresh"
+		echo "  2) helix"
+		echo "  3) nvim (Neovim)"
+		read -rp "Selection [1/2/3/skip]: " full_sel
+		case "$full_sel" in
+			1) full_editor="fresh" ;;
+			2) full_editor="helix" ;;
+			3) full_editor="nvim" ;;
+			*) full_editor="" ;;
+		esac
+	else
+		echo "Skipping full editor selection (non-interactive)"
+		full_editor=""
+	fi
+	echo "$full_editor" > "$FULL_EDITOR_CONFIG"
+fi
+
+install_micro() {
+	echo "Installing Micro v${MICRO_VERSION}..."
+	ARCH=$(uname -m)
+	if [ "$ARCH" = "aarch64" ]; then MARCH="-arm64"; else MARCH="64"; fi
+	curl -fsSLo /tmp/micro.tar.gz "https://github.com/micro-editor/micro/releases/download/v${MICRO_VERSION}/micro-${MICRO_VERSION}-linux${MARCH}.tar.gz"
+	verify_checksum /tmp/micro.tar.gz "micro-${MICRO_VERSION}-linux${MARCH}.tar.gz"
+	tar xzf /tmp/micro.tar.gz --strip-components=1 -C /tmp
+	mv /tmp/micro ~/.local/bin/micro
+	rm -rf /tmp/micro*
+}
+
+install_edit() {
+	echo "Installing Edit v${EDIT_VERSION}..."
+	ARCH=$(uname -m)
+	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
+	sudo apt-get update -qq && sudo apt-get install -y -qq zstd >/dev/null 2>&1
+	curl -fsSLo /tmp/edit.tar.zst "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst"
+	verify_checksum /tmp/edit.tar.zst "edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst"
+	zstd -d /tmp/edit.tar.zst -o /tmp/edit.tar
+	tar xf /tmp/edit.tar -C /tmp
+	find /tmp -name 'edit' -type f -executable -exec mv {} ~/.local/bin/edit \;
+	rm -f /tmp/edit.tar.zst /tmp/edit.tar
+	sudo apt-get purge -y -qq --auto-remove zstd >/dev/null 2>&1
+}
+
+install_fresh() {
+	echo "Installing Fresh v${FRESH_VERSION}..."
+	ARCH=$(uname -m)
+	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
+	curl -fsSLo /tmp/fresh.tar.gz "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
+	verify_checksum /tmp/fresh.tar.gz "fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
+	tar xf /tmp/fresh.tar.gz -C /tmp
+	find /tmp -name 'fresh' -type f -executable -exec mv {} ~/.local/bin/fresh \;
+	rm -rf /tmp/fresh*
+}
+
+install_helix() {
+	echo "Installing Helix v${HELIX_VERSION}..."
+	ARCH=$(uname -m)
+	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
+	sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
+	curl -fsSLo /tmp/helix.tar.xz "https://github.com/helix-editor/helix/releases/download/${HELIX_VERSION}/helix-${HELIX_VERSION}-${ZARCH}-linux.tar.xz"
+	verify_checksum /tmp/helix.tar.xz "helix-${HELIX_VERSION}-${ZARCH}-linux.tar.xz"
+	tar xJf /tmp/helix.tar.xz -C /tmp
+	mv "/tmp/helix-${HELIX_VERSION}-${ZARCH}-linux/hx" ~/.local/bin/hx
+	mkdir -p ~/.config/helix
+	rm -rf ~/.config/helix/runtime
+	mv "/tmp/helix-${HELIX_VERSION}-${ZARCH}-linux/runtime" ~/.config/helix/runtime
+	rm -rf /tmp/helix*
+}
+
+install_nvim() {
+	echo "Installing Neovim v${NVIM_VERSION}..."
+	ARCH=$(uname -m)
+	if [ "$ARCH" = "aarch64" ]; then NARCH="arm64"; else NARCH="x86_64"; fi
+	curl -fsSLo /tmp/nvim.tar.gz "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-${NARCH}.tar.gz"
+	verify_checksum /tmp/nvim.tar.gz "nvim-linux-${NARCH}.tar.gz"
+	tar xzf /tmp/nvim.tar.gz -C /tmp
+	rm -rf ~/.local/nvim
+	mv "/tmp/nvim-linux-${NARCH}" ~/.local/nvim
+	ln -sf ~/.local/nvim/bin/nvim ~/.local/bin/nvim
+	rm -f /tmp/nvim.tar.gz
+}
+
+case "$simple_editor" in
+	micro) install_micro ;;
+	edit) install_edit ;;
+esac
+
+case "$full_editor" in
+	fresh) install_fresh ;;
+	helix) install_helix ;;
+	nvim) install_nvim ;;
+esac
+
+# Set editor aliases based on selection
+editor_cmd=""
+if [ -n "$simple_editor" ]; then
+	editor_cmd="$simple_editor"
+else
+	case "$full_editor" in
+		fresh) editor_cmd="fresh" ;;
+		helix) editor_cmd="hx" ;;
+		nvim) editor_cmd="nvim" ;;
+	esac
+fi
+{
+	if [ -n "$editor_cmd" ]; then
+		echo "export EDITOR='$editor_cmd'"
+	fi
+} > ~/.devbox-editor-aliases
 
 # SDKs
 SDK_CONFIG="/workspace/.devbox/sdks"
