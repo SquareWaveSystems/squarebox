@@ -22,11 +22,17 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Image size breakdown
-        if: success()
-        continue-on-error: true
         run: |
-          docker images devbox:test
-          docker history devbox:test --human --no-trunc
+          docker run --rm devbox:test bash -c '
+            echo "## Binaries in /usr/local/bin"
+            du -sh /usr/local/bin/* 2>/dev/null | sort -rh
+            echo ""
+            echo "## APT packages (dpkg)"
+            dpkg-query -W --showformat="\${Installed-Size}\t\${Package}\n" | sort -rn | head -30
+            echo ""
+            echo "## Filesystem usage by top-level dirs"
+            du -sh /* 2>/dev/null | sort -rh | head -20
+          '
 
       - name: Devcontainer config is valid JSON
         run: jq empty .devcontainer/devcontainer.json
