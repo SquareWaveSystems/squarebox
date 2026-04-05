@@ -43,6 +43,23 @@ run you can just type:
 
     sqrbx
 
+How it works
+------------
+
+The container is a persistent stopped container, not an ephemeral one. The
+difference:
+
+- Ephemeral (`docker run --rm`): container is deleted when you exit. All
+  filesystem changes are lost.
+- Persistent (what this uses): container stops when you exit but stays on disk.
+  `docker start -ai` resumes it with everything intact.
+
+Volume mounts:
+
+- ~/squarebox-workspace -> /workspace: your code (lives on host, survives container deletion)
+- ~/.ssh -> /home/dev/.ssh (read-only): SSH keys for git
+- ~/.config/git -> /home/dev/.config/git: shared git config
+
 What's included
 ---------------
 
@@ -197,23 +214,6 @@ manage their own binary verification.
 For the full trust model — what `install.sh` does on your machine, how each
 layer is verified, and how to inspect the script before running it — see
 [SECURITY.md](SECURITY.md).
-
-How it works
-------------
-
-The container is a persistent stopped container, not an ephemeral one. The
-difference:
-
-- Ephemeral (`docker run --rm`): container is deleted when you exit. All
-  filesystem changes are lost.
-- Persistent (what this uses): container stops when you exit but stays on disk.
-  `docker start -ai` resumes it with everything intact.
-
-Volume mounts:
-
-- ~/squarebox-workspace -> /workspace: your code (lives on host, survives container deletion)
-- ~/.ssh -> /home/dev/.ssh (read-only): SSH keys for git
-- ~/.config/git -> /home/dev/.config/git: shared git config
 
 Devcontainer / Codespaces
 -------------------------
