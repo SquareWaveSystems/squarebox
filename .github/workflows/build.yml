@@ -24,10 +24,10 @@ jobs:
       - name: Image size breakdown
         run: |
           echo "## Total"
-          docker image inspect devbox:test --format '{{.Size}}' | numfmt --to=iec-i --suffix=B
+          docker images devbox:test --format '{{.Size}}'
           echo ""
           echo "## Layers"
-          docker history devbox:test --human --format "{{.Size}}\t{{.CreatedBy}}"
+          docker history devbox:test --human --no-trunc
 
       - name: Devcontainer config is valid JSON
         run: jq empty .devcontainer/devcontainer.json
