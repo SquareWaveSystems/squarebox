@@ -234,6 +234,7 @@ install_helix() {
 	tar xJf /tmp/helix.tar.xz -C /tmp
 	mv "/tmp/helix-${HELIX_VERSION}-${ZARCH}-linux/hx" ~/.local/bin/hx
 	mkdir -p ~/.config/helix
+	rm -rf ~/.config/helix/runtime
 	mv "/tmp/helix-${HELIX_VERSION}-${ZARCH}-linux/runtime" ~/.config/helix/runtime
 	rm -rf /tmp/helix*
 }
@@ -263,9 +264,19 @@ case "$full_editor" in
 esac
 
 # Set editor aliases based on selection
+editor_cmd=""
+if [ -n "$simple_editor" ]; then
+	editor_cmd="$simple_editor"
+else
+	case "$full_editor" in
+		fresh) editor_cmd="fresh" ;;
+		helix) editor_cmd="hx" ;;
+		nvim) editor_cmd="nvim" ;;
+	esac
+fi
 {
-	if [ -n "$simple_editor" ]; then
-		echo "export EDITOR='$simple_editor'"
+	if [ -n "$editor_cmd" ]; then
+		echo "export EDITOR='$editor_cmd'"
 	fi
 } > ~/.devbox-editor-aliases
 
