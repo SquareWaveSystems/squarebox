@@ -21,6 +21,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Devcontainer config is valid JSON
+        run: jq empty .devcontainer/devcontainer.json
+
       - name: Container creates successfully
         run: |
           docker create --name devbox-test \

@@ -10,3 +10,4 @@ TASKS.md
 *.swo
 *~
 .DS_Store
+.devcontainer
