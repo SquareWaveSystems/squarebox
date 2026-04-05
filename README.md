@@ -175,6 +175,26 @@ Volume mounts:
 - ~/.ssh -> /home/dev/.ssh (read-only): SSH keys for git
 - ~/.config/git -> /home/dev/.config/git: shared git config
 
+Image size
+----------
+
+The base image (all CLI/TUI tools, no optional components) is **~400 MB**.
+
+First-run selections add to that:
+
+| Component | Adds |
+|-----------|------|
+| Claude Code | ~300 MB |
+| OpenCode | ~30 MB |
+| micro / edit | ~12 / ~7 MB |
+| fresh / helix / nvim | ~10 / ~80 / ~45 MB |
+| Node.js | ~90 MB |
+| Python (uv) | ~35 MB |
+| Go | ~500 MB |
+| .NET | ~800 MB |
+
+A typical setup (Claude Code + Node.js + one editor) lands around **~800 MB**.
+
 Update
 ------
 
