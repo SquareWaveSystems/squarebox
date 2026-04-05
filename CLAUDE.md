@@ -23,7 +23,7 @@ docker run -it --name squarebox \
 docker start -ai squarebox
 ```
 
-The `install.sh` script automates initial setup (clone, build, create container, add `squarebox` shell alias). The `setup.sh` script runs inside the container on first launch to configure git identity and GitHub CLI auth.
+The `install.sh` script automates initial setup (clone, build, create container, add `sqrbx` shell alias). The `setup.sh` script runs inside the container on first launch to configure git identity and GitHub CLI auth.
 
 ## CI
 
