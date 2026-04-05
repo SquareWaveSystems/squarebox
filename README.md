@@ -39,7 +39,9 @@ Your code lives on the host at ~/squarebox-workspace and is mounted into the con
 is never lost even if the container is deleted.
 
 The install script also adds a `sqrbx` alias to your shell, so after the first
-run you can just type `sqrbx` to jump back in.
+run you can just type:
+
+    sqrbx
 
 What's included
 ---------------
