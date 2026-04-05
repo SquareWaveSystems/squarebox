@@ -15,6 +15,16 @@ else
 	git clone "$REPO" "$INSTALL_DIR"
 fi
 
+# Verify Docker is available
+if ! command -v docker &>/dev/null; then
+	echo "Error: Docker is not installed. See https://docs.docker.com/get-docker/" >&2
+	exit 1
+fi
+if ! docker info &>/dev/null; then
+	echo "Error: Docker daemon is not running or current user lacks permissions." >&2
+	exit 1
+fi
+
 # Build
 echo "Building image..."
 docker build -t "$IMAGE_NAME" "$INSTALL_DIR"
@@ -27,8 +37,10 @@ if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
 fi
 
 # Add shell aliases
-SHELL_RC="${HOME}/.bashrc"
-[ -f "${HOME}/.zshrc" ] && SHELL_RC="${HOME}/.zshrc"
+case "${SHELL:-}" in
+	*/zsh) SHELL_RC="${HOME}/.zshrc" ;;
+	*)     SHELL_RC="${HOME}/.bashrc" ;;
+esac
 
 ALIASES_ADDED=false
 

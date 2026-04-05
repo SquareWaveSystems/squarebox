@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cleanup() {
+	rm -f /tmp/opencode.tar.gz /tmp/micro.tar.gz /tmp/micro /tmp/edit.tar.zst \
+		/tmp/edit.tar /tmp/fresh.tar.gz /tmp/helix.tar.xz /tmp/nvim.tar.gz \
+		/tmp/nvm-install.sh /tmp/go.tar.gz /tmp/yazi.zip
+	rm -rf /tmp/micro-* /tmp/fresh* /tmp/helix-* /tmp/nvim-linux-* /tmp/yazi-*
+}
+trap cleanup EXIT
+
 SETUP_CHECKSUMS="${HOME}/setup-checksums.txt"
 
 # Verify SHA256 checksum of a downloaded file against the checksums file.
@@ -113,6 +121,13 @@ FRESH_VERSION="0.2.21"
 HELIX_VERSION="25.07.1"
 NVIM_VERSION="0.12.0"
 
+for _var in OPENCODE_VERSION MICRO_VERSION EDIT_VERSION EDIT_ASSET_VERSION FRESH_VERSION HELIX_VERSION NVIM_VERSION; do
+	if [ -z "${!_var:-}" ]; then
+		echo "Error: ${_var} is empty or unset" >&2
+		exit 1
+	fi
+done
+
 if [ "$ai_choice" = "opencode" ] || [ "$ai_choice" = "both" ]; then
 	echo "Installing OpenCode v${OPENCODE_VERSION}..."
 	ARCH=$(uname -m)
@@ -214,7 +229,12 @@ install_helix() {
 	echo "Installing Helix v${HELIX_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
-	sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
+	if sudo -n true 2>/dev/null; then
+		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
+	elif ! command -v xz &>/dev/null; then
+		echo "Error: xz-utils required for Helix but sudo unavailable to install it. Skipping Helix." >&2
+		return 1
+	fi
 	curl -fsSLo /tmp/helix.tar.xz "https://github.com/helix-editor/helix/releases/download/${HELIX_VERSION}/helix-${HELIX_VERSION}-${ZARCH}-linux.tar.xz"
 	verify_checksum /tmp/helix.tar.xz "helix-${HELIX_VERSION}-${ZARCH}-linux.tar.xz"
 	tar xJf /tmp/helix.tar.xz -C /tmp
@@ -244,7 +264,7 @@ for editor in $(echo "$editor_list" | tr ',' ' '); do
 		micro) install_micro; [ -z "$editor_cmd" ] && editor_cmd="micro" ;;
 		edit) install_edit; [ -z "$editor_cmd" ] && editor_cmd="edit" ;;
 		fresh) install_fresh; [ -z "$editor_cmd" ] && editor_cmd="fresh" ;;
-		helix) install_helix; [ -z "$editor_cmd" ] && editor_cmd="hx" ;;
+		helix) { install_helix && [ -z "$editor_cmd" ] && editor_cmd="hx"; } || echo "Warning: Helix installation failed, skipping." ;;
 		nvim) install_nvim; [ -z "$editor_cmd" ] && editor_cmd="nvim" ;;
 	esac
 done
@@ -298,6 +318,13 @@ fi
 NVM_VERSION="0.40.3"
 GO_VERSION="go1.26.1"
 
+for _var in NVM_VERSION GO_VERSION; do
+	if [ -z "${!_var:-}" ]; then
+		echo "Error: ${_var} is empty or unset" >&2
+		exit 1
+	fi
+done
+
 install_node() {
 	echo "Installing Node.js (via nvm v${NVM_VERSION})..."
 	curl -fsSo /tmp/nvm-install.sh "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
@@ -313,6 +340,9 @@ install_node() {
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 PATHS
+	if ! command -v node &>/dev/null; then
+		echo "Warning: Node.js binary not found after installation" >&2
+	fi
 }
 
 install_python() {
@@ -323,6 +353,9 @@ install_python() {
 	cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export PATH="$HOME/.local/bin:$PATH"
 PATHS
+	if ! command -v uv &>/dev/null; then
+		echo "Warning: uv binary not found after installation" >&2
+	fi
 }
 
 install_go() {
@@ -338,6 +371,9 @@ export GOROOT="$HOME/.local/go"
 export GOPATH="$HOME/go"
 export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
 PATHS
+	if [ ! -x "${HOME}/.local/go/bin/go" ]; then
+		echo "Warning: Go binary not found after installation" >&2
+	fi
 }
 
 install_dotnet() {
@@ -349,6 +385,9 @@ install_dotnet() {
 export DOTNET_ROOT="$HOME/.dotnet"
 export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
 PATHS
+	if [ ! -x "${HOME}/.dotnet/dotnet" ]; then
+		echo "Warning: .NET binary not found after installation" >&2
+	fi
 }
 
 for sdk in $(echo "$sdk_list" | tr ',' ' '); do

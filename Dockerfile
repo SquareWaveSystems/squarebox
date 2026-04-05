@@ -65,16 +65,25 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 	&& verify-checksum /usr/local/bin/yq "yq_linux_${ARCH}" \
 	&& chmod +x /usr/local/bin/yq
 
-# 3. Binary Tools (arch-aware, single layer)
+# 3a. Git Tools
 
-RUN ARCH=$(uname -m) \
-	&& if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; LARCH="arm64"; GOARCH="arm64"; else ZARCH="x86_64"; LARCH="x86_64"; GOARCH="amd64"; fi \
+RUN DPKG_ARCH=$(dpkg --print-architecture) \
+	&& if [ "$DPKG_ARCH" = "arm64" ]; then LARCH="arm64"; GOARCH="arm64"; else LARCH="x86_64"; GOARCH="amd64"; fi \
 	# Lazygit
 	&& curl -fsSLo /tmp/lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_${LARCH}.tar.gz" \
 	&& verify-checksum /tmp/lazygit.tar.gz "lazygit_${LAZYGIT_VERSION}_Linux_${LARCH}.tar.gz" \
 	&& tar xf /tmp/lazygit.tar.gz -C /tmp lazygit \
 	&& install /tmp/lazygit /usr/local/bin \
 	&& rm /tmp/lazygit /tmp/lazygit.tar.gz \
+	# gh-dash
+	&& curl -fsSLo /usr/local/bin/gh-dash "https://github.com/dlvhdr/gh-dash/releases/download/v${GH_DASH_VERSION}/gh-dash_v${GH_DASH_VERSION}_linux-${GOARCH}" \
+	&& verify-checksum /usr/local/bin/gh-dash "gh-dash_v${GH_DASH_VERSION}_linux-${GOARCH}" \
+	&& chmod +x /usr/local/bin/gh-dash
+
+# 3b. File & HTTP Tools
+
+RUN DPKG_ARCH=$(dpkg --print-architecture) \
+	&& if [ "$DPKG_ARCH" = "arm64" ]; then ZARCH="aarch64"; LARCH="arm64"; else ZARCH="x86_64"; LARCH="x86_64"; fi \
 	# xh
 	&& curl -fsSLo /tmp/xh.tar.gz "https://github.com/ducaale/xh/releases/download/v${XH_VERSION}/xh-v${XH_VERSION}-${ZARCH}-unknown-linux-musl.tar.gz" \
 	&& verify-checksum /tmp/xh.tar.gz "xh-v${XH_VERSION}-${ZARCH}-unknown-linux-musl.tar.gz" \
@@ -87,21 +96,22 @@ RUN ARCH=$(uname -m) \
 	&& mv /tmp/yazi-${ZARCH}-unknown-linux-musl/yazi /usr/local/bin/ \
 	&& mv /tmp/yazi-${ZARCH}-unknown-linux-musl/ya /usr/local/bin/ \
 	&& rm -rf /tmp/yazi* \
-	# Starship (direct binary instead of curl|sh installer)
-	&& curl -fsSLo /tmp/starship.tar.gz "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-${ZARCH}-unknown-linux-musl.tar.gz" \
-	&& verify-checksum /tmp/starship.tar.gz "starship-${ZARCH}-unknown-linux-musl.tar.gz" \
-	&& tar xf /tmp/starship.tar.gz -C /usr/local/bin starship \
-	&& rm /tmp/starship.tar.gz \
-	# gh-dash
-	&& curl -fsSLo /usr/local/bin/gh-dash "https://github.com/dlvhdr/gh-dash/releases/download/v${GH_DASH_VERSION}/gh-dash_v${GH_DASH_VERSION}_linux-${GOARCH}" \
-	&& verify-checksum /usr/local/bin/gh-dash "gh-dash_v${GH_DASH_VERSION}_linux-${GOARCH}" \
-	&& chmod +x /usr/local/bin/gh-dash \
 	# Glow
 	&& curl -fsSLo /tmp/glow.tar.gz "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_${LARCH}.tar.gz" \
 	&& verify-checksum /tmp/glow.tar.gz "glow_${GLOW_VERSION}_Linux_${LARCH}.tar.gz" \
 	&& tar xzf /tmp/glow.tar.gz -C /tmp \
 	&& find /tmp -name 'glow' -type f -executable -exec mv {} /usr/local/bin/glow \; \
-	&& rm -f /tmp/glow.tar.gz \
+	&& rm -f /tmp/glow.tar.gz
+
+# 3c. Shell Tools
+
+RUN DPKG_ARCH=$(dpkg --print-architecture) \
+	&& if [ "$DPKG_ARCH" = "arm64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi \
+	# Starship
+	&& curl -fsSLo /tmp/starship.tar.gz "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-${ZARCH}-unknown-linux-musl.tar.gz" \
+	&& verify-checksum /tmp/starship.tar.gz "starship-${ZARCH}-unknown-linux-musl.tar.gz" \
+	&& tar xf /tmp/starship.tar.gz -C /usr/local/bin starship \
+	&& rm /tmp/starship.tar.gz \
 	# Clean up checksums
 	&& rm -f /tmp/checksums.txt
 
