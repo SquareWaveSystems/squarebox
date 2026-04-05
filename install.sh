@@ -49,8 +49,8 @@ if ! grep -q 'alias sqrbx=' "$SHELL_RC" 2>/dev/null; then
 	ALIASES_ADDED=true
 fi
 
-if ! grep -q 'alias sqrbx-update=' "$SHELL_RC" 2>/dev/null; then
-	echo "alias sqrbx-update='~/squarebox/install.sh'" >> "$SHELL_RC"
+if ! grep -q 'alias sqrbx-rebuild=' "$SHELL_RC" 2>/dev/null; then
+	echo "alias sqrbx-rebuild='~/squarebox/install.sh'" >> "$SHELL_RC"
 	ALIASES_ADDED=true
 fi
 

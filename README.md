@@ -26,19 +26,25 @@ This clones the repo, builds the Docker image, and drops you into the container.
 On first login, a setup script runs automatically to configure git, GitHub CLI,
 your choice of AI coding assistant, and language SDKs.
 
-### Devcontainer / Codespaces
+Start
+-----
 
-Open this repo in VS Code with the
-[Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers),
-or launch it in [GitHub Codespaces](https://github.com/features/codespaces).
-The included `.devcontainer/devcontainer.json` builds the full SquareBox image
-automatically.
+    docker start -ai squarebox
 
-The interactive first-run setup is skipped in devcontainer mode. To configure
-AI tools or SDKs, run `~/setup.sh` from the integrated terminal.
+When you exit the shell, the container stops but is not removed. All changes inside
+the container (installed packages, config files, shell history) persist between
+sessions. Think of it as a VM that suspends on exit and resumes on start.
 
-CLI Tools
----------
+Your code lives on the host at ~/squarebox-workspace and is mounted into the container, so it
+is never lost even if the container is deleted.
+
+The install script also adds a `sqrbx` alias to your shell, so after the first
+run you can just type `sqrbx` to jump back in.
+
+What's included
+---------------
+
+### CLI Tools
 
 | Name | Language | Description |
 |------|----------|-------------|
@@ -58,8 +64,7 @@ CLI Tools
 | [yq](https://github.com/mikefarah/yq) | Go | YAML/JSON/XML processor |
 | [zoxide](https://github.com/ajeetdsouza/zoxide) | Rust | Smarter cd command |
 
-TUI Tools
----------
+### TUI Tools
 
 | Name | Language | Description |
 |------|----------|-------------|
@@ -67,8 +72,7 @@ TUI Tools
 | [lazygit](https://github.com/jesseduffield/lazygit) | Go | Git terminal UI |
 | [yazi](https://github.com/sxyazi/yazi) | Rust | Terminal file manager |
 
-AI Coding Assistants (optional)
--------------------------------
+### AI Coding Assistants (optional)
 
 Installed during first-run setup — choose one or both:
 
@@ -77,8 +81,7 @@ Installed during first-run setup — choose one or both:
 | [Claude Code](https://github.com/anthropics/claude-code) | TypeScript | AI coding assistant |
 | [opencode](https://github.com/anomalyco/opencode) | Go | AI coding TUI |
 
-Text Editors (optional)
------------------------
+### Text Editors (optional)
 
 Installed during first-run setup. Nano is always available as the default editor.
 
@@ -90,8 +93,7 @@ Installed during first-run setup. Nano is always available as the default editor
 | [helix](https://github.com/helix-editor/helix) | Full | Rust | Modal editor (Kakoune-inspired) |
 | [nvim](https://github.com/neovim/neovim) | Full | C/Lua | Neovim |
 
-Aliases
--------
+### Aliases
 
 Inspired by [Omarchy](https://omarchy.com).
 
@@ -117,8 +119,7 @@ Inspired by [Omarchy](https://omarchy.com).
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
 
-SDKs (optional)
----------------
+### SDKs (optional)
 
 Selected during first-run setup — choose any combination, all, or none:
 
@@ -132,20 +133,57 @@ Selected during first-run setup — choose any combination, all, or none:
 Selections are saved to the workspace volume and reused automatically on
 container rebuilds.
 
-Start
------
+Update
+------
 
-    docker start -ai squarebox
+There are two ways to update tools, depending on whether you want a quick
+in-place update or a full rebuild.
 
-When you exit the shell, the container stops but is not removed. All changes inside
-the container (installed packages, config files, shell history) persist between
-sessions. Think of it as a VM that suspends on exit and resumes on start.
+### Quick update (from inside the container)
 
-Your code lives on the host at ~/squarebox-workspace and is mounted into the container, so it
-is never lost even if the container is deleted.
+The `sqrbx-update` command checks all GitHub-released tools against latest
+versions and updates them in-place — no rebuild required. Your container state,
+SDKs, and config are preserved.
 
-The install script also adds a `sqrbx` alias to your shell, so after the first
-run you can just type `sqrbx` to jump back in.
+    sqrbx-update              # show available updates (dry run)
+    sqrbx-update --apply      # download and install all updates
+    sqrbx-update lazygit      # update a single tool
+    sqrbx-update --list       # list all tools and current versions
+
+Set `GITHUB_TOKEN` to avoid API rate limits.
+
+### Full rebuild (from the host)
+
+Pulls the latest changes, rebuilds the image, and replaces the container.
+Your code in ~/squarebox-workspace is safe since it lives on the host.
+Setup selections (AI tool, SDKs, GitHub auth) are persisted in the workspace
+volume and restored automatically.
+
+    sqrbx-rebuild
+
+Or equivalently, re-run the install script:
+
+    ~/squarebox/install.sh
+
+Image size
+----------
+
+The base image (all CLI/TUI tools, no optional components) is **~400 MB**.
+
+First-run selections add to that:
+
+| Component | Adds |
+|-----------|------|
+| Claude Code | ~300 MB |
+| OpenCode | ~30 MB |
+| micro / edit | ~12 / ~7 MB |
+| fresh / helix / nvim | ~10 / ~80 / ~45 MB |
+| Node.js | ~90 MB |
+| Python (uv) | ~35 MB |
+| Go | ~500 MB |
+| .NET | ~800 MB |
+
+A typical setup (Claude Code + Node.js + one editor) lands around **~800 MB**.
 
 Security
 --------
@@ -175,57 +213,17 @@ Volume mounts:
 - ~/.ssh -> /home/dev/.ssh (read-only): SSH keys for git
 - ~/.config/git -> /home/dev/.config/git: shared git config
 
-Image size
-----------
+Devcontainer / Codespaces
+-------------------------
 
-The base image (all CLI/TUI tools, no optional components) is **~400 MB**.
+Open this repo in VS Code with the
+[Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers),
+or launch it in [GitHub Codespaces](https://github.com/features/codespaces).
+The included `.devcontainer/devcontainer.json` builds the full SquareBox image
+automatically.
 
-First-run selections add to that:
-
-| Component | Adds |
-|-----------|------|
-| Claude Code | ~300 MB |
-| OpenCode | ~30 MB |
-| micro / edit | ~12 / ~7 MB |
-| fresh / helix / nvim | ~10 / ~80 / ~45 MB |
-| Node.js | ~90 MB |
-| Python (uv) | ~35 MB |
-| Go | ~500 MB |
-| .NET | ~800 MB |
-
-A typical setup (Claude Code + Node.js + one editor) lands around **~800 MB**.
-
-Update
-------
-
-There are two ways to update tools, depending on whether you want a quick
-in-place update or a full rebuild.
-
-### Quick update (from inside the container)
-
-The `squarebox-update` command checks all GitHub-released tools against latest
-versions and updates them in-place — no rebuild required. Your container state,
-SDKs, and config are preserved.
-
-    squarebox-update              # show available updates (dry run)
-    squarebox-update --apply      # download and install all updates
-    squarebox-update lazygit      # update a single tool
-    squarebox-update --list       # list all tools and current versions
-
-Set `GITHUB_TOKEN` to avoid API rate limits.
-
-### Full rebuild (from the host)
-
-Pulls the latest changes, rebuilds the image, and replaces the container.
-Your code in ~/squarebox-workspace is safe since it lives on the host.
-Setup selections (AI tool, SDKs, GitHub auth) are persisted in the workspace
-volume and restored automatically.
-
-    sqrbx-update
-
-Or equivalently, re-run the install script:
-
-    ~/squarebox/install.sh
+The interactive first-run setup is skipped in devcontainer mode. To configure
+AI tools or SDKs, run `~/setup.sh` from the integrated terminal.
 
 Uninstall
 ---------
@@ -237,7 +235,7 @@ Uninstall
 Remove the aliases from your shell config (~/.bashrc or ~/.zshrc):
 
     sed -i '/alias sqrbx=/d' ~/.bashrc ~/.zshrc 2>/dev/null
-    sed -i '/alias sqrbx-update=/d' ~/.bashrc ~/.zshrc 2>/dev/null
+    sed -i '/alias sqrbx-rebuild=/d' ~/.bashrc ~/.zshrc 2>/dev/null
 
 Your code in ~/squarebox-workspace is left untouched. Delete it manually if
 you no longer need it.

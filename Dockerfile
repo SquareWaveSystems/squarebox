@@ -133,8 +133,8 @@ COPY --chown=dev:dev setup.sh /home/dev/setup.sh
 COPY --chown=dev:dev setup-checksums.txt /home/dev/setup-checksums.txt
 COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
 
-COPY scripts/squarebox-update.sh /usr/local/bin/squarebox-update
-RUN chmod +x /usr/local/bin/squarebox-update
+COPY scripts/squarebox-update.sh /usr/local/bin/sqrbx-update
+RUN chmod +x /usr/local/bin/sqrbx-update
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 	&& mkdir -p /workspace && chown dev:dev /workspace \
