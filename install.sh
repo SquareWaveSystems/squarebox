@@ -58,14 +58,30 @@ if [ "$ALIASES_ADDED" = true ]; then
 	echo "Added sqrbx aliases to $SHELL_RC — restart your shell or run: source $SHELL_RC"
 fi
 
-# Create and enter container
-mkdir -p ~/.config/git ~/squarebox-workspace
+# Prepare host directories
+mkdir -p ~/.config/git "${INSTALL_DIR}/workspace" "${INSTALL_DIR}/.config/lazygit"
+
+# Migrate from old layout if needed
+if [ -d "${HOME}/squarebox-workspace" ] && [ ! -d "${INSTALL_DIR}/workspace" ]; then
+	echo "Migrating ~/squarebox-workspace to ~/squarebox/workspace..."
+	mv "${HOME}/squarebox-workspace" "${INSTALL_DIR}/workspace"
+fi
+
+# Seed default configs (preserves existing customizations)
+if [ ! -f "${INSTALL_DIR}/.config/starship.toml" ]; then
+	cp "${INSTALL_DIR}/starship.toml" "${INSTALL_DIR}/.config/starship.toml"
+fi
+if [ ! -f "${INSTALL_DIR}/.config/lazygit/config.yml" ]; then
+	printf 'git:\n  paging:\n    colorArg: always\n    pager: delta --dark --paging=never\n' > "${INSTALL_DIR}/.config/lazygit/config.yml"
+fi
 
 echo "Creating container..."
 docker create -it --name "$CONTAINER_NAME" \
-	-v ~/squarebox-workspace:/workspace \
+	-v "${INSTALL_DIR}/workspace:/workspace" \
 	-v ~/.ssh:/home/dev/.ssh:ro \
 	-v ~/.config/git:/home/dev/.config/git \
+	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml" \
+	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit" \
 	"$IMAGE_NAME" > /dev/null
 
 if [ -t 0 ]; then

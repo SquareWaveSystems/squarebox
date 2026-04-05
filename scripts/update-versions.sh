@@ -16,9 +16,34 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
 	AUTH_HEADER=(-H "Authorization: token ${GITHUB_TOKEN}")
 fi
 
+# Pre-flight: check remaining GitHub API rate limit
+_rate_info=$(curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/rate_limit" 2>/dev/null) || true
+_rate_remaining=$(echo "$_rate_info" | jq -r '.rate.remaining' 2>/dev/null) || true
+_rate_limit=$(echo "$_rate_info" | jq -r '.rate.limit' 2>/dev/null) || true
+if [[ "${_rate_remaining:-0}" =~ ^[0-9]+$ ]] && [ "$_rate_remaining" -lt 20 ]; then
+	echo "Error: Only ${_rate_remaining}/${_rate_limit} GitHub API requests remaining." >&2
+	if [ -z "${GITHUB_TOKEN:-}" ]; then
+		echo "Set GITHUB_TOKEN to authenticate (5000 req/hr instead of 60)." >&2
+	fi
+	exit 1
+fi
+
 gh_latest_tag() {
 	local repo="$1"
-	curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/repos/${repo}/releases/latest" | jq -r '.tag_name'
+	local response http_code body
+	response=$(curl -fsSL -w '\n%{http_code}' "${AUTH_HEADER[@]}" \
+		"https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) || true
+	http_code=$(echo "$response" | tail -1)
+	body=$(echo "$response" | sed '$d')
+	if [ "$http_code" = "403" ]; then
+		echo "Error: GitHub API rate limit exceeded (${repo})." >&2
+		echo "Set GITHUB_TOKEN to authenticate (5000 req/hr instead of 60)." >&2
+		exit 1
+	elif [ "$http_code" != "200" ]; then
+		echo "Error: GitHub API returned HTTP ${http_code} for ${repo}." >&2
+		exit 1
+	fi
+	echo "$body" | jq -r '.tag_name'
 }
 
 # Strip leading 'v' from a tag
@@ -78,10 +103,20 @@ FRESH_VERSION=$(strip_v "$FRESH_TAG")
 EDIT_TAG=$(gh_latest_tag microsoft/edit)
 EDIT_VERSION=$(strip_v "$EDIT_TAG")
 # Edit has a known issue: asset version may differ from tag. Extract actual asset name.
-EDIT_ASSET_X86=$(curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/repos/microsoft/edit/releases/latest" \
-	| jq -r '.assets[].name' | grep 'x86_64-linux-gnu')
-EDIT_ASSET_ARM=$(curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/repos/microsoft/edit/releases/latest" \
-	| jq -r '.assets[].name' | grep 'aarch64-linux-gnu')
+_edit_response=$(curl -fsSL -w '\n%{http_code}' "${AUTH_HEADER[@]}" \
+	"https://api.github.com/repos/microsoft/edit/releases/latest" 2>/dev/null) || true
+_edit_http=$(echo "$_edit_response" | tail -1)
+if [ "$_edit_http" = "403" ]; then
+	echo "Error: GitHub API rate limit exceeded (microsoft/edit assets)." >&2
+	echo "Set GITHUB_TOKEN to authenticate (5000 req/hr instead of 60)." >&2
+	exit 1
+elif [ "$_edit_http" != "200" ]; then
+	echo "Error: GitHub API returned HTTP ${_edit_http} for microsoft/edit assets." >&2
+	exit 1
+fi
+_edit_body=$(echo "$_edit_response" | sed '$d')
+EDIT_ASSET_X86=$(echo "$_edit_body" | jq -r '.assets[].name' | grep 'x86_64-linux-gnu')
+EDIT_ASSET_ARM=$(echo "$_edit_body" | jq -r '.assets[].name' | grep 'aarch64-linux-gnu')
 EDIT_ASSET_VERSION=$(echo "$EDIT_ASSET_X86" | sed -E 's/^edit-([0-9]+\.[0-9]+\.[0-9]+)-.*/\1/')
 
 HELIX_TAG=$(gh_latest_tag helix-editor/helix)

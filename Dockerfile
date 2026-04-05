@@ -32,6 +32,16 @@ ARG STARSHIP_VERSION=1.24.2
 ARG GH_DASH_VERSION=4.23.2
 ARG GLOW_VERSION=2.1.1
 
+# Validate version ARGs are non-empty
+RUN test -n "$DELTA_VERSION"    || { echo "Error: DELTA_VERSION is empty" >&2; exit 1; } \
+ && test -n "$YQ_VERSION"       || { echo "Error: YQ_VERSION is empty" >&2; exit 1; } \
+ && test -n "$LAZYGIT_VERSION"  || { echo "Error: LAZYGIT_VERSION is empty" >&2; exit 1; } \
+ && test -n "$XH_VERSION"       || { echo "Error: XH_VERSION is empty" >&2; exit 1; } \
+ && test -n "$YAZI_VERSION"     || { echo "Error: YAZI_VERSION is empty" >&2; exit 1; } \
+ && test -n "$STARSHIP_VERSION" || { echo "Error: STARSHIP_VERSION is empty" >&2; exit 1; } \
+ && test -n "$GH_DASH_VERSION"  || { echo "Error: GH_DASH_VERSION is empty" >&2; exit 1; } \
+ && test -n "$GLOW_VERSION"     || { echo "Error: GLOW_VERSION is empty" >&2; exit 1; }
+
 # Checksum verification infrastructure
 COPY checksums.txt /tmp/checksums.txt
 COPY scripts/verify-checksum.sh /usr/local/bin/verify-checksum

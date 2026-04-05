@@ -2,35 +2,66 @@
 
 Items are ordered by priority within each section. Sections are ordered by priority.
 
-## P0 — Security (fix first)
+## P0 — Pre-release blockers
 
 - [x] **Pin all binary versions and add SHA256 checksum verification** for every download in Dockerfile and setup.sh
 - [x] **Audit and document the trust model for `curl | bash` install path** — users piping install.sh into their shell need to understand what it does; mitigate MITM and compromised-repo risks
+- [ ] **Add a LICENSE file** — without one, the project is legally "all rights reserved" and nobody can use it. MIT or Apache-2.0.
+- [ ] **Fix install URL case mismatch** — README and `install.sh` use lowercase `squarebox` in GitHub URLs, but the repo is `SquareBox` (mixed case). GitHub raw URLs are case-sensitive, so the one-liner install command will break.
+- [ ] **Remove `/usr/local/bin` ownership by dev user** (Dockerfile line ~151) — `chown dev:dev /usr/local/bin` lets any code in the container replace system binaries. Use `sudo` in `sqrbx-update` or install user-updatable tools to `~/.local/bin` instead.
+- [ ] **Add checksum verification to `sqrbx-update`** — Dockerfile and setup.sh verify SHA256 checksums, but `squarebox-update.sh` downloads and installs binaries with zero integrity checking. Conspicuous gap in a project that emphasizes supply-chain security.
+- [ ] **Remove TASKS.md from the public repo before v1** — internal backlog with unchecked TODOs and commentary about gaps signals "unfinished." Move to GitHub Issues or a project board.
 
-## P1 — Reliability (fix next)
+## P1 — Reliability
 
-- [ ] **Validate version variables are non-empty** before using them in download URLs (Dockerfile lines 50-90, setup.sh SDK installs) — empty vars silently produce broken binaries
-- [ ] **Handle GitHub API rate limiting** (60 req/hr unauthenticated) — fail fast with a clear message instead of silently continuing; pass `GITHUB_TOKEN` header on GitHub API calls when available
-- [ ] **Verify SDK install success** before continuing (e.g. check `nvm install --lts` exit code, verify binaries exist)
-- [ ] Add cleanup trap in setup.sh to remove temp files on failure
-- [ ] Handle partial setup failure — clean up half-configured state so retries work cleanly
+- [x] **Validate version variables are non-empty** before using them in download URLs (Dockerfile lines 50-90, setup.sh SDK installs) — empty vars silently produce broken binaries
+- [x] **Handle GitHub API rate limiting** (60 req/hr unauthenticated) — fail fast with a clear message instead of silently continuing; pass `GITHUB_TOKEN` header on GitHub API calls when available
+- [x] **Verify SDK install success** before continuing (e.g. check `nvm install --lts` exit code, verify binaries exist)
+- [x] Add cleanup trap in setup.sh to remove temp files on failure
+- [x] Handle partial setup failure — clean up half-configured state so retries work cleanly
+- [ ] **Guard gh config persistence on auth failure** — `setup.sh` lines 71-72 copy `~/.config/gh/*` unconditionally after `gh auth login`. If the user cancels, this errors out and kills the entire setup script due to `set -e`. Wrap in `gh auth status` check.
+- [ ] **Fix delta install fallback in `sqrbx-update`** — `sudo dpkg -i ... 2>/dev/null || dpkg -i ...` swallows the real error and the non-sudo fallback also fails. Emit a clear error instead.
+- [ ] **Clean up temp dirs on failure in `sqrbx-update`** — each `*_install` function creates `mktemp -d` but never cleans up on error. Add trap or explicit cleanup.
+- [ ] **Use `mktemp` for `sqrbx-update` log file** — currently writes to predictable `/tmp/sqrbx-update-log.txt`.
 
-## P1 — install.sh (fix next)
+## P1 — install.sh
 
-- [ ] **Fix shell detection** — use `$SHELL` instead of checking if `~/.zshrc` exists (currently writes aliases to wrong file for bash users with a stale .zshrc)
-- [ ] **Make alias injection idempotent** — check if aliases already exist before appending to shell RC file
-- [ ] Document (or mitigate) that `sqrbx-update` destroys the container and loses in-container state (installed SDKs, shell history, setup-done flag)
+- [x] **Fix shell detection** — use `$SHELL` instead of checking if `~/.zshrc` exists (currently writes aliases to wrong file for bash users with a stale .zshrc)
+- [x] **Make alias injection idempotent** — check if aliases already exist before appending to shell RC file
+- [x] Document (or mitigate) that `sqrbx-rebuild` destroys the container and loses in-container state (shell history, manually installed packages, custom dotfiles)
+
+## P1 — Documentation fixes
+
+- [ ] **Fix SECURITY.md wrong alias** — references `sqrbx-update` but `install.sh` actually creates `sqrbx-rebuild`
+- [ ] **Fix CLAUDE.md `sqrbx-update` description** — says "pull latest repo changes and rebuild" but it actually updates tool binaries in-place
 
 ## P2 — Dockerfile improvements
 
 - [ ] Split the monolithic binary tools `RUN` block (lines 50-90) into smaller per-tool `RUN` blocks for better cache behavior
 - [ ] Unify architecture detection — currently uses `dpkg --print-architecture` in one place and `uname -m` in another
 - [ ] Pick one versioning strategy: either pin all versions or fetch all dynamically (currently mixed)
+- [ ] **Add `CMD ["/bin/bash"]`** — without it, `docker run` without `-it` drops into `/bin/sh` (no starship, no aliases)
+- [ ] **Fix `apt-get purge` ordering** — gnupg purge runs after `rm -rf /var/lib/apt/lists/*`. Swap: purge first, then clean lists.
+- [ ] **Check if Eza APT repo supports HTTPS** — currently uses `http://deb.gierens.de`. GPG signing mitigates, but HTTPS is preferred.
 
-## P2 — setup.sh improvements
+## P2 — Script improvements
 
 - [ ] Add input validation for git name/email and SDK selection prompts
 - [ ] Make GO_VERSION parsing more robust (currently assumes first line of go.dev/VERSION response)
+- [ ] **Remove dead code in `update-versions.sh`** — line 63 calls `strip_v` on delta version, then line 64 immediately overwrites the result
+- [ ] **Fetch NVM version dynamically in `update-versions.sh`** — every other tool is fetched from GitHub, but NVM is hardcoded to `0.40.3` with no explanation
+- [ ] **Replace fragile `find -exec mv` pattern** — used in `setup.sh` (lines 141, 219, 231) and `sqrbx-update` to locate extracted binaries. Silently succeeds if no match is found. Use explicit paths instead.
+- [ ] **Fix empty SDK list message** — `setup.sh` line 294 prints "Installing SDKs: (from previous selection)" even when the list is empty
+- [ ] **Add comment explaining `BROWSER=echo` trick** — `setup.sh` line 69 uses this to make `gh auth login` print the URL instead of opening a browser. Non-obvious to contributors.
+- [ ] **Remove redundant `rm -rf`** — `install_helix` (setup.sh line 237) deletes `~/.config/helix/runtime` before starting the download, then does it again at line 252. Remove the first one.
+
+## P2 — README/docs cleanup
+
+- [ ] **Note macOS `sed` incompatibility in uninstall section** — `sed -i` without a backup suffix doesn't work on macOS. Provide macOS-compatible commands.
+- [ ] **Remove `master` branch from CI triggers** — `.github/workflows/build.yml` triggers on both `main` and `master`. Repo uses `main`.
+- [ ] **Clarify alias table** — `lsa` is listed as `ls -a` but actually resolves to `eza --icons -a` due to alias chaining
+- [ ] **Verify OpenCode repo URL** — README links to `https://github.com/anomalyco/opencode`, which may have moved
+- [ ] **Add "approximate, as of v1.0" note to disk usage table** — sizes will drift as tools update
 
 ## P3 — CI coverage gaps
 
@@ -41,7 +72,7 @@ Items are ordered by priority within each section. Sections are ordered by prior
 
 ## P4 — Features & Polish
 
-- [ ] **Add tmux** — preconfigured terminal multiplexer with a sensible default layout (editor, terminal, lazygit panes) and keybindings
+- [ ] **Add tmux and zellij as optional installs** — offer both terminal multiplexers in the setup.sh selection menu, preconfigured with sensible defaults
 - [ ] **Custom colour theme** — ship a unified terminal colour palette (e.g. Catppuccin or Tokyo Night) so bat, delta, fzf, eza, starship, and tmux all look coordinated out of the box
 - [ ] **Dotfile portability** — let users mount or bootstrap their own dotfiles (starship.toml, tmux.conf, aliases, etc.) via a `~/.squarebox/` convention, with sensible merge/override behaviour against the defaults
 - [ ] **Versioned releases with changelogs** — publish GitHub Releases with semantic version tags and changelogs so users can pin to a known-good version and see what changed
@@ -51,3 +82,7 @@ Items are ordered by priority within each section. Sections are ordered by prior
 
 - [x] Add a `.dockerignore` to exclude `.git/` and other unnecessary context from Docker builds
 - [ ] Support multiple concurrent container instances
+- [ ] Add `.editorconfig` for contributor consistency
+- [ ] Add `CONTRIBUTING.md` with build/test/PR instructions
+- [ ] Expand `.gitignore` — currently only covers `.DS_Store` and swap files
+- [ ] Add TASKS.md to `.dockerignore` to keep it out of build context

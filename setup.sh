@@ -129,14 +129,18 @@ for _var in OPENCODE_VERSION MICRO_VERSION EDIT_VERSION EDIT_ASSET_VERSION FRESH
 done
 
 if [ "$ai_choice" = "opencode" ] || [ "$ai_choice" = "both" ]; then
-	echo "Installing OpenCode v${OPENCODE_VERSION}..."
-	ARCH=$(uname -m)
-	if [ "$ARCH" = "aarch64" ]; then OCARCH="arm64"; else OCARCH="x64"; fi
-	curl -fsSLo /tmp/opencode.tar.gz "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OCARCH}.tar.gz"
-	verify_checksum /tmp/opencode.tar.gz "opencode-linux-${OCARCH}.tar.gz"
-	tar xzf /tmp/opencode.tar.gz -C /tmp
-	find /tmp -name 'opencode' -type f -executable -exec mv {} ~/.local/bin/opencode \;
-	rm -f /tmp/opencode.tar.gz
+	if command -v opencode &>/dev/null; then
+		echo "OpenCode already installed, skipping."
+	else
+		echo "Installing OpenCode v${OPENCODE_VERSION}..."
+		ARCH=$(uname -m)
+		if [ "$ARCH" = "aarch64" ]; then OCARCH="arm64"; else OCARCH="x64"; fi
+		curl -fsSLo /tmp/opencode.tar.gz "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OCARCH}.tar.gz"
+		verify_checksum /tmp/opencode.tar.gz "opencode-linux-${OCARCH}.tar.gz"
+		tar xzf /tmp/opencode.tar.gz -C /tmp
+		find /tmp -name 'opencode' -type f -executable -exec mv {} ~/.local/bin/opencode \;
+		rm -f /tmp/opencode.tar.gz
+	fi
 fi
 
 # Set aliases based on selection
@@ -192,6 +196,7 @@ else
 fi
 
 install_micro() {
+	if command -v micro &>/dev/null; then echo "Micro already installed, skipping."; return 0; fi
 	echo "Installing Micro v${MICRO_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then MARCH="-arm64"; else MARCH="64"; fi
@@ -203,6 +208,7 @@ install_micro() {
 }
 
 install_edit() {
+	if command -v edit &>/dev/null; then echo "Edit already installed, skipping."; return 0; fi
 	echo "Installing Edit v${EDIT_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
@@ -215,6 +221,7 @@ install_edit() {
 }
 
 install_fresh() {
+	if command -v fresh &>/dev/null; then echo "Fresh already installed, skipping."; return 0; fi
 	echo "Installing Fresh v${FRESH_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
@@ -226,6 +233,8 @@ install_fresh() {
 }
 
 install_helix() {
+	if command -v hx &>/dev/null; then echo "Helix already installed, skipping."; return 0; fi
+	rm -rf ~/.config/helix/runtime
 	echo "Installing Helix v${HELIX_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
@@ -246,6 +255,8 @@ install_helix() {
 }
 
 install_nvim() {
+	if command -v nvim &>/dev/null; then echo "Neovim already installed, skipping."; return 0; fi
+	rm -rf ~/.local/nvim
 	echo "Installing Neovim v${NVIM_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then NARCH="arm64"; else NARCH="x86_64"; fi
@@ -311,8 +322,8 @@ else
 	echo "$sdk_list" > "$SDK_CONFIG"
 fi
 
-# SDK path setup file
-> ~/.squarebox-sdk-paths
+# SDK path setup file (create if missing, preserve on retry)
+touch ~/.squarebox-sdk-paths
 
 # Pinned versions — update via: scripts/update-versions.sh
 NVM_VERSION="0.40.3"
@@ -326,6 +337,8 @@ for _var in NVM_VERSION GO_VERSION; do
 done
 
 install_node() {
+	if command -v node &>/dev/null; then echo "Node.js already installed, skipping."; return 0; fi
+	rm -rf "$HOME/.nvm"
 	echo "Installing Node.js (via nvm v${NVM_VERSION})..."
 	curl -fsSo /tmp/nvm-install.sh "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
 	verify_checksum /tmp/nvm-install.sh "nvm-install-v${NVM_VERSION}.sh"
@@ -336,29 +349,38 @@ install_node() {
 	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 	# Node.js binary verification is handled by nvm
 	nvm install --lts
-	cat <<'PATHS' >> ~/.squarebox-sdk-paths
+	if ! grep -q 'NVM_DIR' ~/.squarebox-sdk-paths 2>/dev/null; then
+		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 PATHS
+	fi
 	if ! command -v node &>/dev/null; then
-		echo "Warning: Node.js binary not found after installation" >&2
+		echo "Error: Node.js binary not found after installation" >&2
+		exit 1
 	fi
 }
 
 install_python() {
+	if command -v uv &>/dev/null; then echo "uv already installed, skipping."; return 0; fi
 	echo "Installing Python (via uv)..."
 	# Trust boundary: the uv install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
 	curl -fsSL https://astral.sh/uv/install.sh | bash
-	cat <<'PATHS' >> ~/.squarebox-sdk-paths
+	if ! grep -q '\.local/bin' ~/.squarebox-sdk-paths 2>/dev/null; then
+		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export PATH="$HOME/.local/bin:$PATH"
 PATHS
+	fi
 	if ! command -v uv &>/dev/null; then
-		echo "Warning: uv binary not found after installation" >&2
+		echo "Error: uv binary not found after installation" >&2
+		exit 1
 	fi
 }
 
 install_go() {
+	if [ -x "${HOME}/.local/go/bin/go" ]; then echo "Go already installed, skipping."; return 0; fi
+	rm -rf "$HOME/.local/go"
 	echo "Installing Go ${GO_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then GOARCH="arm64"; else GOARCH="amd64"; fi
@@ -366,27 +388,35 @@ install_go() {
 	verify_checksum /tmp/go.tar.gz "${GO_VERSION}.linux-${GOARCH}.tar.gz"
 	tar xzf /tmp/go.tar.gz -C ~/.local
 	rm /tmp/go.tar.gz
-	cat <<'PATHS' >> ~/.squarebox-sdk-paths
+	if ! grep -q 'GOROOT' ~/.squarebox-sdk-paths 2>/dev/null; then
+		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export GOROOT="$HOME/.local/go"
 export GOPATH="$HOME/go"
 export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
 PATHS
+	fi
 	if [ ! -x "${HOME}/.local/go/bin/go" ]; then
-		echo "Warning: Go binary not found after installation" >&2
+		echo "Error: Go binary not found after installation" >&2
+		exit 1
 	fi
 }
 
 install_dotnet() {
+	if [ -x "${HOME}/.dotnet/dotnet" ]; then echo ".NET already installed, skipping."; return 0; fi
+	rm -rf "$HOME/.dotnet"
 	echo "Installing .NET..."
 	# Trust boundary: the .NET install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
 	curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS
-	cat <<'PATHS' >> ~/.squarebox-sdk-paths
+	if ! grep -q 'DOTNET_ROOT' ~/.squarebox-sdk-paths 2>/dev/null; then
+		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export DOTNET_ROOT="$HOME/.dotnet"
 export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
 PATHS
+	fi
 	if [ ! -x "${HOME}/.dotnet/dotnet" ]; then
-		echo "Warning: .NET binary not found after installation" >&2
+		echo "Error: .NET binary not found after installation" >&2
+		exit 1
 	fi
 }
 

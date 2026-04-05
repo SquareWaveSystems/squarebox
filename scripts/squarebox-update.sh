@@ -37,9 +37,35 @@ fi
 
 # ── GitHub helpers ──────────────────────────────────────────────────
 
+check_rate_limit() {
+	local info remaining limit
+	info=$(curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/rate_limit" 2>/dev/null) || return 0
+	remaining=$(echo "$info" | jq -r '.rate.remaining' 2>/dev/null) || return 0
+	limit=$(echo "$info" | jq -r '.rate.limit' 2>/dev/null) || return 0
+	if [[ "${remaining:-0}" =~ ^[0-9]+$ ]] && [ "$remaining" -lt 20 ]; then
+		echo -e "${RED}Warning: Only ${remaining}/${limit} GitHub API requests remaining.${RESET}" >&2
+		if [ -z "${GITHUB_TOKEN:-}" ]; then
+			echo -e "${YELLOW}Set GITHUB_TOKEN to authenticate (5000 req/hr instead of 60).${RESET}" >&2
+		fi
+		echo >&2
+	fi
+}
+
 gh_latest_tag() {
 	local repo="$1"
-	curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null | jq -r '.tag_name'
+	local response http_code body
+	response=$(curl -fsSL -w '\n%{http_code}' "${AUTH_HEADER[@]}" \
+		"https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) || true
+	http_code=$(echo "$response" | tail -1)
+	body=$(echo "$response" | sed '$d')
+	if [ "$http_code" = "403" ]; then
+		echo "Error: GitHub API rate limit exceeded (${repo}). Set GITHUB_TOKEN to authenticate." >&2
+		return 1
+	elif [ "$http_code" != "200" ]; then
+		echo "Error: GitHub API returned HTTP ${http_code} for ${repo}." >&2
+		return 1
+	fi
+	echo "$body" | jq -r '.tag_name'
 }
 
 strip_v() { echo "${1#v}"; }
@@ -184,8 +210,19 @@ edit_install() {
 	local ver="$1"
 	# Edit has a quirk: asset version may differ from tag version. Query the actual asset name.
 	local asset_name
-	asset_name=$(curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/repos/${edit_repo}/releases/latest" \
-		| jq -r '.assets[].name' | grep "${ZARCH}-linux-gnu" | head -1)
+	local api_response
+	api_response=$(curl -fsSL -w '\n%{http_code}' "${AUTH_HEADER[@]}" \
+		"https://api.github.com/repos/${edit_repo}/releases/latest" 2>/dev/null) || true
+	local api_code
+	api_code=$(echo "$api_response" | tail -1)
+	if [ "$api_code" = "403" ]; then
+		echo "  GitHub API rate limit exceeded. Set GITHUB_TOKEN to authenticate." >&2
+		return 1
+	elif [ "$api_code" != "200" ]; then
+		echo "  GitHub API returned HTTP ${api_code} for ${edit_repo}." >&2
+		return 1
+	fi
+	asset_name=$(echo "$api_response" | sed '$d' | jq -r '.assets[].name' | grep "${ZARCH}-linux-gnu" | head -1)
 	if [ -z "$asset_name" ]; then
 		echo "  Could not find edit asset for ${ZARCH}" >&2
 		return 1
@@ -305,7 +342,11 @@ check_tool() {
 
 	local current latest
 	current=$("${tool}_current")
-	latest=$("${tool}_latest")
+	if ! latest=$("${tool}_latest"); then
+		printf "  %-12s ${RED}%s${RESET} ${DIM}(could not check latest)${RESET}\n" "$display" "$current"
+		echo "skip"
+		return
+	fi
 
 	# Normalize: strip leading v for comparison
 	local current_clean latest_clean
@@ -330,7 +371,10 @@ update_tool() {
 	local display="${TOOL_DISPLAY_NAMES[$idx]}"
 
 	local latest
-	latest=$("${tool}_latest")
+	if ! latest=$("${tool}_latest"); then
+		printf "  ${RED}Skipping %s (could not fetch latest version)${RESET}\n" "$display"
+		return
+	fi
 	local latest_clean
 	latest_clean=$(echo "$latest" | sed 's/^v//')
 
@@ -346,6 +390,8 @@ update_tool() {
 # ── Entry point ─────────────────────────────────────────────────────
 
 main() {
+	check_rate_limit
+
 	local mode="check"
 	local single_tool=""
 

@@ -26,7 +26,7 @@ min_time = 2000
 format = "[$duration]($style)"
 
 [env_var.SQUAREBOX]
-format = "[📦](yellow) "
+format = "[🟧📦](yellow) "
 
 [character]
 success_symbol = "[>](green)"

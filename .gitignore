@@ -2,3 +2,5 @@
 *.swp
 *.swo
 *~
+workspace/
+.config/

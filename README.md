@@ -1,5 +1,5 @@
-SquareBox
-=========
+🟧📦 SquareBox
+==============
 
 A containerised development environment packed with modern CLI/TUI tools and
 AI coding assistants. One install script gives you a ready-to-go terminal
@@ -39,7 +39,7 @@ inside the container (installed packages, config files, shell history) persist
 between sessions. Think of it as a VM that suspends on exit and resumes on
 start.
 
-Your code lives on the host at ~/squarebox-workspace and is mounted into the
+Your code lives on the host at ~/squarebox/workspace and is mounted into the
 container, so it is never lost even if the container is deleted.
 
 How it works
@@ -55,7 +55,9 @@ difference:
 
 Volume mounts:
 
-- ~/squarebox-workspace -> /workspace: your code (lives on host, survives container deletion)
+- ~/squarebox/workspace -> /workspace: your code (lives on host, survives container deletion)
+- ~/squarebox/.config/starship.toml -> /home/dev/.config/starship.toml: prompt config (survives rebuilds)
+- ~/squarebox/.config/lazygit/ -> /home/dev/.config/lazygit/: lazygit config (survives rebuilds)
 - ~/.ssh -> /home/dev/.ssh (read-only): SSH keys for git
 - ~/.config/git -> /home/dev/.config/git: shared git config
 
@@ -174,9 +176,29 @@ Set `GITHUB_TOKEN` to avoid API rate limits.
     sqrbx-rebuild
 
 Pulls the latest changes, rebuilds the image, and replaces the container.
-Your code in ~/squarebox-workspace is safe since it lives on the host.
-Setup selections (AI tool, SDKs, GitHub auth) are persisted in the workspace
-volume and restored automatically.
+Your code in ~/squarebox/workspace is safe since it lives on the host.
+Setup selections (AI tool, editors, SDKs, GitHub auth) are persisted in the
+workspace volume and restored automatically. However, shell history, manually
+installed packages, and custom config files inside the container are lost.
+
+#### What survives a rebuild
+
+| Survives | Lost |
+|----------|------|
+| Code in ~/squarebox/workspace (host volume) | Shell history (~/.bash_history) |
+| Starship and lazygit config (host volume) | Manually installed apt packages |
+| AI tool / editor / SDK selections | Custom dotfiles in /home/dev/ |
+| GitHub CLI auth | Caches and temp files |
+| SSH keys (read-only mount from host) | |
+
+Git identity (user.name, user.email) is re-prompted on first login after
+rebuild. To preserve additional files across rebuilds, store them in
+`/workspace/.squarebox/` — this directory lives on the host volume.
+Config files in `~/squarebox/.config/` (starship, lazygit) also persist on the host.
+
+> **Tip:** Use `sqrbx-update` from inside the container to update tools without
+> rebuilding. Only use `sqrbx-rebuild` when the base image itself needs to
+> change (new apt packages, new base tools, Dockerfile changes).
 
 Disk usage
 ----------
@@ -233,5 +255,5 @@ Remove the aliases from your shell config (~/.bashrc or ~/.zshrc):
     sed -i '/alias sqrbx=/d' ~/.bashrc ~/.zshrc 2>/dev/null
     sed -i '/alias sqrbx-rebuild=/d' ~/.bashrc ~/.zshrc 2>/dev/null
 
-Your code in ~/squarebox-workspace is left untouched. Delete it manually if
-you no longer need it.
+This removes everything including your workspace and config. Back up
+~/squarebox/workspace first if you need your code.
