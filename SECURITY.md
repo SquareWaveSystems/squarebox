@@ -11,7 +11,7 @@ install script performs these actions on your **host** system:
 4. Creates a Docker container named `squarebox` with volume mounts for your
    workspace (`~/squarebox-workspace`), SSH keys (`~/.ssh`, read-only),
    and git config (`~/.config/git`)
-5. Appends two shell aliases (`squarebox`, `squarebox-update`) to your `~/.bashrc`
+5. Appends two shell aliases (`sqrbx`, `sqrbx-update`) to your `~/.bashrc`
    or `~/.zshrc`
 6. Starts the container interactively
 

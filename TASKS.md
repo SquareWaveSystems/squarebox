@@ -19,7 +19,7 @@ Items are ordered by priority within each section. Sections are ordered by prior
 
 - [ ] **Fix shell detection** — use `$SHELL` instead of checking if `~/.zshrc` exists (currently writes aliases to wrong file for bash users with a stale .zshrc)
 - [ ] **Make alias injection idempotent** — check if aliases already exist before appending to shell RC file
-- [ ] Document (or mitigate) that `squarebox-update` destroys the container and loses in-container state (installed SDKs, shell history, setup-done flag)
+- [ ] Document (or mitigate) that `sqrbx-update` destroys the container and loses in-container state (installed SDKs, shell history, setup-done flag)
 
 ## P2 — Dockerfile improvements
 

@@ -113,8 +113,8 @@ sessions. Think of it as a VM that suspends on exit and resumes on start.
 Your code lives on the host at ~/squarebox-workspace and is mounted into the container, so it
 is never lost even if the container is deleted.
 
-The install script also adds a `squarebox` alias to your shell, so after the first
-run you can just type `squarebox` to jump back in.
+The install script also adds a `sqrbx` alias to your shell, so after the first
+run you can just type `sqrbx` to jump back in.
 
 Security
 --------
@@ -170,7 +170,7 @@ Your code in ~/squarebox-workspace is safe since it lives on the host.
 Setup selections (AI tool, SDKs, GitHub auth) are persisted in the workspace
 volume and restored automatically.
 
-    squarebox-update
+    sqrbx-update
 
 Or equivalently, re-run the install script:
 
@@ -185,8 +185,8 @@ Uninstall
 
 Remove the aliases from your shell config (~/.bashrc or ~/.zshrc):
 
-    sed -i '/alias squarebox=/d' ~/.bashrc ~/.zshrc 2>/dev/null
-    sed -i '/alias squarebox-update=/d' ~/.bashrc ~/.zshrc 2>/dev/null
+    sed -i '/alias sqrbx=/d' ~/.bashrc ~/.zshrc 2>/dev/null
+    sed -i '/alias sqrbx-update=/d' ~/.bashrc ~/.zshrc 2>/dev/null
 
 Your code in ~/squarebox-workspace is left untouched. Delete it manually if
 you no longer need it.

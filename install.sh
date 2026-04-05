@@ -32,18 +32,18 @@ SHELL_RC="${HOME}/.bashrc"
 
 ALIASES_ADDED=false
 
-if ! grep -q 'alias squarebox=' "$SHELL_RC" 2>/dev/null; then
-	echo "alias squarebox='docker start -ai squarebox'" >> "$SHELL_RC"
+if ! grep -q 'alias sqrbx=' "$SHELL_RC" 2>/dev/null; then
+	echo "alias sqrbx='docker start -ai squarebox'" >> "$SHELL_RC"
 	ALIASES_ADDED=true
 fi
 
-if ! grep -q 'alias squarebox-update=' "$SHELL_RC" 2>/dev/null; then
-	echo "alias squarebox-update='~/squarebox/install.sh'" >> "$SHELL_RC"
+if ! grep -q 'alias sqrbx-update=' "$SHELL_RC" 2>/dev/null; then
+	echo "alias sqrbx-update='~/squarebox/install.sh'" >> "$SHELL_RC"
 	ALIASES_ADDED=true
 fi
 
 if [ "$ALIASES_ADDED" = true ]; then
-	echo "Added squarebox aliases to $SHELL_RC — restart your shell or run: source $SHELL_RC"
+	echo "Added sqrbx aliases to $SHELL_RC — restart your shell or run: source $SHELL_RC"
 fi
 
 # Create and enter container
@@ -59,5 +59,5 @@ docker create -it --name "$CONTAINER_NAME" \
 if [ -t 0 ]; then
 	docker start -ai "$CONTAINER_NAME"
 else
-	echo "Install complete. Run 'squarebox' to start (you may need to restart your shell first)."
+	echo "Install complete. Run 'sqrbx' to start (you may need to restart your shell first)."
 fi
