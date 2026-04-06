@@ -3,7 +3,7 @@
 **Containerised dev environment packed with modern CLI/TUI tools and AI coding assistants. Batteries included.**
 
 Curated Rust/Go replacements for everyday Unix tools, multiple AI-powered
-editors, and sensible defaults — all in a reproducible Docker container you can
+editors, and sensible defaults, all in a reproducible Docker container you can
 spin up on any machine.
 
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.webp)
@@ -28,7 +28,7 @@ Start
 
     squarebox        # or: sqrbx
 
-The container is persistent — it suspends on exit and resumes on start, keeping
+The container is persistent: it suspends on exit and resumes on start, keeping
 installed packages, config, and shell history intact between sessions. Your code
 lives on the host at `~/squarebox/workspace` via volume mount, so it survives
 even if the container is deleted.
@@ -66,7 +66,7 @@ What's included
 
 ### AI Coding Assistants (optional)
 
-Installed during first-run setup — choose one or both:
+Installed during first-run setup. Choose one or both:
 
 | Name | Language | Description |
 |------|----------|-------------|
@@ -113,7 +113,7 @@ Inspired by [Omarchy](https://omarchy.com).
 
 ### SDKs (optional)
 
-Selected during first-run setup — choose any combination, all, or none:
+Selected during first-run setup. Choose any combination, all, or none:
 
 | SDK | Installed via |
 |-----|---------------|
@@ -133,7 +133,7 @@ Update
     sqrbx-update
 
 Checks all GitHub-released tools against latest versions and updates them
-in-place — no rebuild required. Your container state, SDKs, and config are
+in-place. No rebuild required. Your container state, SDKs, and config are
 preserved.
 
     sqrbx-update              # show available updates (dry run)
@@ -197,8 +197,8 @@ All binary tools are pinned to specific versions and verified against SHA256
 checksums at build time. Third-party install scripts (Claude Code, uv, .NET)
 manage their own binary verification.
 
-For the full trust model — what `install.sh` does on your machine, how each
-layer is verified, and how to inspect the script before running it — see
+For the full trust model (what `install.sh` does on your machine, how each
+layer is verified, and how to inspect the script before running it) see
 [SECURITY.md](SECURITY.md).
 
 Devcontainer / Codespaces
