@@ -11,6 +11,8 @@ environment they can spin up on any machine with Docker. Useful as a daily
 driver, a sandbox for trying out TUI tools, or a starting point for your own
 container-based dev setup.
 
+![SquareBox first-run setup](https://raw.githubusercontent.com/BrettKinny/SquareBox/demo/demo/squarebox-setup.webp)
+
 Prerequisites
 -------------
 
