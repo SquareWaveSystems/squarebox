@@ -45,7 +45,7 @@ Selections are saved to `/workspace/.squarebox/` and reused on subsequent rebuil
 # Update all pinned versions, checksums, Dockerfile ARGs, and setup.sh versions
 scripts/update-versions.sh
 
-# Inside a running container, pull latest repo changes and rebuild
+# Inside a running container, update tool binaries in-place from GitHub releases
 sqrbx-update
 ```
 

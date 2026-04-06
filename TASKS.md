@@ -32,8 +32,8 @@ Items are ordered by priority within each section. Sections are ordered by prior
 
 ## P1 — Documentation fixes
 
-- [ ] **Fix SECURITY.md wrong alias** — references `sqrbx-update` but `install.sh` actually creates `sqrbx-rebuild`
-- [ ] **Fix CLAUDE.md `sqrbx-update` description** — says "pull latest repo changes and rebuild" but it actually updates tool binaries in-place
+- [x] **Fix SECURITY.md wrong alias** — references `sqrbx-update` but `install.sh` actually creates `sqrbx-rebuild`
+- [x] **Fix CLAUDE.md `sqrbx-update` description** — says "pull latest repo changes and rebuild" but it actually updates tool binaries in-place
 
 ## P2 — Structural simplification
 
