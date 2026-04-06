@@ -9,7 +9,7 @@ Items are ordered by priority within each section. Sections are ordered by prior
 - [x] **Add a LICENSE file** — without one, the project is legally "all rights reserved" and nobody can use it. MIT or Apache-2.0.
 - [x] **Fix install URL case mismatch** — not a real issue; GitHub raw URLs and git clone URLs are case-insensitive for repo names. Both `squarebox` and `SquareBox` resolve identically.
 - [x] **Remove `/usr/local/bin` ownership by dev user** (Dockerfile line ~151) — `chown dev:dev /usr/local/bin` lets any code in the container replace system binaries. Use `sudo` in `sqrbx-update` or install user-updatable tools to `~/.local/bin` instead.
-- [ ] **Add checksum verification to `sqrbx-update`** — Dockerfile and setup.sh verify SHA256 checksums, but `squarebox-update.sh` downloads and installs binaries with zero integrity checking. Conspicuous gap in a project that emphasizes supply-chain security.
+- [x] **Add checksum verification to `sqrbx-update`** — Dockerfile and setup.sh verify SHA256 checksums, but `squarebox-update.sh` downloads and installs binaries with zero integrity checking. Conspicuous gap in a project that emphasizes supply-chain security.
 - [ ] **Remove TASKS.md from the public repo before v1** — internal backlog with unchecked TODOs and commentary about gaps signals "unfinished." Move to GitHub Issues or a project board.
 
 ## P1 — Reliability

@@ -40,6 +40,7 @@ at each layer:
 | **Dockerfile — APT packages** | Ubuntu 24.04 packages, GitHub CLI, Eza | HTTPS | APT GPG signatures | Distro versions (not pinned) |
 | **Dockerfile — binary tools** | 10 tools from GitHub Releases (delta, lazygit, starship, etc.) | HTTPS | SHA256 checksum — build fails on mismatch | Yes, all pinned |
 | **setup.sh — SDKs with checksums** | OpenCode, nvm, Go | HTTPS | SHA256 checksum | Yes, all pinned |
+| **sqrbx-update** | Same tools as above | HTTPS | SHA256 checksum — fetched from repo, update refused on mismatch or missing checksum | Only vetted versions |
 | **setup.sh — third-party installers** | Claude Code, uv, .NET | HTTPS | Delegates to vendor installer | No (latest/LTS) |
 
 **What this means in practice:**
@@ -56,7 +57,27 @@ at each layer:
 
 Checksums are maintained in `checksums.txt` (Dockerfile tools) and
 `setup-checksums.txt` (setup.sh tools), covering both x86_64 and aarch64
-architectures. To update all tool versions and recompute checksums:
+architectures.
+
+All three install paths — Dockerfile builds, `setup.sh`, and `sqrbx-update` —
+verify downloads against these checksums. `sqrbx-update` fetches the latest
+checksum files from the repo's `main` branch before installing, so it will
+only install versions that have been vetted and committed to the repo. If a
+tool has a newer upstream release but no matching checksum in the repo, the
+update is refused.
+
+### Updating tool versions
+
+To vet and publish new tool versions:
+
+1. Run `./scripts/update-versions.sh` — this fetches the latest releases,
+   downloads artifacts for both architectures, computes SHA256 checksums,
+   and updates `checksums.txt`, `setup-checksums.txt`, the Dockerfile, and
+   `setup.sh`.
+2. Review the diff — verify the version bumps and checksums look correct.
+3. Commit and push to `main`.
+
+Users running `sqrbx-update --apply` will then pick up these vetted versions.
 
 ```bash
 ./scripts/update-versions.sh

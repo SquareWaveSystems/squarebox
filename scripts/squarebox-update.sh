@@ -35,6 +35,53 @@ else
 	ZARCH="x86_64"; LARCH="x86_64"; GOARCH="amd64"; DPKG_ARCH="amd64"; OCARCH="x64"
 fi
 
+# ── Checksum verification ──────────────────────────────────────────
+# Fetches checksums.txt and setup-checksums.txt from the repo's main branch.
+# Only versions that have been vetted (committed to the repo) can be installed.
+
+REPO_RAW="https://raw.githubusercontent.com/BrettKinny/SquareBox/main"
+CHECKSUM_DIR=$(mktemp -d)
+CHECKSUMS_FETCHED=false
+
+fetch_checksums() {
+	if [ "$CHECKSUMS_FETCHED" = true ]; then return 0; fi
+	if curl -fsSLo "$CHECKSUM_DIR/checksums.txt" "$REPO_RAW/checksums.txt" 2>/dev/null \
+		&& curl -fsSLo "$CHECKSUM_DIR/setup-checksums.txt" "$REPO_RAW/setup-checksums.txt" 2>/dev/null; then
+		# Merge both files
+		cat "$CHECKSUM_DIR/checksums.txt" "$CHECKSUM_DIR/setup-checksums.txt" > "$CHECKSUM_DIR/all-checksums.txt"
+		CHECKSUMS_FETCHED=true
+	else
+		echo -e "${RED}Warning: Could not fetch checksums from repo. Updates will be skipped.${RESET}" >&2
+		return 1
+	fi
+}
+
+# Verify a downloaded file against the fetched checksums.
+# Usage: verify_checksum <file> <artifact-name>
+# Returns 0 on match, 1 on mismatch, 2 if no checksum found (version not vetted).
+verify_checksum() {
+	local file="$1" name="$2"
+	if [ "$CHECKSUMS_FETCHED" != true ]; then return 2; fi
+	local expected
+	expected=$(grep -E "^[0-9a-f]{64}  ${name}$" "$CHECKSUM_DIR/all-checksums.txt" | awk '{print $1}') || true
+	if [ -z "$expected" ]; then
+		echo -e "    ${YELLOW}No checksum found for ${name} — version not yet vetted in repo${RESET}" >&2
+		return 2
+	fi
+	local actual
+	actual=$(sha256sum "$file" | awk '{print $1}')
+	if [ "$actual" != "$expected" ]; then
+		echo -e "    ${RED}CHECKSUM MISMATCH for ${name}${RESET}" >&2
+		echo -e "    ${RED}  expected: ${expected}${RESET}" >&2
+		echo -e "    ${RED}  actual:   ${actual}${RESET}" >&2
+		return 1
+	fi
+	return 0
+}
+
+cleanup_checksums() { rm -rf "$CHECKSUM_DIR"; }
+trap cleanup_checksums EXIT
+
 # ── GitHub helpers ──────────────────────────────────────────────────
 
 check_rate_limit() {
@@ -79,9 +126,11 @@ delta_current() { delta --version 2>/dev/null | awk '{print $2}' || echo "not in
 delta_latest() { gh_latest_tag "$delta_repo"; }
 delta_install() {
 	local ver="$1"
+	local artifact="git-delta_${ver}_${DPKG_ARCH}.deb"
 	local tmp=$(mktemp -d)
-	curl -fsSLo "$tmp/delta.deb" "https://github.com/${delta_repo}/releases/download/${ver}/git-delta_${ver}_${DPKG_ARCH}.deb"
-	sudo dpkg -i "$tmp/delta.deb" 2>/dev/null || dpkg -i "$tmp/delta.deb"
+	curl -fsSLo "$tmp/delta.deb" "https://github.com/${delta_repo}/releases/download/${ver}/${artifact}"
+	verify_checksum "$tmp/delta.deb" "$artifact" || { rm -rf "$tmp"; return 1; }
+	sudo dpkg -i "$tmp/delta.deb"
 	rm -rf "$tmp"
 }
 
@@ -91,7 +140,9 @@ yq_current() { yq --version 2>/dev/null | grep -oP 'v[\d.]+' | head -1 | sed 's/
 yq_latest() { strip_v "$(gh_latest_tag "$yq_repo")"; }
 yq_install() {
 	local ver="$1"
-	curl -fsSLo "/tmp/yq" "https://github.com/${yq_repo}/releases/download/v${ver}/yq_linux_${DPKG_ARCH}"
+	local artifact="yq_linux_${DPKG_ARCH}"
+	curl -fsSLo "/tmp/yq" "https://github.com/${yq_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "/tmp/yq" "$artifact" || { rm -f /tmp/yq; return 1; }
 	sudo install /tmp/yq "${INSTALL_DIR}/yq"
 	rm -f /tmp/yq
 }
@@ -102,8 +153,10 @@ lazygit_current() { lazygit --version 2>/dev/null | grep -oP 'version=[\d.]+' | 
 lazygit_latest() { strip_v "$(gh_latest_tag "$lazygit_repo")"; }
 lazygit_install() {
 	local ver="$1"
+	local artifact="lazygit_${ver}_Linux_${LARCH}.tar.gz"
 	local tmp=$(mktemp -d)
-	curl -fsSLo "$tmp/lazygit.tar.gz" "https://github.com/${lazygit_repo}/releases/download/v${ver}/lazygit_${ver}_Linux_${LARCH}.tar.gz"
+	curl -fsSLo "$tmp/lazygit.tar.gz" "https://github.com/${lazygit_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "$tmp/lazygit.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xf "$tmp/lazygit.tar.gz" -C "$tmp" lazygit
 	sudo install "$tmp/lazygit" "${INSTALL_DIR}/lazygit"
 	rm -rf "$tmp"
@@ -115,8 +168,10 @@ xh_current() { xh --version 2>/dev/null | head -1 | awk '{print $2}' || echo "no
 xh_latest() { strip_v "$(gh_latest_tag "$xh_repo")"; }
 xh_install() {
 	local ver="$1"
+	local artifact="xh-v${ver}-${ZARCH}-unknown-linux-musl.tar.gz"
 	local tmp=$(mktemp -d)
-	curl -fsSLo "$tmp/xh.tar.gz" "https://github.com/${xh_repo}/releases/download/v${ver}/xh-v${ver}-${ZARCH}-unknown-linux-musl.tar.gz"
+	curl -fsSLo "$tmp/xh.tar.gz" "https://github.com/${xh_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "$tmp/xh.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/xh.tar.gz" --strip-components=1 -C "$tmp"
 	sudo install "$tmp/xh" "${INSTALL_DIR}/xh"
 	rm -rf "$tmp"
@@ -128,8 +183,10 @@ yazi_current() { yazi --version 2>/dev/null | awk '{print $2}' || echo "not inst
 yazi_latest() { strip_v "$(gh_latest_tag "$yazi_repo")"; }
 yazi_install() {
 	local ver="$1"
+	local artifact="yazi-${ZARCH}-unknown-linux-musl.zip"
 	local tmp=$(mktemp -d)
-	curl -fsSLo "$tmp/yazi.zip" "https://github.com/${yazi_repo}/releases/download/v${ver}/yazi-${ZARCH}-unknown-linux-musl.zip"
+	curl -fsSLo "$tmp/yazi.zip" "https://github.com/${yazi_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "$tmp/yazi.zip" "$artifact" || { rm -rf "$tmp"; return 1; }
 	unzip -q "$tmp/yazi.zip" -d "$tmp"
 	sudo install "$tmp/yazi-${ZARCH}-unknown-linux-musl/yazi" "${INSTALL_DIR}/yazi"
 	sudo install "$tmp/yazi-${ZARCH}-unknown-linux-musl/ya" "${INSTALL_DIR}/ya"
@@ -142,8 +199,10 @@ starship_current() { starship --version 2>/dev/null | awk '{print $2}' || echo "
 starship_latest() { strip_v "$(gh_latest_tag "$starship_repo")"; }
 starship_install() {
 	local ver="$1"
+	local artifact="starship-${ZARCH}-unknown-linux-musl.tar.gz"
 	local tmp=$(mktemp -d)
-	curl -fsSLo "$tmp/starship.tar.gz" "https://github.com/${starship_repo}/releases/download/v${ver}/starship-${ZARCH}-unknown-linux-musl.tar.gz"
+	curl -fsSLo "$tmp/starship.tar.gz" "https://github.com/${starship_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "$tmp/starship.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xf "$tmp/starship.tar.gz" -C "$tmp"
 	sudo install "$tmp/starship" "${INSTALL_DIR}/starship"
 	rm -rf "$tmp"
@@ -159,7 +218,9 @@ ghdash_current() {
 ghdash_latest() { strip_v "$(gh_latest_tag "$ghdash_repo")"; }
 ghdash_install() {
 	local ver="$1"
-	curl -fsSLo "/tmp/gh-dash" "https://github.com/${ghdash_repo}/releases/download/v${ver}/gh-dash_v${ver}_linux-${GOARCH}"
+	local artifact="gh-dash_v${ver}_linux-${GOARCH}"
+	curl -fsSLo "/tmp/gh-dash" "https://github.com/${ghdash_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "/tmp/gh-dash" "$artifact" || { rm -f /tmp/gh-dash; return 1; }
 	sudo install /tmp/gh-dash "${INSTALL_DIR}/gh-dash"
 	rm -f /tmp/gh-dash
 }
@@ -170,8 +231,10 @@ glow_current() { glow --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || ech
 glow_latest() { strip_v "$(gh_latest_tag "$glow_repo")"; }
 glow_install() {
 	local ver="$1"
+	local artifact="glow_${ver}_Linux_${LARCH}.tar.gz"
 	local tmp=$(mktemp -d)
-	curl -fsSLo "$tmp/glow.tar.gz" "https://github.com/${glow_repo}/releases/download/v${ver}/glow_${ver}_Linux_${LARCH}.tar.gz"
+	curl -fsSLo "$tmp/glow.tar.gz" "https://github.com/${glow_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "$tmp/glow.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/glow.tar.gz" -C "$tmp"
 	find "$tmp" -name 'glow' -type f -executable -exec sudo install {} "${INSTALL_DIR}/glow" \;
 	rm -rf "$tmp"
@@ -184,8 +247,10 @@ micro_latest() { strip_v "$(gh_latest_tag "$micro_repo")"; }
 micro_install() {
 	local ver="$1"
 	local march; if [ "$ZARCH" = "aarch64" ]; then march="-arm64"; else march="64"; fi
+	local artifact="micro-${ver}-linux${march}.tar.gz"
 	local tmp=$(mktemp -d)
-	curl -fsSLo "$tmp/micro.tar.gz" "https://github.com/${micro_repo}/releases/download/v${ver}/micro-${ver}-linux${march}.tar.gz"
+	curl -fsSLo "$tmp/micro.tar.gz" "https://github.com/${micro_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "$tmp/micro.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/micro.tar.gz" --strip-components=1 -C "$tmp"
 	install "$tmp/micro" "$HOME/.local/bin/micro"
 	rm -rf "$tmp"
@@ -197,8 +262,10 @@ fresh_current() { fresh --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || e
 fresh_latest() { strip_v "$(gh_latest_tag "$fresh_repo")"; }
 fresh_install() {
 	local ver="$1"
+	local artifact="fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
 	local tmp=$(mktemp -d)
-	curl -fsSLo "$tmp/fresh.tar.gz" "https://github.com/${fresh_repo}/releases/download/v${ver}/fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
+	curl -fsSLo "$tmp/fresh.tar.gz" "https://github.com/${fresh_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "$tmp/fresh.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xf "$tmp/fresh.tar.gz" -C "$tmp"
 	find "$tmp" -name 'fresh' -type f -executable -exec install {} "$HOME/.local/bin/fresh" \;
 	rm -rf "$tmp"
@@ -231,6 +298,7 @@ edit_install() {
 	fi
 	local tmp=$(mktemp -d)
 	curl -fsSLo "$tmp/edit.tar.zst" "https://github.com/${edit_repo}/releases/download/v${ver}/${asset_name}"
+	verify_checksum "$tmp/edit.tar.zst" "$asset_name" || { rm -rf "$tmp"; return 1; }
 	# Check if zstd is available; install temporarily if not
 	if ! command -v zstd &>/dev/null; then
 		echo "  Installing zstd (needed for edit)..."
@@ -252,11 +320,13 @@ helix_current() { hx --version 2>/dev/null | awk '{print $2}' || echo "not insta
 helix_latest() { gh_latest_tag "$helix_repo"; }
 helix_install() {
 	local ver="$1"
+	local artifact="helix-${ver}-${ZARCH}-linux.tar.xz"
 	local tmp=$(mktemp -d)
 	if ! command -v xz &>/dev/null; then
 		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
 	fi
-	curl -fsSLo "$tmp/helix.tar.xz" "https://github.com/${helix_repo}/releases/download/${ver}/helix-${ver}-${ZARCH}-linux.tar.xz"
+	curl -fsSLo "$tmp/helix.tar.xz" "https://github.com/${helix_repo}/releases/download/${ver}/${artifact}"
+	verify_checksum "$tmp/helix.tar.xz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xJf "$tmp/helix.tar.xz" -C "$tmp"
 	install "$tmp/helix-${ver}-${ZARCH}-linux/hx" "$HOME/.local/bin/hx"
 	mkdir -p "$HOME/.config/helix"
@@ -272,8 +342,10 @@ nvim_latest() { strip_v "$(gh_latest_tag "$nvim_repo")"; }
 nvim_install() {
 	local ver="$1"
 	local narch; if [ "$ZARCH" = "aarch64" ]; then narch="arm64"; else narch="x86_64"; fi
+	local artifact="nvim-linux-${narch}.tar.gz"
 	local tmp=$(mktemp -d)
-	curl -fsSLo "$tmp/nvim.tar.gz" "https://github.com/${nvim_repo}/releases/download/v${ver}/nvim-linux-${narch}.tar.gz"
+	curl -fsSLo "$tmp/nvim.tar.gz" "https://github.com/${nvim_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "$tmp/nvim.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/nvim.tar.gz" -C "$tmp"
 	rm -rf "$HOME/.local/nvim"
 	mv "$tmp/nvim-linux-${narch}" "$HOME/.local/nvim"
@@ -287,8 +359,10 @@ opencode_current() { opencode --version 2>/dev/null | grep -oP '[\d.]+' | head -
 opencode_latest() { strip_v "$(gh_latest_tag "$opencode_repo")"; }
 opencode_install() {
 	local ver="$1"
+	local artifact="opencode-linux-${OCARCH}.tar.gz"
 	local tmp=$(mktemp -d)
-	curl -fsSLo "$tmp/opencode.tar.gz" "https://github.com/${opencode_repo}/releases/download/v${ver}/opencode-linux-${OCARCH}.tar.gz"
+	curl -fsSLo "$tmp/opencode.tar.gz" "https://github.com/${opencode_repo}/releases/download/v${ver}/${artifact}"
+	verify_checksum "$tmp/opencode.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/opencode.tar.gz" -C "$tmp"
 	find "$tmp" -name 'opencode' -type f -executable -exec install {} "$HOME/.local/bin/opencode" \;
 	rm -rf "$tmp"
@@ -417,6 +491,11 @@ main() {
 			single_tool="$1"
 			;;
 	esac
+
+	# Fetch checksums before any install operations
+	if [ "$mode" != "list" ] && [ "$mode" != "check" ]; then
+		fetch_checksums || { echo -e "${RED}Cannot verify downloads without checksums. Aborting.${RESET}"; exit 1; }
+	fi
 
 	if [ "$mode" = "single" ]; then
 		local idx
