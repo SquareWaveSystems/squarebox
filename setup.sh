@@ -130,60 +130,79 @@ mkdir -p /workspace/.squarebox ~/.local/bin
 ai_prev=""
 if [ -f "$AI_CONFIG" ]; then
 	ai_prev=$(cat "$AI_CONFIG")
+	# Migrate legacy single-choice values
+	case "$ai_prev" in
+		both) ai_prev="claude,opencode" ;;
+	esac
 fi
 
 if $INTERACTIVE; then
-	case "$ai_prev" in
-		claude)   ai_default_label="Claude Code" ;;
-		opencode) ai_default_label="OpenCode" ;;
-		both)     ai_default_label="Both" ;;
-		*)        ai_default_label="" ;;
-	esac
-
 	echo
 	if $HAS_GUM; then
-		gum_args=(--header "Choose your AI coding assistant:")
-		[ -n "$ai_default_label" ] && gum_args+=(--selected "$ai_default_label")
-		ai_label=$(gum choose "${gum_args[@]}" \
-			"Claude Code" "OpenCode" "Both") || true
-		case "$ai_label" in
-			"Claude Code") ai_choice="claude" ;;
-			"OpenCode")    ai_choice="opencode" ;;
-			"Both")        ai_choice="both" ;;
-			*)             echo "No selection, defaulting to Claude Code"; ai_choice="claude" ;;
-		esac
+		# Build --selected from previously saved AI tools
+		gum_selected=""
+		for ai in $(echo "$ai_prev" | tr ',' ' '); do
+			case "$ai" in
+				claude)   gum_selected="${gum_selected:+$gum_selected,}Claude Code" ;;
+				copilot)  gum_selected="${gum_selected:+$gum_selected,}GitHub Copilot CLI" ;;
+				gemini)   gum_selected="${gum_selected:+$gum_selected,}Google Gemini CLI" ;;
+				codex)    gum_selected="${gum_selected:+$gum_selected,}OpenAI Codex CLI" ;;
+				opencode) gum_selected="${gum_selected:+$gum_selected,}OpenCode" ;;
+			esac
+		done
+		gum_args=(--no-limit --header "Select AI coding assistants (space=toggle, enter=confirm):")
+		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
+		selected=$(gum choose "${gum_args[@]}" \
+			"Claude Code" "GitHub Copilot CLI" "Google Gemini CLI" \
+			"OpenAI Codex CLI" "OpenCode") || true
+		ai_choice=""
+		while IFS= read -r line; do
+			case "$line" in
+				"Claude Code")        ai_choice="${ai_choice:+$ai_choice,}claude" ;;
+				"GitHub Copilot CLI") ai_choice="${ai_choice:+$ai_choice,}copilot" ;;
+				"Google Gemini CLI")  ai_choice="${ai_choice:+$ai_choice,}gemini" ;;
+				"OpenAI Codex CLI")   ai_choice="${ai_choice:+$ai_choice,}codex" ;;
+				"OpenCode")           ai_choice="${ai_choice:+$ai_choice,}opencode" ;;
+			esac
+		done <<< "$selected"
 	else
-		echo "Choose your AI coding assistant:"
-		if [ "$ai_prev" = "claude" ];   then echo "  1) Claude Code [current]"; else echo "  1) Claude Code"; fi
-		if [ "$ai_prev" = "opencode" ]; then echo "  2) OpenCode [current]";    else echo "  2) OpenCode"; fi
-		if [ "$ai_prev" = "both" ];     then echo "  3) Both [current]";        else echo "  3) Both"; fi
-		read -rp "Selection [1/2/3]: " selection
-		if [ -z "$selection" ] && [ -n "$ai_prev" ]; then
+		echo "Select AI coding assistants (comma-separated, 'all', or press Enter to skip):"
+		for ai_item in "1:claude:Claude Code" "2:copilot:GitHub Copilot CLI" "3:gemini:Google Gemini CLI" "4:codex:OpenAI Codex CLI" "5:opencode:OpenCode"; do
+			num="${ai_item%%:*}"; rest="${ai_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
+			if [[ ",$ai_prev," == *",${key},"* ]]; then
+				echo "  ${num}) ${label} [installed]"
+			else
+				echo "  ${num}) ${label}"
+			fi
+		done
+		read -rp "Selection [1,2,3,4,5/all/skip]: " ai_selection
+		if [ -z "$ai_selection" ] && [ -n "$ai_prev" ]; then
 			ai_choice="$ai_prev"
 		else
-			case "$selection" in
-				1) ai_choice="claude" ;;
-				2) ai_choice="opencode" ;;
-				3) ai_choice="both" ;;
-				*) echo "Invalid selection, defaulting to Claude Code"; ai_choice="claude" ;;
-			esac
+			ai_choice=""
+			if [ "$ai_selection" = "all" ]; then
+				ai_choice="claude,copilot,gemini,codex,opencode"
+			elif [ -n "$ai_selection" ]; then
+				for item in $(echo "$ai_selection" | tr ',' ' '); do
+					case "$item" in
+						1) ai_choice="${ai_choice:+$ai_choice,}claude" ;;
+						2) ai_choice="${ai_choice:+$ai_choice,}copilot" ;;
+						3) ai_choice="${ai_choice:+$ai_choice,}gemini" ;;
+						4) ai_choice="${ai_choice:+$ai_choice,}codex" ;;
+						5) ai_choice="${ai_choice:+$ai_choice,}opencode" ;;
+					esac
+				done
+			fi
 		fi
 	fi
 	echo "$ai_choice" > "$AI_CONFIG"
 elif [ -n "$ai_prev" ]; then
 	ai_choice="$ai_prev"
-	echo "Installing AI tool: $ai_choice (from previous selection)"
+	echo "Installing AI tools: $ai_choice (from previous selection)"
 else
 	echo "Defaulting to Claude Code (non-interactive)"
 	ai_choice="claude"
 	echo "$ai_choice" > "$AI_CONFIG"
-fi
-
-if [ "$ai_choice" = "claude" ] || [ "$ai_choice" = "both" ]; then
-	echo "Installing Claude Code..."
-	# Trust boundary: the Claude Code install script manages its own binary
-	# fetching and verification. We rely on HTTPS for script integrity.
-	curl -fsSL https://claude.ai/install.sh | bash
 fi
 
 # Pinned versions — update via: scripts/update-versions.sh
@@ -203,27 +222,115 @@ for _var in OPENCODE_VERSION MICRO_VERSION EDIT_VERSION EDIT_ASSET_VERSION FRESH
 	fi
 done
 
-if [ "$ai_choice" = "opencode" ] || [ "$ai_choice" = "both" ]; then
-	if command -v opencode &>/dev/null; then
-		echo "OpenCode already installed, skipping."
-	else
-		echo "Installing OpenCode v${OPENCODE_VERSION}..."
-		sb_install opencode "$OPENCODE_VERSION"
-	fi
-fi
+# Pinned SDK versions needed early (for npm-based AI tools)
+NVM_VERSION="0.40.3"
 
-# Set aliases based on selection
-{
-	if [ "$ai_choice" = "claude" ]; then
-		echo "alias c='claude'"
-		echo "alias claude-yolo='claude --dangerously-skip-permissions'"
-	elif [ "$ai_choice" = "opencode" ]; then
-		echo "alias c='opencode'"
-		echo "alias opencode-yolo='opencode --dangerously-skip-permissions'"
-	else
-		echo "alias claude-yolo='claude --dangerously-skip-permissions'"
-		echo "alias opencode-yolo='opencode --dangerously-skip-permissions'"
+# SDK path setup file (create if missing, preserve on retry)
+touch ~/.squarebox-sdk-paths
+
+install_node() {
+	if command -v node &>/dev/null; then echo "Node.js already installed, skipping."; return 0; fi
+	rm -rf "$HOME/.nvm"
+	echo "Installing Node.js (via nvm v${NVM_VERSION})..."
+	curl -fsSo /tmp/nvm-install.sh "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
+	verify_checksum /tmp/nvm-install.sh "nvm-install-v${NVM_VERSION}.sh"
+	bash /tmp/nvm-install.sh
+	rm /tmp/nvm-install.sh
+	export NVM_DIR="$HOME/.nvm"
+	# shellcheck source=/dev/null
+	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+	# Node.js binary verification is handled by nvm
+	nvm install --lts
+	if ! grep -q 'NVM_DIR' ~/.squarebox-sdk-paths 2>/dev/null; then
+		cat <<'PATHS' >> ~/.squarebox-sdk-paths
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+PATHS
 	fi
+	if ! command -v node &>/dev/null; then
+		echo "Error: Node.js binary not found after installation" >&2
+		exit 1
+	fi
+}
+
+# Ensure Node.js is available for npm-based AI tools
+ensure_node_for_npm() {
+	if command -v node &>/dev/null; then return 0; fi
+	echo "Installing Node.js (required for npm-based AI tools)..."
+	install_node
+	# Ensure node/npm are available in this session
+	export NVM_DIR="$HOME/.nvm"
+	# shellcheck source=/dev/null
+	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+	# Persist Node.js in SDK config so it survives rebuilds
+	local sdk_cfg="/workspace/.squarebox/sdks"
+	if [ -f "$sdk_cfg" ]; then
+		local sdk_current
+		sdk_current=$(cat "$sdk_cfg")
+		if [[ ",$sdk_current," != *",node,"* ]] && [ "$sdk_current" != "node" ]; then
+			echo "${sdk_current:+$sdk_current,}node" > "$sdk_cfg"
+		fi
+	else
+		echo "node" > "$sdk_cfg"
+	fi
+}
+
+install_copilot() {
+	if command -v github-copilot-cli &>/dev/null; then echo "GitHub Copilot CLI already installed, skipping."; return 0; fi
+	ensure_node_for_npm
+	echo "Installing GitHub Copilot CLI..."
+	npm install -g @githubnext/github-copilot-cli
+}
+
+install_gemini() {
+	if command -v gemini &>/dev/null; then echo "Google Gemini CLI already installed, skipping."; return 0; fi
+	ensure_node_for_npm
+	echo "Installing Google Gemini CLI..."
+	npm install -g @google/gemini-cli
+}
+
+install_codex() {
+	if command -v codex &>/dev/null; then echo "OpenAI Codex CLI already installed, skipping."; return 0; fi
+	ensure_node_for_npm
+	echo "Installing OpenAI Codex CLI..."
+	npm install -g @openai/codex
+}
+
+for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
+	case "$ai_tool" in
+		claude)
+			echo "Installing Claude Code..."
+			# Trust boundary: the Claude Code install script manages its own binary
+			# fetching and verification. We rely on HTTPS for script integrity.
+			curl -fsSL https://claude.ai/install.sh | bash
+			;;
+		opencode)
+			if command -v opencode &>/dev/null; then
+				echo "OpenCode already installed, skipping."
+			else
+				echo "Installing OpenCode v${OPENCODE_VERSION}..."
+				sb_install opencode "$OPENCODE_VERSION"
+			fi
+			;;
+		copilot)  install_copilot ;;
+		gemini)   install_gemini ;;
+		codex)    install_codex ;;
+	esac
+done
+
+# Set aliases based on selection — c maps to first selected tool in priority order
+{
+	c_target=""
+	for ai_tool in claude copilot gemini codex opencode; do
+		if [[ ",$ai_choice," == *",$ai_tool,"* ]]; then
+			[ -z "$c_target" ] && c_target="$ai_tool"
+			case "$ai_tool" in
+				claude)   echo "alias claude-yolo='claude --dangerously-skip-permissions'" ;;
+				opencode) echo "alias opencode-yolo='opencode --dangerously-skip-permissions'" ;;
+			esac
+		fi
+	done
+	[ -n "$c_target" ] && echo "alias c='$c_target'"
 } > ~/.squarebox-ai-aliases
 
 # Text editors
@@ -532,44 +639,17 @@ else
 	echo "$sdk_list" > "$SDK_CONFIG"
 fi
 
-# SDK path setup file (create if missing, preserve on retry)
-touch ~/.squarebox-sdk-paths
-
 # Pinned versions — update via: scripts/update-versions.sh
-NVM_VERSION="0.40.3"
 GO_VERSION="go1.26.1"
 
-for _var in NVM_VERSION GO_VERSION; do
+for _var in GO_VERSION; do
 	if [ -z "${!_var:-}" ]; then
 		echo "Error: ${_var} is empty or unset" >&2
 		exit 1
 	fi
 done
 
-install_node() {
-	if command -v node &>/dev/null; then echo "Node.js already installed, skipping."; return 0; fi
-	rm -rf "$HOME/.nvm"
-	echo "Installing Node.js (via nvm v${NVM_VERSION})..."
-	curl -fsSo /tmp/nvm-install.sh "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
-	verify_checksum /tmp/nvm-install.sh "nvm-install-v${NVM_VERSION}.sh"
-	bash /tmp/nvm-install.sh
-	rm /tmp/nvm-install.sh
-	export NVM_DIR="$HOME/.nvm"
-	# shellcheck source=/dev/null
-	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-	# Node.js binary verification is handled by nvm
-	nvm install --lts
-	if ! grep -q 'NVM_DIR' ~/.squarebox-sdk-paths 2>/dev/null; then
-		cat <<'PATHS' >> ~/.squarebox-sdk-paths
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-PATHS
-	fi
-	if ! command -v node &>/dev/null; then
-		echo "Error: Node.js binary not found after installation" >&2
-		exit 1
-	fi
-}
+# install_node is defined earlier (needed by npm-based AI tools)
 
 install_python() {
 	if command -v uv &>/dev/null; then echo "uv already installed, skipping."; return 0; fi

@@ -33,7 +33,7 @@ The `install.sh` script automates initial setup (clone, build, create container,
 
 1. **Git identity** — name and email (skipped if already configured)
 2. **GitHub CLI auth** — persisted to `/workspace/.squarebox/gh` across rebuilds
-3. **AI coding assistant** — Claude Code, OpenCode, or both
+3. **AI coding assistant** — Claude Code, GitHub Copilot CLI, Google Gemini CLI, OpenAI Codex CLI, OpenCode (any combination)
 4. **Text editors** — micro, edit (Microsoft), fresh, helix, nvim (nano is always available)
 5. **SDKs** — Node.js (via nvm), Python (via uv), Go, .NET
 

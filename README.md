@@ -66,12 +66,17 @@ What's included
 
 ### AI Coding Assistants (optional)
 
-Installed during first-run setup. Choose one or both:
+Installed during first-run setup. Choose any combination:
 
 | Name | Language | Description |
 |------|----------|-------------|
 | [Claude Code](https://github.com/anthropics/claude-code) | TypeScript | AI coding assistant |
+| [GitHub Copilot CLI](https://github.com/githubnext/github-copilot-cli) | TypeScript | GitHub Copilot in the terminal * |
+| [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) | TypeScript | Google Gemini in the terminal * |
+| [OpenAI Codex CLI](https://github.com/openai/codex) | TypeScript | OpenAI Codex in the terminal * |
 | [opencode](https://github.com/anomalyco/opencode) | Go | AI coding TUI |
+
+\* Requires Node.js (auto-installed if needed).
 
 ### Text Editors (optional)
 
@@ -102,7 +107,7 @@ Inspired by [Omarchy](https://omarchy.com).
 | `..` | `cd ..` | Go up one directory |
 | `...` | `cd ../..` | Go up two directories |
 | `....` | `cd ../../..` | Go up three directories |
-| `c` | `claude` or `opencode` | Launch selected AI assistant |
+| `c` | first selected AI tool | Launch selected AI assistant |
 | `g` | `git` | Git shorthand |
 | `gcm` | `git commit -m` | Commit with message |
 | `gcam` | `git commit -a -m` | Stage all and commit |
@@ -179,6 +184,9 @@ First-run selections add to that:
 | Component | Adds |
 |-----------|------|
 | Claude Code | ~300 MB |
+| GitHub Copilot CLI | ~50 MB |
+| Google Gemini CLI | ~50 MB |
+| OpenAI Codex CLI | ~50 MB |
 | OpenCode | ~30 MB |
 | micro / edit | ~12 / ~7 MB |
 | fresh / helix / nvim | ~10 / ~80 / ~45 MB |
@@ -195,7 +203,8 @@ Security
 
 All binary tools are pinned to specific versions and verified against SHA256
 checksums at build time. Third-party install scripts (Claude Code, uv, .NET)
-manage their own binary verification.
+manage their own binary verification. npm-based AI tools (Copilot CLI, Gemini
+CLI, Codex CLI) use npm's built-in integrity verification.
 
 For the full trust model (what `install.sh` does on your machine, how each
 layer is verified, and how to inspect the script before running it) see
