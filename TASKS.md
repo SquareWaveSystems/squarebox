@@ -43,18 +43,18 @@ Items are ordered by priority within each section. Sections are ordered by prior
 
 - [ ] Split the monolithic binary tools `RUN` block (lines 50-90) into smaller per-tool `RUN` blocks for better cache behavior
 - [ ] Unify architecture detection — currently uses `dpkg --print-architecture` in one place and `uname -m` in another
-- [ ] Pick one versioning strategy: either pin all versions or fetch all dynamically (currently mixed)
+- [x] Pick one versioning strategy — mixed approach is intentional: binary tools are pinned+checksummed, APT packages use distro versions with GPG signatures, third-party installers fetch latest
 - [x] **Add `CMD ["/bin/bash"]`** — without it, `docker run` without `-it` drops into `/bin/sh` (no starship, no aliases)
 - [x] **Fix `apt-get purge` ordering** — gnupg purge runs after `rm -rf /var/lib/apt/lists/*`. Swap: purge first, then clean lists.
 - [x] **Check if Eza APT repo supports HTTPS** — currently uses `http://deb.gierens.de`. GPG signing mitigates, but HTTPS is preferred.
 
 ## P2 — Script improvements
 
-- [ ] Add input validation for git name/email and SDK selection prompts
-- [ ] Make GO_VERSION parsing more robust (currently assumes first line of go.dev/VERSION response)
+- [x] Add input validation for git name/email and SDK selection prompts
+- [x] Make GO_VERSION parsing more robust (currently assumes first line of go.dev/VERSION response)
 - [x] **Remove dead code in `update-versions.sh`** — line 63 calls `strip_v` on delta version, then line 64 immediately overwrites the result
 - [x] **Fetch NVM version dynamically in `update-versions.sh`** — every other tool is fetched from GitHub, but NVM is hardcoded to `0.40.3` with no explanation
-- [ ] **Replace fragile `find -exec mv` pattern** — used in `setup.sh` (lines 141, 219, 231) and `sqrbx-update` to locate extracted binaries. Silently succeeds if no match is found. Use explicit paths instead.
+- [x] **Replace fragile `find -exec mv` pattern** — used in `setup.sh` (lines 141, 219, 231) and `sqrbx-update` to locate extracted binaries. Silently succeeds if no match is found. Use explicit paths instead.
 - [x] **Fix empty SDK list message** — `setup.sh` line 294 prints "Installing SDKs: (from previous selection)" even when the list is empty
 - [x] **Add comment explaining `BROWSER=echo` trick** — `setup.sh` line 69 uses this to make `gh auth login` print the URL instead of opening a browser. Non-obvious to contributors.
 - [x] **Remove redundant `rm -rf`** — `install_helix` (setup.sh line 237) deletes `~/.config/helix/runtime` before starting the download, then does it again at line 252. Remove the first one.

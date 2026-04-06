@@ -251,7 +251,9 @@ glow_install() {
 	curl -fsSLo "$tmp/glow.tar.gz" "https://github.com/${glow_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/glow.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/glow.tar.gz" -C "$tmp"
-	find "$tmp" -name 'glow' -type f -executable -exec sudo install {} "${INSTALL_DIR}/glow" \;
+	local bin; bin=$(find "$tmp" -name 'glow' -type f -executable | head -1)
+	[ -n "$bin" ] || { echo "Error: glow binary not found in archive" >&2; rm -rf "$tmp"; return 1; }
+	sudo install "$bin" "${INSTALL_DIR}/glow"
 	rm -rf "$tmp"
 }
 
@@ -282,7 +284,9 @@ fresh_install() {
 	curl -fsSLo "$tmp/fresh.tar.gz" "https://github.com/${fresh_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/fresh.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xf "$tmp/fresh.tar.gz" -C "$tmp"
-	find "$tmp" -name 'fresh' -type f -executable -exec install {} "$HOME/.local/bin/fresh" \;
+	local bin; bin=$(find "$tmp" -name 'fresh' -type f -executable | head -1)
+	[ -n "$bin" ] || { echo "Error: fresh binary not found in archive" >&2; rm -rf "$tmp"; return 1; }
+	install "$bin" "$HOME/.local/bin/fresh"
 	rm -rf "$tmp"
 }
 
@@ -322,7 +326,9 @@ edit_install() {
 	fi
 	zstd -d "$tmp/edit.tar.zst" -o "$tmp/edit.tar"
 	tar xf "$tmp/edit.tar" -C "$tmp"
-	find "$tmp" -name 'edit' -type f -executable -exec install {} "$HOME/.local/bin/edit" \;
+	local bin; bin=$(find "$tmp" -name 'edit' -type f -executable | head -1)
+	[ -n "$bin" ] || { echo "Error: edit binary not found in archive" >&2; rm -rf "$tmp"; return 1; }
+	install "$bin" "$HOME/.local/bin/edit"
 	rm -rf "$tmp"
 	if [ "${CLEANUP_ZSTD:-}" = "1" ]; then
 		sudo apt-get purge -y -qq --auto-remove zstd
@@ -379,7 +385,9 @@ opencode_install() {
 	curl -fsSLo "$tmp/opencode.tar.gz" "https://github.com/${opencode_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/opencode.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/opencode.tar.gz" -C "$tmp"
-	find "$tmp" -name 'opencode' -type f -executable -exec install {} "$HOME/.local/bin/opencode" \;
+	local bin; bin=$(find "$tmp" -name 'opencode' -type f -executable | head -1)
+	[ -n "$bin" ] || { echo "Error: opencode binary not found in archive" >&2; rm -rf "$tmp"; return 1; }
+	install "$bin" "$HOME/.local/bin/opencode"
 	rm -rf "$tmp"
 }
 

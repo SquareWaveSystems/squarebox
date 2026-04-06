@@ -50,7 +50,11 @@ echo
 # Git identity
 if [ -z "$(git config --global user.name 2>/dev/null)" ]; then
 	if $INTERACTIVE; then
-		read -rp "Git name: " name
+		while true; do
+			read -rp "Git name: " name
+			[ -n "$name" ] && break
+			echo "Name cannot be empty."
+		done
 		git config --global user.name "$name"
 	else
 		echo "Skipping git identity setup (non-interactive)"
@@ -59,7 +63,11 @@ fi
 
 if [ -z "$(git config --global user.email 2>/dev/null)" ]; then
 	if $INTERACTIVE; then
-		read -rp "Git email: " email
+		while true; do
+			read -rp "Git email: " email
+			[ -n "$email" ] && break
+			echo "Email cannot be empty."
+		done
 		git config --global user.email "$email"
 	fi
 fi
@@ -181,7 +189,9 @@ if [ "$ai_choice" = "opencode" ] || [ "$ai_choice" = "both" ]; then
 		curl -fsSLo /tmp/opencode.tar.gz "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OCARCH}.tar.gz"
 		verify_checksum /tmp/opencode.tar.gz "opencode-linux-${OCARCH}.tar.gz"
 		tar xzf /tmp/opencode.tar.gz -C /tmp
-		find /tmp -name 'opencode' -type f -executable -exec mv {} ~/.local/bin/opencode \;
+		local bin; bin=$(find /tmp -name 'opencode' -type f -executable | head -1)
+		[ -n "$bin" ] || { echo "Error: opencode binary not found in archive" >&2; return 1; }
+		mv "$bin" ~/.local/bin/opencode
 		rm -f /tmp/opencode.tar.gz
 	fi
 fi
@@ -276,7 +286,9 @@ install_edit() {
 	verify_checksum /tmp/edit.tar.zst "edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst"
 	zstd -d /tmp/edit.tar.zst -o /tmp/edit.tar
 	tar xf /tmp/edit.tar -C /tmp
-	find /tmp -name 'edit' -type f -executable -exec mv {} ~/.local/bin/edit \;
+	local bin; bin=$(find /tmp -name 'edit' -type f -executable | head -1)
+	[ -n "$bin" ] || { echo "Error: edit binary not found in archive" >&2; return 1; }
+	mv "$bin" ~/.local/bin/edit
 	rm -f /tmp/edit.tar.zst /tmp/edit.tar
 }
 
@@ -288,7 +300,9 @@ install_fresh() {
 	curl -fsSLo /tmp/fresh.tar.gz "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
 	verify_checksum /tmp/fresh.tar.gz "fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
 	tar xf /tmp/fresh.tar.gz -C /tmp
-	find /tmp -name 'fresh' -type f -executable -exec mv {} ~/.local/bin/fresh \;
+	local bin; bin=$(find /tmp -name 'fresh' -type f -executable | head -1)
+	[ -n "$bin" ] || { echo "Error: fresh binary not found in archive" >&2; return 1; }
+	mv "$bin" ~/.local/bin/fresh
 	rm -rf /tmp/fresh*
 }
 

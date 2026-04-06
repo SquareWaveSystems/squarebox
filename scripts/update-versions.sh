@@ -93,6 +93,9 @@ OPENCODE_TAG=$(gh_latest_tag anomalyco/opencode)
 OPENCODE_VERSION=$(strip_v "$OPENCODE_TAG")
 
 GO_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1)
+if ! echo "$GO_VERSION" | grep -qE '^go[0-9]+\.[0-9]+'; then
+	echo "Error: unexpected Go version format: '$GO_VERSION'" >&2; exit 1
+fi
 
 NVM_TAG=$(gh_latest_tag nvm-sh/nvm)
 NVM_VERSION=$(strip_v "$NVM_TAG")
