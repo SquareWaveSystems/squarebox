@@ -17,15 +17,10 @@
 </tr></table>
 </div>
 
-A containerised development environment packed with modern CLI/TUI tools and
-AI coding assistants. One install script gives you a ready-to-go terminal
-workspace with curated Rust/Go replacements for everyday Unix tools, multiple
-AI-powered editors, and sensible defaults.
-
-Built for developers who live in the terminal and want a reproducible, isolated
-environment they can spin up on any machine with Docker. Useful as a daily
-driver, a sandbox for trying out TUI tools, or a starting point for your own
-container-based dev setup.
+A containerized dev environment packed with modern CLI/TUI tools and AI coding
+assistants. Curated Rust/Go replacements for everyday Unix tools, multiple
+AI-powered editors, and sensible defaults — all in a reproducible Docker
+container you can spin up on any machine.
 
 ![SquareBox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/SquareBox/demo/demo/squarebox-setup.webp)
 
@@ -49,35 +44,10 @@ Start
 
     sqrbx
 
-The install script adds shell aliases so you don't need to remember Docker
-commands. `sqrbx` starts the container (equivalent to `docker start -ai squarebox`).
-
-When you exit the shell, the container stops but is not removed. All changes
-inside the container (installed packages, config files, shell history) persist
-between sessions. Think of it as a VM that suspends on exit and resumes on
-start.
-
-Your code lives on the host at ~/squarebox/workspace and is mounted into the
-container, so it is never lost even if the container is deleted.
-
-How it works
-------------
-
-The container is a persistent stopped container, not an ephemeral one. The
-difference:
-
-- Ephemeral (`docker run --rm`): container is deleted when you exit. All
-  filesystem changes are lost.
-- Persistent (what this uses): container stops when you exit but stays on disk.
-  `docker start -ai` resumes it with everything intact.
-
-Volume mounts:
-
-- ~/squarebox/workspace -> /workspace: your code (lives on host, survives container deletion)
-- ~/squarebox/.config/starship.toml -> /home/dev/.config/starship.toml: prompt config (survives rebuilds)
-- ~/squarebox/.config/lazygit/ -> /home/dev/.config/lazygit/: lazygit config (survives rebuilds)
-- ~/.ssh -> /home/dev/.ssh (read-only): SSH keys for git
-- ~/.config/git -> /home/dev/.config/git: shared git config
+The container is persistent — it suspends on exit and resumes on start, keeping
+installed packages, config, and shell history intact between sessions. Your code
+lives on the host at `~/squarebox/workspace` via volume mount, so it survives
+even if the container is deleted.
 
 What's included
 ---------------
@@ -123,13 +93,13 @@ Installed during first-run setup — choose one or both:
 
 Installed during first-run setup. Nano is always available as the default editor.
 
-| Name | Tier | Language | Description |
-|------|------|----------|-------------|
-| [micro](https://github.com/micro-editor/micro) | Simple | Go | Modern, intuitive terminal editor |
-| [edit](https://github.com/microsoft/edit) | Simple | Rust | Terminal text editor (Microsoft) |
-| [fresh](https://github.com/sinelaw/fresh) | Full | Rust | Modern terminal text editor |
-| [helix](https://github.com/helix-editor/helix) | Full | Rust | Modal editor (Kakoune-inspired) |
-| [nvim](https://github.com/neovim/neovim) | Full | C/Lua | Neovim |
+| Name | Language | Description |
+|------|----------|-------------|
+| [micro](https://github.com/micro-editor/micro) | Go | Modern, intuitive terminal editor |
+| [edit](https://github.com/microsoft/edit) | Rust | Terminal text editor (Microsoft) |
+| [fresh](https://github.com/sinelaw/fresh) | Rust | Modern terminal text editor |
+| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) |
+| [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
 
 ### Aliases
 
@@ -209,10 +179,7 @@ installed packages, and custom config files inside the container are lost.
 | GitHub CLI auth | Caches and temp files |
 | SSH keys (read-only mount from host) | |
 
-Git identity (user.name, user.email) is re-prompted on first login after
-rebuild. To preserve additional files across rebuilds, store them in
-`/workspace/.squarebox/` — this directory lives on the host volume.
-Config files in `~/squarebox/.config/` (starship, lazygit) also persist on the host.
+To preserve extra files across rebuilds, store them in `/workspace/.squarebox/`.
 
 > **Tip:** Use `sqrbx-update` from inside the container to update tools without
 > rebuilding. Only use `sqrbx-rebuild` when the base image itself needs to
@@ -269,15 +236,6 @@ Uninstall
     docker rmi squarebox
     rm -rf ~/squarebox
 
-Remove the aliases from your shell config (~/.bashrc or ~/.zshrc):
-
-    # Linux
-    sed -i '/alias sqrbx=/d' ~/.bashrc ~/.zshrc 2>/dev/null
-    sed -i '/alias sqrbx-rebuild=/d' ~/.bashrc ~/.zshrc 2>/dev/null
-
-    # macOS (BSD sed requires '' after -i)
-    sed -i '' '/alias sqrbx=/d' ~/.bashrc ~/.zshrc 2>/dev/null
-    sed -i '' '/alias sqrbx-rebuild=/d' ~/.bashrc ~/.zshrc 2>/dev/null
-
-This removes everything including your workspace and config. Back up
-~/squarebox/workspace first if you need your code.
+Then remove the `sqrbx` and `sqrbx-rebuild` aliases from your shell config
+(`~/.bashrc` or `~/.zshrc`). Back up `~/squarebox/workspace` first if you need
+your code.
