@@ -13,7 +13,20 @@ SETUP_CHECKSUMS="${HOME}/setup-checksums.txt"
 
 # Fix /workspace ownership if volume mount left it owned by a different UID
 if [ -d /workspace ] && ! [ -w /workspace ]; then
-	sudo chown dev:dev /workspace
+	if ! command -v sudo >/dev/null 2>&1; then
+		echo "ERROR: /workspace is not writable and sudo is not available to fix ownership." >&2
+		echo "Please make /workspace writable for user 'dev' or rerun with appropriate privileges." >&2
+		exit 1
+	elif ! sudo -n true >/dev/null 2>&1; then
+		echo "ERROR: /workspace is not writable and passwordless sudo is required to fix ownership automatically." >&2
+		echo "Please run 'sudo chown dev:dev /workspace' manually or rerun with appropriate privileges." >&2
+		exit 1
+	elif ! sudo -n chown dev:dev /workspace; then
+		echo "ERROR: Failed to change ownership of /workspace to dev:dev." >&2
+		echo "This can happen on volume types that do not allow chown." >&2
+		echo "Please make /workspace writable for user 'dev' or adjust the mount configuration and try again." >&2
+		exit 1
+	fi
 fi
 
 # Verify SHA256 checksum of a downloaded file against the checksums file.
