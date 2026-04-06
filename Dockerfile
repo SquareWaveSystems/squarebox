@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	unzip \
 	jq \
 	less \
+	sudo \
 	ca-certificates \
 	fd-find \
 	ripgrep \
@@ -137,6 +138,7 @@ RUN DPKG_ARCH=$(dpkg --print-architecture) \
 
 RUN userdel -r ubuntu 2>/dev/null || true \
 	&& useradd -m -s /bin/bash -u 1000 dev \
+	&& echo 'dev ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/dev \
 	&& mkdir -p /home/dev/.claude /home/dev/.config/lazygit \
 	&& chown -R dev:dev /home/dev
 
@@ -155,8 +157,7 @@ COPY scripts/squarebox-update.sh /usr/local/bin/sqrbx-update
 RUN chmod +x /usr/local/bin/sqrbx-update
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
-	&& mkdir -p /workspace && chown dev:dev /workspace \
-	&& chown dev:dev /usr/local/bin
+	&& mkdir -p /workspace && chown dev:dev /workspace
 
 USER dev
 

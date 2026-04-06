@@ -20,7 +20,7 @@ Prerequisites
 Install
 -------
 
-    curl -fsSL https://raw.githubusercontent.com/BrettKinny/squarebox/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/BrettKinny/SquareBox/main/install.sh | bash
 
 This clones the repo, builds the Docker image, and drops you into the container.
 On first login, a setup script runs automatically to configure git, GitHub CLI,

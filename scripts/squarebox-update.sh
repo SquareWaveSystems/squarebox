@@ -91,8 +91,9 @@ yq_current() { yq --version 2>/dev/null | grep -oP 'v[\d.]+' | head -1 | sed 's/
 yq_latest() { strip_v "$(gh_latest_tag "$yq_repo")"; }
 yq_install() {
 	local ver="$1"
-	curl -fsSLo "${INSTALL_DIR}/yq" "https://github.com/${yq_repo}/releases/download/v${ver}/yq_linux_${DPKG_ARCH}"
-	chmod +x "${INSTALL_DIR}/yq"
+	curl -fsSLo "/tmp/yq" "https://github.com/${yq_repo}/releases/download/v${ver}/yq_linux_${DPKG_ARCH}"
+	sudo install /tmp/yq "${INSTALL_DIR}/yq"
+	rm -f /tmp/yq
 }
 
 # --- lazygit ---
@@ -104,7 +105,7 @@ lazygit_install() {
 	local tmp=$(mktemp -d)
 	curl -fsSLo "$tmp/lazygit.tar.gz" "https://github.com/${lazygit_repo}/releases/download/v${ver}/lazygit_${ver}_Linux_${LARCH}.tar.gz"
 	tar xf "$tmp/lazygit.tar.gz" -C "$tmp" lazygit
-	install "$tmp/lazygit" "${INSTALL_DIR}/lazygit"
+	sudo install "$tmp/lazygit" "${INSTALL_DIR}/lazygit"
 	rm -rf "$tmp"
 }
 
@@ -117,7 +118,7 @@ xh_install() {
 	local tmp=$(mktemp -d)
 	curl -fsSLo "$tmp/xh.tar.gz" "https://github.com/${xh_repo}/releases/download/v${ver}/xh-v${ver}-${ZARCH}-unknown-linux-musl.tar.gz"
 	tar xzf "$tmp/xh.tar.gz" --strip-components=1 -C "$tmp"
-	install "$tmp/xh" "${INSTALL_DIR}/xh"
+	sudo install "$tmp/xh" "${INSTALL_DIR}/xh"
 	rm -rf "$tmp"
 }
 
@@ -130,8 +131,8 @@ yazi_install() {
 	local tmp=$(mktemp -d)
 	curl -fsSLo "$tmp/yazi.zip" "https://github.com/${yazi_repo}/releases/download/v${ver}/yazi-${ZARCH}-unknown-linux-musl.zip"
 	unzip -q "$tmp/yazi.zip" -d "$tmp"
-	install "$tmp/yazi-${ZARCH}-unknown-linux-musl/yazi" "${INSTALL_DIR}/yazi"
-	install "$tmp/yazi-${ZARCH}-unknown-linux-musl/ya" "${INSTALL_DIR}/ya"
+	sudo install "$tmp/yazi-${ZARCH}-unknown-linux-musl/yazi" "${INSTALL_DIR}/yazi"
+	sudo install "$tmp/yazi-${ZARCH}-unknown-linux-musl/ya" "${INSTALL_DIR}/ya"
 	rm -rf "$tmp"
 }
 
@@ -144,7 +145,7 @@ starship_install() {
 	local tmp=$(mktemp -d)
 	curl -fsSLo "$tmp/starship.tar.gz" "https://github.com/${starship_repo}/releases/download/v${ver}/starship-${ZARCH}-unknown-linux-musl.tar.gz"
 	tar xf "$tmp/starship.tar.gz" -C "$tmp"
-	install "$tmp/starship" "${INSTALL_DIR}/starship"
+	sudo install "$tmp/starship" "${INSTALL_DIR}/starship"
 	rm -rf "$tmp"
 }
 
@@ -158,8 +159,9 @@ ghdash_current() {
 ghdash_latest() { strip_v "$(gh_latest_tag "$ghdash_repo")"; }
 ghdash_install() {
 	local ver="$1"
-	curl -fsSLo "${INSTALL_DIR}/gh-dash" "https://github.com/${ghdash_repo}/releases/download/v${ver}/gh-dash_v${ver}_linux-${GOARCH}"
-	chmod +x "${INSTALL_DIR}/gh-dash"
+	curl -fsSLo "/tmp/gh-dash" "https://github.com/${ghdash_repo}/releases/download/v${ver}/gh-dash_v${ver}_linux-${GOARCH}"
+	sudo install /tmp/gh-dash "${INSTALL_DIR}/gh-dash"
+	rm -f /tmp/gh-dash
 }
 
 # --- glow ---
@@ -171,7 +173,7 @@ glow_install() {
 	local tmp=$(mktemp -d)
 	curl -fsSLo "$tmp/glow.tar.gz" "https://github.com/${glow_repo}/releases/download/v${ver}/glow_${ver}_Linux_${LARCH}.tar.gz"
 	tar xzf "$tmp/glow.tar.gz" -C "$tmp"
-	find "$tmp" -name 'glow' -type f -executable -exec install {} "${INSTALL_DIR}/glow" \;
+	find "$tmp" -name 'glow' -type f -executable -exec sudo install {} "${INSTALL_DIR}/glow" \;
 	rm -rf "$tmp"
 }
 
