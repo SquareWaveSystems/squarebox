@@ -628,7 +628,4 @@ done
 
 echo
 
-# Re-source SDK paths so motd.sh can detect them in this session
-[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
-
 echo "🟧📦 You're in the box."
