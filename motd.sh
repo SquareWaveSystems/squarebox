@@ -3,7 +3,7 @@
 
 # Orange metallic: bright orange heading, muted orange date
 printf '\e[1;38;5;208m'
-toilet -f smslant --metal "squarebox"
+toilet -f smblock --metal "squarebox"
 printf '\e[0m'
 
 # Detect installed SDKs
