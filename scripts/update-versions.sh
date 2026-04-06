@@ -11,6 +11,10 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
+# Source shared tool library (for sb_get, sb_artifact, sb_url, sb_list_group)
+export SB_TOOLS_YAML="${REPO_ROOT}/scripts/lib/tools.yaml"
+source "${REPO_ROOT}/scripts/lib/tool-lib.sh"
+
 AUTH_HEADER=()
 if [ -n "${GITHUB_TOKEN:-}" ]; then
 	AUTH_HEADER=(-H "Authorization: token ${GITHUB_TOKEN}")
@@ -57,41 +61,23 @@ download_and_hash() {
 
 echo "Fetching latest versions..."
 
-# --- Dockerfile tools ---
+# ── Fetch latest versions ─────────────────────────────────────────────
+# Read repos from tools.yaml; handle version_prefix for tag→version stripping.
 
-DELTA_TAG=$(gh_latest_tag dandavison/delta)
-# Delta tags don't have a 'v' prefix
-DELTA_VERSION="${DELTA_TAG}"
+declare -A VERSIONS
 
-YQ_TAG=$(gh_latest_tag mikefarah/yq)
-YQ_VERSION=$(strip_v "$YQ_TAG")
+for tool in $(sb_list_tools); do
+	repo=$(sb_get "$tool" repo)
+	prefix=$(sb_get "$tool" version_prefix)
+	tag=$(gh_latest_tag "$repo")
+	if [ -n "$prefix" ]; then
+		VERSIONS[$tool]=$(strip_v "$tag")
+	else
+		VERSIONS[$tool]="$tag"
+	fi
+done
 
-LAZYGIT_TAG=$(gh_latest_tag jesseduffield/lazygit)
-LAZYGIT_VERSION=$(strip_v "$LAZYGIT_TAG")
-
-XH_TAG=$(gh_latest_tag ducaale/xh)
-XH_VERSION=$(strip_v "$XH_TAG")
-
-YAZI_TAG=$(gh_latest_tag sxyazi/yazi)
-YAZI_VERSION=$(strip_v "$YAZI_TAG")
-
-STARSHIP_TAG=$(gh_latest_tag starship/starship)
-STARSHIP_VERSION=$(strip_v "$STARSHIP_TAG")
-
-GH_DASH_TAG=$(gh_latest_tag dlvhdr/gh-dash)
-GH_DASH_VERSION=$(strip_v "$GH_DASH_TAG")
-
-GLOW_TAG=$(gh_latest_tag charmbracelet/glow)
-GLOW_VERSION=$(strip_v "$GLOW_TAG")
-
-GUM_TAG=$(gh_latest_tag charmbracelet/gum)
-GUM_VERSION=$(strip_v "$GUM_TAG")
-
-# --- setup.sh tools ---
-
-OPENCODE_TAG=$(gh_latest_tag anomalyco/opencode)
-OPENCODE_VERSION=$(strip_v "$OPENCODE_TAG")
-
+# Non-registry tools (not in tools.yaml)
 GO_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1)
 if ! echo "$GO_VERSION" | grep -qE '^go[0-9]+\.[0-9]+'; then
 	echo "Error: unexpected Go version format: '$GO_VERSION'" >&2; exit 1
@@ -100,15 +86,7 @@ fi
 NVM_TAG=$(gh_latest_tag nvm-sh/nvm)
 NVM_VERSION=$(strip_v "$NVM_TAG")
 
-MICRO_TAG=$(gh_latest_tag micro-editor/micro)
-MICRO_VERSION=$(strip_v "$MICRO_TAG")
-
-FRESH_TAG=$(gh_latest_tag sinelaw/fresh)
-FRESH_VERSION=$(strip_v "$FRESH_TAG")
-
-EDIT_TAG=$(gh_latest_tag microsoft/edit)
-EDIT_VERSION=$(strip_v "$EDIT_TAG")
-# Edit has a known issue: asset version may differ from tag. Extract actual asset name.
+# Edit special handling: asset version may differ from tag
 _edit_response=$(curl -fsSL -w '\n%{http_code}' "${AUTH_HEADER[@]}" \
 	"https://api.github.com/repos/microsoft/edit/releases/latest" 2>/dev/null) || true
 _edit_http=$(echo "$_edit_response" | tail -1)
@@ -124,37 +102,21 @@ _edit_body=$(echo "$_edit_response" | sed '$d')
 EDIT_ASSET_X86=$(echo "$_edit_body" | jq -r '.assets[].name' | grep 'x86_64-linux-gnu')
 EDIT_ASSET_ARM=$(echo "$_edit_body" | jq -r '.assets[].name' | grep 'aarch64-linux-gnu')
 EDIT_ASSET_VERSION=$(echo "$EDIT_ASSET_X86" | sed -E 's/^edit-([0-9]+\.[0-9]+\.[0-9]+)-.*/\1/')
-
-HELIX_TAG=$(gh_latest_tag helix-editor/helix)
-HELIX_VERSION="$HELIX_TAG"
-
-NVIM_TAG=$(gh_latest_tag neovim/neovim)
-NVIM_VERSION=$(strip_v "$NVIM_TAG")
+export SB_ASSET_VERSION="$EDIT_ASSET_VERSION"
 
 echo
 echo "Versions:"
-echo "  Delta:    ${DELTA_VERSION}"
-echo "  Yq:       ${YQ_VERSION}"
-echo "  Lazygit:  ${LAZYGIT_VERSION}"
-echo "  xh:       ${XH_VERSION}"
-echo "  Yazi:     ${YAZI_VERSION}"
-echo "  Starship: ${STARSHIP_VERSION}"
-echo "  gh-dash:  ${GH_DASH_VERSION}"
-echo "  Glow:     ${GLOW_VERSION}"
-echo "  Gum:      ${GUM_VERSION}"
-echo "  OpenCode: ${OPENCODE_VERSION}"
-echo "  Go:       ${GO_VERSION}"
-echo "  NVM:      ${NVM_VERSION}"
-echo "  Micro:    ${MICRO_VERSION}"
-echo "  Fresh:    ${FRESH_VERSION}"
-echo "  Edit:     ${EDIT_VERSION} (asset: ${EDIT_ASSET_VERSION})"
-echo "  Helix:    ${HELIX_VERSION}"
-echo "  Neovim:   ${NVIM_VERSION}"
+for tool in $(sb_list_tools); do
+	printf "  %-12s %s\n" "$tool" "${VERSIONS[$tool]}"
+done
+printf "  %-12s %s\n" "go" "$GO_VERSION"
+printf "  %-12s %s\n" "nvm" "$NVM_VERSION"
+printf "  %-12s %s (asset: %s)\n" "edit" "${VERSIONS[edit]}" "$EDIT_ASSET_VERSION"
 echo
 
 echo "Downloading artifacts and computing checksums..."
 
-# --- checksums.txt (Dockerfile) ---
+# ── Generate checksums.txt (Dockerfile tools) ─────────────────────────
 
 cat > "${REPO_ROOT}/checksums.txt" << HEADER
 # SHA256 checksums for Dockerfile binary tool downloads.
@@ -179,43 +141,21 @@ emit_setup() {
 	echo "  ${label}: ${hash}  ${name}"
 }
 
-echo "# Delta ${DELTA_VERSION}" >> "${REPO_ROOT}/checksums.txt"
-emit "delta amd64" "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_amd64.deb" "git-delta_${DELTA_VERSION}_amd64.deb"
-emit "delta arm64" "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_arm64.deb" "git-delta_${DELTA_VERSION}_arm64.deb"
+for tool in $(sb_list_group dockerfile); do
+	ver="${VERSIONS[$tool]}"
+	display=$(echo "$tool" | tr '-' ' ')
+	echo "# ${display^} ${ver}" >> "${REPO_ROOT}/checksums.txt"
 
-echo "# Yq ${YQ_VERSION}" >> "${REPO_ROOT}/checksums.txt"
-emit "yq amd64" "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" "yq_linux_amd64"
-emit "yq arm64" "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_arm64" "yq_linux_arm64"
+	artifact_amd64=$(sb_artifact "$tool" "$ver" amd64)
+	artifact_arm64=$(sb_artifact "$tool" "$ver" arm64)
+	url_amd64=$(sb_url "$tool" "$ver" amd64)
+	url_arm64=$(sb_url "$tool" "$ver" arm64)
 
-echo "# Lazygit ${LAZYGIT_VERSION}" >> "${REPO_ROOT}/checksums.txt"
-emit "lazygit x86_64" "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz" "lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
-emit "lazygit arm64" "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_arm64.tar.gz" "lazygit_${LAZYGIT_VERSION}_Linux_arm64.tar.gz"
+	emit "$tool amd64" "$url_amd64" "$artifact_amd64"
+	emit "$tool arm64" "$url_arm64" "$artifact_arm64"
+done
 
-echo "# xh ${XH_VERSION}" >> "${REPO_ROOT}/checksums.txt"
-emit "xh x86_64" "https://github.com/ducaale/xh/releases/download/v${XH_VERSION}/xh-v${XH_VERSION}-x86_64-unknown-linux-musl.tar.gz" "xh-v${XH_VERSION}-x86_64-unknown-linux-musl.tar.gz"
-emit "xh aarch64" "https://github.com/ducaale/xh/releases/download/v${XH_VERSION}/xh-v${XH_VERSION}-aarch64-unknown-linux-musl.tar.gz" "xh-v${XH_VERSION}-aarch64-unknown-linux-musl.tar.gz"
-
-echo "# Yazi ${YAZI_VERSION}" >> "${REPO_ROOT}/checksums.txt"
-emit "yazi x86_64" "https://github.com/sxyazi/yazi/releases/download/v${YAZI_VERSION}/yazi-x86_64-unknown-linux-musl.zip" "yazi-x86_64-unknown-linux-musl.zip"
-emit "yazi aarch64" "https://github.com/sxyazi/yazi/releases/download/v${YAZI_VERSION}/yazi-aarch64-unknown-linux-musl.zip" "yazi-aarch64-unknown-linux-musl.zip"
-
-echo "# Starship ${STARSHIP_VERSION}" >> "${REPO_ROOT}/checksums.txt"
-emit "starship x86_64" "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-x86_64-unknown-linux-musl.tar.gz" "starship-x86_64-unknown-linux-musl.tar.gz"
-emit "starship aarch64" "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-aarch64-unknown-linux-musl.tar.gz" "starship-aarch64-unknown-linux-musl.tar.gz"
-
-echo "# gh-dash ${GH_DASH_VERSION}" >> "${REPO_ROOT}/checksums.txt"
-emit "gh-dash amd64" "https://github.com/dlvhdr/gh-dash/releases/download/v${GH_DASH_VERSION}/gh-dash_v${GH_DASH_VERSION}_linux-amd64" "gh-dash_v${GH_DASH_VERSION}_linux-amd64"
-emit "gh-dash arm64" "https://github.com/dlvhdr/gh-dash/releases/download/v${GH_DASH_VERSION}/gh-dash_v${GH_DASH_VERSION}_linux-arm64" "gh-dash_v${GH_DASH_VERSION}_linux-arm64"
-
-echo "# Glow ${GLOW_VERSION}" >> "${REPO_ROOT}/checksums.txt"
-emit "glow x86_64" "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_x86_64.tar.gz" "glow_${GLOW_VERSION}_Linux_x86_64.tar.gz"
-emit "glow arm64" "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_arm64.tar.gz" "glow_${GLOW_VERSION}_Linux_arm64.tar.gz"
-
-echo "# Gum ${GUM_VERSION}" >> "${REPO_ROOT}/checksums.txt"
-emit "gum x86_64" "https://github.com/charmbracelet/gum/releases/download/v${GUM_VERSION}/gum_${GUM_VERSION}_Linux_x86_64.tar.gz" "gum_${GUM_VERSION}_Linux_x86_64.tar.gz"
-emit "gum arm64" "https://github.com/charmbracelet/gum/releases/download/v${GUM_VERSION}/gum_${GUM_VERSION}_Linux_arm64.tar.gz" "gum_${GUM_VERSION}_Linux_arm64.tar.gz"
-
-# --- setup-checksums.txt ---
+# ── Generate setup-checksums.txt ──────────────────────────────────────
 
 cat > "${REPO_ROOT}/setup-checksums.txt" << HEADER
 # SHA256 checksums for setup.sh downloads.
@@ -224,38 +164,36 @@ cat > "${REPO_ROOT}/setup-checksums.txt" << HEADER
 #
 HEADER
 
-echo "# OpenCode ${OPENCODE_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
-emit_setup "opencode x64" "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" "opencode-linux-x64.tar.gz"
-emit_setup "opencode arm64" "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-arm64.tar.gz" "opencode-linux-arm64.tar.gz"
+for tool in $(sb_list_group setup); do
+	ver="${VERSIONS[$tool]}"
+	display=$(echo "$tool" | tr '-' ' ')
 
+	# Special label for edit with asset version
+	if [ "$tool" = "edit" ]; then
+		echo "# Edit ${ver} (asset version ${EDIT_ASSET_VERSION})" >> "${REPO_ROOT}/setup-checksums.txt"
+	else
+		echo "# ${display^} ${ver}" >> "${REPO_ROOT}/setup-checksums.txt"
+	fi
+
+	artifact_amd64=$(sb_artifact "$tool" "$ver" amd64)
+	artifact_arm64=$(sb_artifact "$tool" "$ver" arm64)
+	url_amd64=$(sb_url "$tool" "$ver" amd64)
+	url_arm64=$(sb_url "$tool" "$ver" arm64)
+
+	emit_setup "$tool amd64" "$url_amd64" "$artifact_amd64"
+	emit_setup "$tool arm64" "$url_arm64" "$artifact_arm64"
+done
+
+# NVM (not in tools.yaml — uses raw.githubusercontent.com, not GitHub releases)
 echo "# NVM install script v${NVM_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
 emit_setup "nvm script" "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh" "nvm-install-v${NVM_VERSION}.sh"
 
+# Go (not in tools.yaml — uses go.dev, not GitHub releases)
 echo "# Go ${GO_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
 emit_setup "go amd64" "https://go.dev/dl/${GO_VERSION}.linux-amd64.tar.gz" "${GO_VERSION}.linux-amd64.tar.gz"
 emit_setup "go arm64" "https://go.dev/dl/${GO_VERSION}.linux-arm64.tar.gz" "${GO_VERSION}.linux-arm64.tar.gz"
 
-echo "# Micro ${MICRO_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
-emit_setup "micro linux64" "https://github.com/micro-editor/micro/releases/download/v${MICRO_VERSION}/micro-${MICRO_VERSION}-linux64.tar.gz" "micro-${MICRO_VERSION}-linux64.tar.gz"
-emit_setup "micro arm64" "https://github.com/micro-editor/micro/releases/download/v${MICRO_VERSION}/micro-${MICRO_VERSION}-linux-arm64.tar.gz" "micro-${MICRO_VERSION}-linux-arm64.tar.gz"
-
-echo "# Edit ${EDIT_VERSION} (asset version ${EDIT_ASSET_VERSION})" >> "${REPO_ROOT}/setup-checksums.txt"
-emit_setup "edit x86_64" "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/${EDIT_ASSET_X86}" "${EDIT_ASSET_X86}"
-emit_setup "edit aarch64" "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/${EDIT_ASSET_ARM}" "${EDIT_ASSET_ARM}"
-
-echo "# Fresh ${FRESH_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
-emit_setup "fresh x86_64" "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-x86_64-unknown-linux-musl.tar.gz" "fresh-editor-x86_64-unknown-linux-musl.tar.gz"
-emit_setup "fresh aarch64" "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-aarch64-unknown-linux-musl.tar.gz" "fresh-editor-aarch64-unknown-linux-musl.tar.gz"
-
-echo "# Helix ${HELIX_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
-emit_setup "helix x86_64" "https://github.com/helix-editor/helix/releases/download/${HELIX_VERSION}/helix-${HELIX_VERSION}-x86_64-linux.tar.xz" "helix-${HELIX_VERSION}-x86_64-linux.tar.xz"
-emit_setup "helix aarch64" "https://github.com/helix-editor/helix/releases/download/${HELIX_VERSION}/helix-${HELIX_VERSION}-aarch64-linux.tar.xz" "helix-${HELIX_VERSION}-aarch64-linux.tar.xz"
-
-echo "# Neovim ${NVIM_VERSION}" >> "${REPO_ROOT}/setup-checksums.txt"
-emit_setup "nvim x86_64" "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-x86_64.tar.gz" "nvim-linux-x86_64.tar.gz"
-emit_setup "nvim arm64" "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-arm64.tar.gz" "nvim-linux-arm64.tar.gz"
-
-# --- Update Dockerfile ARGs ---
+# ── Update Dockerfile ARGs ────────────────────────────────────────────
 
 echo
 echo "Updating Dockerfile..."
@@ -265,29 +203,30 @@ update_arg() {
 	sed -i "s|^ARG ${name}=.*|ARG ${name}=${value}|" "${REPO_ROOT}/Dockerfile"
 }
 
-update_arg DELTA_VERSION "$DELTA_VERSION"
-update_arg YQ_VERSION "$YQ_VERSION"
-update_arg LAZYGIT_VERSION "$LAZYGIT_VERSION"
-update_arg XH_VERSION "$XH_VERSION"
-update_arg YAZI_VERSION "$YAZI_VERSION"
-update_arg STARSHIP_VERSION "$STARSHIP_VERSION"
-update_arg GH_DASH_VERSION "$GH_DASH_VERSION"
-update_arg GLOW_VERSION "$GLOW_VERSION"
-update_arg GUM_VERSION "$GUM_VERSION"
+update_arg DELTA_VERSION "${VERSIONS[delta]}"
+update_arg YQ_VERSION "${VERSIONS[yq]}"
+update_arg LAZYGIT_VERSION "${VERSIONS[lazygit]}"
+update_arg XH_VERSION "${VERSIONS[xh]}"
+update_arg YAZI_VERSION "${VERSIONS[yazi]}"
+update_arg STARSHIP_VERSION "${VERSIONS[starship]}"
+update_arg GH_DASH_VERSION "${VERSIONS[gh-dash]}"
+update_arg GLOW_VERSION "${VERSIONS[glow]}"
+update_arg GUM_VERSION "${VERSIONS[gum]}"
 
-# --- Update setup.sh versions ---
+# ── Update setup.sh versions ──────────────────────────────────────────
 
 echo "Updating setup.sh..."
 
-sed -i "s|^OPENCODE_VERSION=.*|OPENCODE_VERSION=\"${OPENCODE_VERSION}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^OPENCODE_VERSION=.*|OPENCODE_VERSION=\"${VERSIONS[opencode]}\"|" "${REPO_ROOT}/setup.sh"
 sed -i "s|^GO_VERSION=.*|GO_VERSION=\"${GO_VERSION}\"|" "${REPO_ROOT}/setup.sh"
 sed -i "s|^NVM_VERSION=.*|NVM_VERSION=\"${NVM_VERSION}\"|" "${REPO_ROOT}/setup.sh"
-sed -i "s|^MICRO_VERSION=.*|MICRO_VERSION=\"${MICRO_VERSION}\"|" "${REPO_ROOT}/setup.sh"
-sed -i "s|^EDIT_VERSION=.*|EDIT_VERSION=\"${EDIT_VERSION}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^MICRO_VERSION=.*|MICRO_VERSION=\"${VERSIONS[micro]}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^EDIT_VERSION=.*|EDIT_VERSION=\"${VERSIONS[edit]}\"|" "${REPO_ROOT}/setup.sh"
 sed -i "s|^EDIT_ASSET_VERSION=.*|EDIT_ASSET_VERSION=\"${EDIT_ASSET_VERSION}\"|" "${REPO_ROOT}/setup.sh"
-sed -i "s|^FRESH_VERSION=.*|FRESH_VERSION=\"${FRESH_VERSION}\"|" "${REPO_ROOT}/setup.sh"
-sed -i "s|^HELIX_VERSION=.*|HELIX_VERSION=\"${HELIX_VERSION}\"|" "${REPO_ROOT}/setup.sh"
-sed -i "s|^NVIM_VERSION=.*|NVIM_VERSION=\"${NVIM_VERSION}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^FRESH_VERSION=.*|FRESH_VERSION=\"${VERSIONS[fresh]}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^HELIX_VERSION=.*|HELIX_VERSION=\"${VERSIONS[helix]}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^NVIM_VERSION=.*|NVIM_VERSION=\"${VERSIONS[nvim]}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^ZELLIJ_VERSION=.*|ZELLIJ_VERSION=\"${VERSIONS[zellij]}\"|" "${REPO_ROOT}/setup.sh"
 
 echo
 echo "Done. Review changes with: git diff"

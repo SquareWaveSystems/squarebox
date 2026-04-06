@@ -5,7 +5,8 @@
 .dockerignore
 README.md
 CLAUDE.md
-TASKS.md
+CONTRIBUTING.md
+.editorconfig
 *.swp
 *.swo
 *~

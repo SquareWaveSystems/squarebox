@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# sqrbx-update — update SquareBox tools in-place from GitHub releases.
+# sqrbx-update — update squarebox tools in-place from GitHub releases.
 #
 # Usage:
 #   sqrbx-update              Show available updates (dry run)
@@ -9,14 +9,6 @@ set -euo pipefail
 #   sqrbx-update <tool>       Update a single tool
 #   sqrbx-update --list       List all managed tools and versions
 #   sqrbx-update --help       Show this help
-
-INSTALL_DIR="/usr/local/bin"
-mkdir -p "$HOME/.local/bin"
-
-AUTH_HEADER=()
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-	AUTH_HEADER=(-H "Authorization: token ${GITHUB_TOKEN}")
-fi
 
 # Colors
 RED='\033[0;31m'
@@ -27,19 +19,23 @@ BOLD='\033[1m'
 DIM='\033[2m'
 RESET='\033[0m'
 
-# Architecture detection (done once)
-ARCH=$(uname -m)
-if [ "$ARCH" = "aarch64" ]; then
-	ZARCH="aarch64"; LARCH="arm64"; GOARCH="arm64"; DPKG_ARCH="arm64"; OCARCH="arm64"
-else
-	ZARCH="x86_64"; LARCH="x86_64"; GOARCH="amd64"; DPKG_ARCH="amd64"; OCARCH="x64"
+# ── Source shared tool library ─────────────────────────────────────────
+
+export SB_TOOLS_YAML=/usr/local/lib/squarebox/tools.yaml
+source /usr/local/lib/squarebox/tool-lib.sh
+
+mkdir -p "$HOME/.local/bin"
+
+AUTH_HEADER=()
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+	AUTH_HEADER=(-H "Authorization: token ${GITHUB_TOKEN}")
 fi
 
-# ── Checksum verification ──────────────────────────────────────────
+# ── Checksum verification ──────────────────────────────────────────────
 # Fetches checksums.txt and setup-checksums.txt from the repo's main branch.
 # Only versions that have been vetted (committed to the repo) can be installed.
 
-REPO_RAW="https://raw.githubusercontent.com/BrettKinny/SquareBox/main"
+REPO_RAW="https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main"
 CHECKSUM_DIR=$(mktemp -d)
 CHECKSUMS_FETCHED=false
 
@@ -56,10 +52,9 @@ fetch_checksums() {
 	fi
 }
 
-# Verify a downloaded file against the fetched checksums.
-# Usage: verify_checksum <file> <artifact-name>
+# Override the library's no-op sb_verify with checksum verification.
 # Returns 0 on match, 1 on mismatch, 2 if no checksum found (version not vetted).
-verify_checksum() {
+sb_verify() {
 	local file="$1" name="$2"
 	if [ "$CHECKSUMS_FETCHED" != true ]; then return 2; fi
 	local expected
@@ -81,14 +76,6 @@ verify_checksum() {
 
 UPDATE_LOG=$(mktemp /tmp/sqrbx-update-log.XXXXXX)
 TEMP_DIRS=("$CHECKSUM_DIR" "$UPDATE_LOG")
-
-# Track temp dirs so they're cleaned up on exit (including on failure)
-make_tmp() {
-	local d
-	d=$(mktemp -d)
-	TEMP_DIRS+=("$d")
-	echo "$d"
-}
 
 cleanup_temp() {
 	for d in "${TEMP_DIRS[@]}"; do
@@ -132,275 +119,85 @@ gh_latest_tag() {
 
 strip_v() { echo "${1#v}"; }
 
-# ── Tool definitions ────────────────────────────────────────────────
-# Each tool has: get_current_version, get_latest_version, do_install
+# ── Current version detection ──────────────────────────────────────────
+# Each tool's --version output is unique; not worth abstracting.
 
-# --- delta ---
-delta_repo="dandavison/delta"
 delta_current() { delta --version 2>/dev/null | awk '{print $2}' || echo "not installed"; }
-delta_latest() { gh_latest_tag "$delta_repo"; }
-delta_install() {
-	local ver="$1"
-	local artifact="git-delta_${ver}_${DPKG_ARCH}.deb"
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/delta.deb" "https://github.com/${delta_repo}/releases/download/${ver}/${artifact}"
-	verify_checksum "$tmp/delta.deb" "$artifact" || { rm -rf "$tmp"; return 1; }
-	sudo dpkg -i "$tmp/delta.deb"
-	rm -rf "$tmp"
-}
-
-# --- yq ---
-yq_repo="mikefarah/yq"
 yq_current() { yq --version 2>/dev/null | grep -oP 'v[\d.]+' | head -1 | sed 's/^v//' || echo "not installed"; }
-yq_latest() { strip_v "$(gh_latest_tag "$yq_repo")"; }
-yq_install() {
-	local ver="$1"
-	local artifact="yq_linux_${DPKG_ARCH}"
-	curl -fsSLo "/tmp/yq" "https://github.com/${yq_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "/tmp/yq" "$artifact" || { rm -f /tmp/yq; return 1; }
-	sudo install /tmp/yq "${INSTALL_DIR}/yq"
-	rm -f /tmp/yq
-}
-
-# --- lazygit ---
-lazygit_repo="jesseduffield/lazygit"
-lazygit_current() { lazygit --version 2>/dev/null | grep -oP 'version=[\d.]+' | cut -d= -f2 || echo "not installed"; }
-lazygit_latest() { strip_v "$(gh_latest_tag "$lazygit_repo")"; }
-lazygit_install() {
-	local ver="$1"
-	local artifact="lazygit_${ver}_Linux_${LARCH}.tar.gz"
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/lazygit.tar.gz" "https://github.com/${lazygit_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "$tmp/lazygit.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
-	tar xf "$tmp/lazygit.tar.gz" -C "$tmp" lazygit
-	sudo install "$tmp/lazygit" "${INSTALL_DIR}/lazygit"
-	rm -rf "$tmp"
-}
-
-# --- xh ---
-xh_repo="ducaale/xh"
+lazygit_current() { lazygit --version 2>/dev/null | grep -oP ', version=\K[\d.]+' | head -1 || echo "not installed"; }
 xh_current() { xh --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
-xh_latest() { strip_v "$(gh_latest_tag "$xh_repo")"; }
-xh_install() {
-	local ver="$1"
-	local artifact="xh-v${ver}-${ZARCH}-unknown-linux-musl.tar.gz"
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/xh.tar.gz" "https://github.com/${xh_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "$tmp/xh.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
-	tar xzf "$tmp/xh.tar.gz" --strip-components=1 -C "$tmp"
-	sudo install "$tmp/xh" "${INSTALL_DIR}/xh"
-	rm -rf "$tmp"
-}
-
-# --- yazi ---
-yazi_repo="sxyazi/yazi"
-yazi_current() { yazi --version 2>/dev/null | awk '{print $2}' || echo "not installed"; }
-yazi_latest() { strip_v "$(gh_latest_tag "$yazi_repo")"; }
-yazi_install() {
-	local ver="$1"
-	local artifact="yazi-${ZARCH}-unknown-linux-musl.zip"
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/yazi.zip" "https://github.com/${yazi_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "$tmp/yazi.zip" "$artifact" || { rm -rf "$tmp"; return 1; }
-	unzip -q "$tmp/yazi.zip" -d "$tmp"
-	sudo install "$tmp/yazi-${ZARCH}-unknown-linux-musl/yazi" "${INSTALL_DIR}/yazi"
-	sudo install "$tmp/yazi-${ZARCH}-unknown-linux-musl/ya" "${INSTALL_DIR}/ya"
-	rm -rf "$tmp"
-}
-
-# --- starship ---
-starship_repo="starship/starship"
-starship_current() { starship --version 2>/dev/null | awk '{print $2}' || echo "not installed"; }
-starship_latest() { strip_v "$(gh_latest_tag "$starship_repo")"; }
-starship_install() {
-	local ver="$1"
-	local artifact="starship-${ZARCH}-unknown-linux-musl.tar.gz"
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/starship.tar.gz" "https://github.com/${starship_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "$tmp/starship.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
-	tar xf "$tmp/starship.tar.gz" -C "$tmp"
-	sudo install "$tmp/starship" "${INSTALL_DIR}/starship"
-	rm -rf "$tmp"
-}
-
-# --- gh-dash ---
-ghdash_repo="dlvhdr/gh-dash"
-ghdash_current() {
-	local ver
-	ver=$(gh-dash --version 2>/dev/null | grep -oP '[\d.]+' | head -1) || ver="not installed"
-	echo "$ver"
-}
-ghdash_latest() { strip_v "$(gh_latest_tag "$ghdash_repo")"; }
-ghdash_install() {
-	local ver="$1"
-	local artifact="gh-dash_v${ver}_linux-${GOARCH}"
-	curl -fsSLo "/tmp/gh-dash" "https://github.com/${ghdash_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "/tmp/gh-dash" "$artifact" || { rm -f /tmp/gh-dash; return 1; }
-	sudo install /tmp/gh-dash "${INSTALL_DIR}/gh-dash"
-	rm -f /tmp/gh-dash
-}
-
-# --- glow ---
-glow_repo="charmbracelet/glow"
-glow_current() { glow --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
-glow_latest() { strip_v "$(gh_latest_tag "$glow_repo")"; }
-glow_install() {
-	local ver="$1"
-	local artifact="glow_${ver}_Linux_${LARCH}.tar.gz"
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/glow.tar.gz" "https://github.com/${glow_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "$tmp/glow.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
-	tar xzf "$tmp/glow.tar.gz" -C "$tmp"
-	local bin; bin=$(find "$tmp" -name 'glow' -type f -executable | head -1)
-	[ -n "$bin" ] || { echo "Error: glow binary not found in archive" >&2; rm -rf "$tmp"; return 1; }
-	sudo install "$bin" "${INSTALL_DIR}/glow"
-	rm -rf "$tmp"
-}
-
-# --- micro (user-installed, in ~/.local/bin) ---
-micro_repo="micro-editor/micro"
+yazi_current() { yazi --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
+starship_current() { starship --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
+ghdash_current() { local ver; ver=$(gh-dash --version 2>/dev/null | grep -oP 'module version: v\K[\d.]+' | head -1) || ver="not installed"; echo "$ver"; }
+glow_current() { glow --version 2>/dev/null | head -1 | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
 micro_current() { micro --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
-micro_latest() { strip_v "$(gh_latest_tag "$micro_repo")"; }
-micro_install() {
-	local ver="$1"
-	local march; if [ "$ZARCH" = "aarch64" ]; then march="-arm64"; else march="64"; fi
-	local artifact="micro-${ver}-linux${march}.tar.gz"
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/micro.tar.gz" "https://github.com/${micro_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "$tmp/micro.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
-	tar xzf "$tmp/micro.tar.gz" --strip-components=1 -C "$tmp"
-	install "$tmp/micro" "$HOME/.local/bin/micro"
-	rm -rf "$tmp"
-}
-
-# --- fresh (user-installed, in ~/.local/bin) ---
-fresh_repo="sinelaw/fresh"
 fresh_current() { fresh --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
-fresh_latest() { strip_v "$(gh_latest_tag "$fresh_repo")"; }
-fresh_install() {
-	local ver="$1"
-	local artifact="fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/fresh.tar.gz" "https://github.com/${fresh_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "$tmp/fresh.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
-	tar xf "$tmp/fresh.tar.gz" -C "$tmp"
-	local bin; bin=$(find "$tmp" -name 'fresh' -type f -executable | head -1)
-	[ -n "$bin" ] || { echo "Error: fresh binary not found in archive" >&2; rm -rf "$tmp"; return 1; }
-	install "$bin" "$HOME/.local/bin/fresh"
-	rm -rf "$tmp"
+edit_current() { edit --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
+helix_current() { hx --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
+nvim_current() { nvim --version 2>/dev/null | head -1 | awk '{print $2}' | sed 's/^v//' || echo "not installed"; }
+opencode_current() { opencode --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
+zellij_current() { zellij --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
+
+# ── Latest version fetching ────────────────────────────────────────────
+# Uses repo from tools.yaml via sb_get; strips v prefix where needed.
+
+tool_latest() {
+	local tool="$1"
+	local repo prefix tag
+	repo=$(sb_get "$tool" repo)
+	prefix=$(sb_get "$tool" version_prefix)
+	tag=$(gh_latest_tag "$repo") || return 1
+	if [ -n "$prefix" ]; then
+		strip_v "$tag"
+	else
+		echo "$tag"
+	fi
 }
 
-# --- edit (user-installed, in ~/.local/bin) ---
-edit_repo="microsoft/edit"
-edit_current() { edit --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
-edit_latest() { strip_v "$(gh_latest_tag "$edit_repo")"; }
-edit_install() {
-	local ver="$1"
-	# Edit has a quirk: asset version may differ from tag version. Query the actual asset name.
-	local asset_name
-	local api_response
+# ── Edit special handling ──────────────────────────────────────────────
+# Edit's asset version may differ from its tag version. Query the API to
+# determine the actual asset name and set SB_ASSET_VERSION before installing.
+
+edit_prepare_asset_version() {
+	local api_response api_code asset_name
 	api_response=$(curl -fsSL -w '\n%{http_code}' "${AUTH_HEADER[@]}" \
-		"https://api.github.com/repos/${edit_repo}/releases/latest" 2>/dev/null) || true
-	local api_code
+		"https://api.github.com/repos/microsoft/edit/releases/latest" 2>/dev/null) || true
 	api_code=$(echo "$api_response" | tail -1)
 	if [ "$api_code" = "403" ]; then
 		echo "  GitHub API rate limit exceeded. Set GITHUB_TOKEN to authenticate." >&2
 		return 1
 	elif [ "$api_code" != "200" ]; then
-		echo "  GitHub API returned HTTP ${api_code} for ${edit_repo}." >&2
+		echo "  GitHub API returned HTTP ${api_code} for microsoft/edit." >&2
 		return 1
 	fi
-	asset_name=$(echo "$api_response" | sed '$d' | jq -r '.assets[].name' | grep "${ZARCH}-linux-gnu" | head -1)
+	asset_name=$(echo "$api_response" | sed '$d' | jq -r '.assets[].name' | grep "${SB_ZARCH}-linux-gnu" | head -1)
 	if [ -z "$asset_name" ]; then
-		echo "  Could not find edit asset for ${ZARCH}" >&2
+		echo "  Could not find edit asset for ${SB_ZARCH}" >&2
 		return 1
 	fi
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/edit.tar.zst" "https://github.com/${edit_repo}/releases/download/v${ver}/${asset_name}"
-	verify_checksum "$tmp/edit.tar.zst" "$asset_name" || { rm -rf "$tmp"; return 1; }
-	# Check if zstd is available; install temporarily if not
-	if ! command -v zstd &>/dev/null; then
-		echo "  Installing zstd (needed for edit)..."
-		sudo apt-get update -qq && sudo apt-get install -y -qq zstd
-		local CLEANUP_ZSTD=1
-	fi
-	zstd -d "$tmp/edit.tar.zst" -o "$tmp/edit.tar"
-	tar xf "$tmp/edit.tar" -C "$tmp"
-	local bin; bin=$(find "$tmp" -name 'edit' -type f -executable | head -1)
-	[ -n "$bin" ] || { echo "Error: edit binary not found in archive" >&2; rm -rf "$tmp"; return 1; }
-	install "$bin" "$HOME/.local/bin/edit"
-	rm -rf "$tmp"
-	if [ "${CLEANUP_ZSTD:-}" = "1" ]; then
-		sudo apt-get purge -y -qq --auto-remove zstd
-	fi
+	# Extract asset version from filename: edit-1.2.0-x86_64-linux-gnu.tar.zst → 1.2.0
+	SB_ASSET_VERSION=$(echo "$asset_name" | sed -E 's/^edit-([0-9]+\.[0-9]+\.[0-9]+)-.*/\1/')
+	export SB_ASSET_VERSION
 }
 
-# --- helix (user-installed, in ~/.local/bin) ---
-helix_repo="helix-editor/helix"
-helix_current() { hx --version 2>/dev/null | awk '{print $2}' || echo "not installed"; }
-helix_latest() { gh_latest_tag "$helix_repo"; }
-helix_install() {
-	local ver="$1"
-	local artifact="helix-${ver}-${ZARCH}-linux.tar.xz"
-	local tmp=$(make_tmp)
-	if ! command -v xz &>/dev/null; then
-		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
-	fi
-	curl -fsSLo "$tmp/helix.tar.xz" "https://github.com/${helix_repo}/releases/download/${ver}/${artifact}"
-	verify_checksum "$tmp/helix.tar.xz" "$artifact" || { rm -rf "$tmp"; return 1; }
-	tar xJf "$tmp/helix.tar.xz" -C "$tmp"
-	install "$tmp/helix-${ver}-${ZARCH}-linux/hx" "$HOME/.local/bin/hx"
-	mkdir -p "$HOME/.config/helix"
-	rm -rf "$HOME/.config/helix/runtime"
-	mv "$tmp/helix-${ver}-${ZARCH}-linux/runtime" "$HOME/.config/helix/runtime"
-	rm -rf "$tmp"
+# ── Tool registry ──────────────────────────────────────────────────────
+
+TOOLS=(delta yq lazygit xh yazi starship ghdash glow micro fresh edit helix nvim opencode zellij)
+TOOL_DISPLAY_NAMES=(delta yq lazygit xh yazi starship gh-dash glow micro fresh edit helix nvim opencode zellij)
+
+# Map display names to tools.yaml names (ghdash → gh-dash)
+yaml_name() {
+	case "$1" in
+		ghdash) echo "gh-dash" ;;
+		*)      echo "$1" ;;
+	esac
 }
-
-# --- nvim (user-installed, in ~/.local) ---
-nvim_repo="neovim/neovim"
-nvim_current() { nvim --version 2>/dev/null | head -1 | awk '{print $2}' | sed 's/^v//' || echo "not installed"; }
-nvim_latest() { strip_v "$(gh_latest_tag "$nvim_repo")"; }
-nvim_install() {
-	local ver="$1"
-	local narch; if [ "$ZARCH" = "aarch64" ]; then narch="arm64"; else narch="x86_64"; fi
-	local artifact="nvim-linux-${narch}.tar.gz"
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/nvim.tar.gz" "https://github.com/${nvim_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "$tmp/nvim.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
-	tar xzf "$tmp/nvim.tar.gz" -C "$tmp"
-	rm -rf "$HOME/.local/nvim"
-	mv "$tmp/nvim-linux-${narch}" "$HOME/.local/nvim"
-	ln -sf "$HOME/.local/nvim/bin/nvim" "$HOME/.local/bin/nvim"
-	rm -rf "$tmp"
-}
-
-# --- opencode (user-installed, in ~/.local/bin) ---
-opencode_repo="anomalyco/opencode"
-opencode_current() { opencode --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
-opencode_latest() { strip_v "$(gh_latest_tag "$opencode_repo")"; }
-opencode_install() {
-	local ver="$1"
-	local artifact="opencode-linux-${OCARCH}.tar.gz"
-	local tmp=$(make_tmp)
-	curl -fsSLo "$tmp/opencode.tar.gz" "https://github.com/${opencode_repo}/releases/download/v${ver}/${artifact}"
-	verify_checksum "$tmp/opencode.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
-	tar xzf "$tmp/opencode.tar.gz" -C "$tmp"
-	local bin; bin=$(find "$tmp" -name 'opencode' -type f -executable | head -1)
-	[ -n "$bin" ] || { echo "Error: opencode binary not found in archive" >&2; rm -rf "$tmp"; return 1; }
-	install "$bin" "$HOME/.local/bin/opencode"
-	rm -rf "$tmp"
-}
-
-# ── Tool registry ──────────────────────────────────────────────────
-
-TOOLS=(delta yq lazygit xh yazi starship ghdash glow micro fresh edit helix nvim opencode)
-TOOL_DISPLAY_NAMES=(delta yq lazygit xh yazi starship gh-dash glow micro fresh edit helix nvim opencode)
 
 # ── Main logic ──────────────────────────────────────────────────────
 
 usage() {
 	cat <<-EOF
-	${BOLD}sqrbx-update${RESET} — update SquareBox tools from GitHub releases
+	${BOLD}sqrbx-update${RESET} — update squarebox tools from GitHub releases
 
 	${BOLD}Usage:${RESET}
 	  sqrbx-update              Show available updates (dry run)
@@ -410,7 +207,7 @@ usage() {
 	  sqrbx-update --help       Show this help
 
 	${BOLD}Tools:${RESET}
-	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, micro, fresh, edit, helix, nvim, opencode
+	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, micro, fresh, edit, helix, nvim, opencode, zellij
 
 	${DIM}Set GITHUB_TOKEN to avoid API rate limits.${RESET}
 	EOF
@@ -438,10 +235,12 @@ check_tool() {
 	local idx="$1"
 	local tool="${TOOLS[$idx]}"
 	local display="${TOOL_DISPLAY_NAMES[$idx]}"
+	local yname
+	yname=$(yaml_name "$tool")
 
 	local current latest
 	current=$("${tool}_current")
-	if ! latest=$("${tool}_latest"); then
+	if ! latest=$(tool_latest "$yname"); then
 		printf "  %-12s ${RED}%s${RESET} ${DIM}(could not check latest)${RESET}\n" "$display" "$current"
 		echo "skip"
 		return
@@ -468,9 +267,11 @@ update_tool() {
 	local idx="$1"
 	local tool="${TOOLS[$idx]}"
 	local display="${TOOL_DISPLAY_NAMES[$idx]}"
+	local yname
+	yname=$(yaml_name "$tool")
 
 	local latest
-	if ! latest=$("${tool}_latest"); then
+	if ! latest=$(tool_latest "$yname"); then
 		printf "  ${RED}Skipping %s (could not fetch latest version)${RESET}\n" "$display"
 		return
 	fi
@@ -478,11 +279,33 @@ update_tool() {
 	latest_clean=$(echo "$latest" | sed 's/^v//')
 
 	printf "  ${CYAN}Updating %s to %s...${RESET}" "$display" "$latest_clean"
-	if (set -e; "${tool}_install" "$latest_clean") &>"$UPDATE_LOG"; then
+
+	# Special handling for edit's asset version
+	if [ "$tool" = "edit" ]; then
+		edit_prepare_asset_version || { printf " ${RED}failed${RESET}\n"; return; }
+	fi
+
+	# Ensure xz-utils is available for helix
+	if [ "$tool" = "helix" ] && ! command -v xz &>/dev/null; then
+		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
+	fi
+
+	# Ensure zstd is available for edit
+	local cleanup_zstd=""
+	if [ "$tool" = "edit" ] && ! command -v zstd &>/dev/null; then
+		sudo apt-get update -qq && sudo apt-get install -y -qq zstd >/dev/null 2>&1
+		cleanup_zstd=1
+	fi
+
+	if (set -e; sb_install "$yname" "$latest_clean") &>"$UPDATE_LOG"; then
 		printf " ${GREEN}done${RESET}\n"
 	else
 		printf " ${RED}failed${RESET}\n"
 		echo "    See ${UPDATE_LOG} for details" >&2
+	fi
+
+	if [ "$cleanup_zstd" = "1" ]; then
+		sudo apt-get purge -y -qq --auto-remove zstd 2>/dev/null || true
 	fi
 }
 
@@ -540,7 +363,7 @@ main() {
 	fi
 
 	echo
-	echo "${BOLD}SquareBox Tool Updater${RESET}"
+	echo "${BOLD}squarebox Tool Updater${RESET}"
 	echo
 
 	if [ "$mode" = "list" ]; then

@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	nano \
 	zstd \
 	zoxide \
+	toilet \
+	toilet-fonts \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& ln -s $(which fdfind) /usr/local/bin/fd \
 	&& ln -s $(which batcat) /usr/local/bin/bat
@@ -48,11 +50,16 @@ RUN test -n "$DELTA_VERSION"    || { echo "Error: DELTA_VERSION is empty" >&2; e
 # Checksum verification infrastructure
 COPY checksums.txt /tmp/checksums.txt
 COPY scripts/verify-checksum.sh /usr/local/bin/verify-checksum
+COPY scripts/lib/tools.yaml /tmp/tools.yaml
+COPY scripts/lib/tool-lib.sh /tmp/tool-lib.sh
 RUN chmod +x /usr/local/bin/verify-checksum
 
+# tool-lib.sh uses bash parameter substitution
+SHELL ["/bin/bash", "-c"]
+
+# 2a. External APT repos (GitHub CLI, Eza) — needs gnupg, stays combined
 RUN mkdir -p -m 755 /etc/apt/keyrings \
 	&& ARCH=$(dpkg --print-architecture) \
-	# gnupg needed for key imports, purged at end of this layer
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends gnupg \
 	# GitHub CLI
@@ -67,72 +74,24 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 	&& apt-get install -y --no-install-recommends gh eza \
 	# Purge build-only dependency
 	&& apt-get purge -y --auto-remove gnupg \
-	&& rm -rf /var/lib/apt/lists/* \
-	# Delta (arch-aware deb)
-	&& curl -fsSLo /tmp/delta.deb "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_${ARCH}.deb" \
-	&& verify-checksum /tmp/delta.deb "git-delta_${DELTA_VERSION}_${ARCH}.deb" \
-	&& dpkg -i /tmp/delta.deb \
-	&& rm /tmp/delta.deb \
-	# Yq (arch-aware binary)
-	&& curl -fsSLo /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_${ARCH}" \
-	&& verify-checksum /usr/local/bin/yq "yq_linux_${ARCH}" \
-	&& chmod +x /usr/local/bin/yq
+	&& rm -rf /var/lib/apt/lists/*
 
-# 3a. Git Tools
+# Build-time tool install helper: sources library + wires up checksum verification
+RUN echo '. /tmp/tool-lib.sh; sb_verify() { verify-checksum "$1" "$2"; }' > /tmp/sb-init.sh
 
-RUN DPKG_ARCH=$(dpkg --print-architecture) \
-	&& if [ "$DPKG_ARCH" = "arm64" ]; then LARCH="arm64"; GOARCH="arm64"; else LARCH="x86_64"; GOARCH="amd64"; fi \
-	# Lazygit
-	&& curl -fsSLo /tmp/lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_${LARCH}.tar.gz" \
-	&& verify-checksum /tmp/lazygit.tar.gz "lazygit_${LAZYGIT_VERSION}_Linux_${LARCH}.tar.gz" \
-	&& tar xf /tmp/lazygit.tar.gz -C /tmp lazygit \
-	&& install /tmp/lazygit /usr/local/bin \
-	&& rm /tmp/lazygit /tmp/lazygit.tar.gz \
-	# gh-dash
-	&& curl -fsSLo /usr/local/bin/gh-dash "https://github.com/dlvhdr/gh-dash/releases/download/v${GH_DASH_VERSION}/gh-dash_v${GH_DASH_VERSION}_linux-${GOARCH}" \
-	&& verify-checksum /usr/local/bin/gh-dash "gh-dash_v${GH_DASH_VERSION}_linux-${GOARCH}" \
-	&& chmod +x /usr/local/bin/gh-dash
+# 3. Binary tool installs (one per layer for cache granularity)
+RUN . /tmp/sb-init.sh && sb_install delta "$DELTA_VERSION"
+RUN . /tmp/sb-init.sh && sb_install yq "$YQ_VERSION"
+RUN . /tmp/sb-init.sh && sb_install lazygit "$LAZYGIT_VERSION"
+RUN . /tmp/sb-init.sh && sb_install gh-dash "$GH_DASH_VERSION"
+RUN . /tmp/sb-init.sh && sb_install xh "$XH_VERSION"
+RUN . /tmp/sb-init.sh && sb_install yazi "$YAZI_VERSION"
+RUN . /tmp/sb-init.sh && sb_install glow "$GLOW_VERSION"
+RUN . /tmp/sb-init.sh && sb_install gum "$GUM_VERSION"
+RUN . /tmp/sb-init.sh && sb_install starship "$STARSHIP_VERSION"
 
-# 3b. File & HTTP Tools
-
-RUN DPKG_ARCH=$(dpkg --print-architecture) \
-	&& if [ "$DPKG_ARCH" = "arm64" ]; then ZARCH="aarch64"; LARCH="arm64"; else ZARCH="x86_64"; LARCH="x86_64"; fi \
-	# xh
-	&& curl -fsSLo /tmp/xh.tar.gz "https://github.com/ducaale/xh/releases/download/v${XH_VERSION}/xh-v${XH_VERSION}-${ZARCH}-unknown-linux-musl.tar.gz" \
-	&& verify-checksum /tmp/xh.tar.gz "xh-v${XH_VERSION}-${ZARCH}-unknown-linux-musl.tar.gz" \
-	&& tar xzf /tmp/xh.tar.gz --strip-components=1 -C /usr/local/bin "xh-v${XH_VERSION}-${ZARCH}-unknown-linux-musl/xh" \
-	&& rm /tmp/xh.tar.gz \
-	# Yazi
-	&& curl -fsSLo /tmp/yazi.zip "https://github.com/sxyazi/yazi/releases/download/v${YAZI_VERSION}/yazi-${ZARCH}-unknown-linux-musl.zip" \
-	&& verify-checksum /tmp/yazi.zip "yazi-${ZARCH}-unknown-linux-musl.zip" \
-	&& unzip -q /tmp/yazi.zip -d /tmp \
-	&& mv /tmp/yazi-${ZARCH}-unknown-linux-musl/yazi /usr/local/bin/ \
-	&& mv /tmp/yazi-${ZARCH}-unknown-linux-musl/ya /usr/local/bin/ \
-	&& rm -rf /tmp/yazi* \
-	# Glow
-	&& curl -fsSLo /tmp/glow.tar.gz "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_${GLOW_VERSION}_Linux_${LARCH}.tar.gz" \
-	&& verify-checksum /tmp/glow.tar.gz "glow_${GLOW_VERSION}_Linux_${LARCH}.tar.gz" \
-	&& tar xzf /tmp/glow.tar.gz -C /tmp \
-	&& find /tmp -name 'glow' -type f -executable -exec mv {} /usr/local/bin/glow \; \
-	&& rm -f /tmp/glow.tar.gz \
-	# Gum
-	&& curl -fsSLo /tmp/gum.tar.gz "https://github.com/charmbracelet/gum/releases/download/v${GUM_VERSION}/gum_${GUM_VERSION}_Linux_${LARCH}.tar.gz" \
-	&& verify-checksum /tmp/gum.tar.gz "gum_${GUM_VERSION}_Linux_${LARCH}.tar.gz" \
-	&& tar xzf /tmp/gum.tar.gz -C /tmp \
-	&& find /tmp -name 'gum' -type f -executable -exec mv {} /usr/local/bin/gum \; \
-	&& rm -f /tmp/gum.tar.gz
-
-# 3c. Shell Tools
-
-RUN DPKG_ARCH=$(dpkg --print-architecture) \
-	&& if [ "$DPKG_ARCH" = "arm64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi \
-	# Starship
-	&& curl -fsSLo /tmp/starship.tar.gz "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-${ZARCH}-unknown-linux-musl.tar.gz" \
-	&& verify-checksum /tmp/starship.tar.gz "starship-${ZARCH}-unknown-linux-musl.tar.gz" \
-	&& tar xf /tmp/starship.tar.gz -C /usr/local/bin starship \
-	&& rm /tmp/starship.tar.gz \
-	# Clean up checksums
-	&& rm -f /tmp/checksums.txt
+# Clean up build-time files
+RUN rm -f /tmp/checksums.txt /tmp/tools.yaml /tmp/tool-lib.sh /tmp/sb-init.sh
 
 # 4. User Setup
 
@@ -149,11 +108,16 @@ RUN printf '[core]\n\tpager = delta\n[interactive]\n\tdiffFilter = delta --color
 
 # 6. Setup script
 
+COPY --chown=dev:dev motd.sh /home/dev/motd.sh
+RUN chmod +x /home/dev/motd.sh
+
 COPY --chown=dev:dev setup.sh /home/dev/setup.sh
 COPY --chown=dev:dev setup-checksums.txt /home/dev/setup-checksums.txt
 COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
 
 COPY scripts/squarebox-update.sh /usr/local/bin/sqrbx-update
+COPY scripts/lib/tools.yaml /usr/local/lib/squarebox/tools.yaml
+COPY scripts/lib/tool-lib.sh /usr/local/lib/squarebox/tool-lib.sh
 RUN chmod +x /usr/local/bin/sqrbx-update
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
@@ -199,6 +163,9 @@ if [ ! -f ~/.squarebox-setup-done ]; then
 	fi
 fi
 EOFRC
+
+# Display MOTD on interactive shell login
+RUN echo '~/motd.sh' >> ~/.bashrc
 
 WORKDIR /workspace
 CMD ["/bin/bash"]
