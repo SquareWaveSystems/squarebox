@@ -12,3 +12,4 @@
 - **Zsh as optional shell** — offer Zsh + Oh-My-Zsh as a setup wizard option alongside bash
 - **direnv integration** — automatic per-directory environment variable loading for multi-project workspaces
 - **Task completion notifications** — webhook, terminal bell, or desktop notification when long-running AI tasks finish
+- **Multi-agent workflow orchestration** — explore adding a layer to run multiple AI coding agents simultaneously in isolated contexts (git worktrees + tmux sessions), inspired by agent-of-empires; may be better to integrate an existing tool than build from scratch
