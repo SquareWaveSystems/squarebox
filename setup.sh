@@ -412,7 +412,7 @@ if $INTERACTIVE; then
 				dotnet) gum_selected="${gum_selected:+$gum_selected,}.NET" ;;
 			esac
 		done
-		gum_args=(--no-limit --header "Select SDKs to install (space=toggle, enter=confirm):")
+		gum_args=(--no-limit --header "Select SDKs to install (space=toggle, enter=confirm, or enter with none selected to skip):")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		selected=$(gum choose "${gum_args[@]}" \
 			"Node.js" "Python" "Go" ".NET") || true
@@ -428,7 +428,7 @@ if $INTERACTIVE; then
 		# Empty gum output means nothing selected
 		[ -z "$selected" ] && sdk_list=""
 	else
-		echo "Select SDKs to install (comma-separated, or 'all', or 'none'):"
+		echo "Select SDKs to install (comma-separated, 'all', or 'none' to skip):"
 		for sdk_item in "1:node:Node.js" "2:python:Python" "3:go:Go" "4:dotnet:.NET"; do
 			num="${sdk_item%%:*}"; rest="${sdk_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
 			if [[ ",$sdk_prev," == *",${key},"* ]]; then
