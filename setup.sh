@@ -91,27 +91,40 @@ fi
 AI_CONFIG="/workspace/.squarebox/ai-tool"
 mkdir -p /workspace/.squarebox ~/.local/bin
 
+ai_prev=""
 if [ -f "$AI_CONFIG" ]; then
-	ai_choice=$(cat "$AI_CONFIG")
-	echo "Installing AI tool: $ai_choice (from previous selection)"
-else
-	if $INTERACTIVE; then
-		echo
-		if $HAS_GUM; then
-			ai_label=$(gum choose --header "Choose your AI coding assistant:" \
-				"Claude Code" "OpenCode" "Both") || true
-			case "$ai_label" in
-				"Claude Code") ai_choice="claude" ;;
-				"OpenCode")    ai_choice="opencode" ;;
-				"Both")        ai_choice="both" ;;
-				*)             echo "No selection, defaulting to Claude Code"; ai_choice="claude" ;;
-			esac
+	ai_prev=$(cat "$AI_CONFIG")
+fi
+
+if $INTERACTIVE; then
+	case "$ai_prev" in
+		claude)   ai_default_label="Claude Code" ;;
+		opencode) ai_default_label="OpenCode" ;;
+		both)     ai_default_label="Both" ;;
+		*)        ai_default_label="" ;;
+	esac
+
+	echo
+	if $HAS_GUM; then
+		gum_args=(--header "Choose your AI coding assistant:")
+		[ -n "$ai_default_label" ] && gum_args+=(--selected "$ai_default_label")
+		ai_label=$(gum choose "${gum_args[@]}" \
+			"Claude Code" "OpenCode" "Both") || true
+		case "$ai_label" in
+			"Claude Code") ai_choice="claude" ;;
+			"OpenCode")    ai_choice="opencode" ;;
+			"Both")        ai_choice="both" ;;
+			*)             echo "No selection, defaulting to Claude Code"; ai_choice="claude" ;;
+		esac
+	else
+		echo "Choose your AI coding assistant:"
+		if [ "$ai_prev" = "claude" ];   then echo "  1) Claude Code [current]"; else echo "  1) Claude Code"; fi
+		if [ "$ai_prev" = "opencode" ]; then echo "  2) OpenCode [current]";    else echo "  2) OpenCode"; fi
+		if [ "$ai_prev" = "both" ];     then echo "  3) Both [current]";        else echo "  3) Both"; fi
+		read -rp "Selection [1/2/3]: " selection
+		if [ -z "$selection" ] && [ -n "$ai_prev" ]; then
+			ai_choice="$ai_prev"
 		else
-			echo "Choose your AI coding assistant:"
-			echo "  1) Claude Code"
-			echo "  2) OpenCode"
-			echo "  3) Both"
-			read -rp "Selection [1/2/3]: " selection
 			case "$selection" in
 				1) ai_choice="claude" ;;
 				2) ai_choice="opencode" ;;
@@ -119,10 +132,14 @@ else
 				*) echo "Invalid selection, defaulting to Claude Code"; ai_choice="claude" ;;
 			esac
 		fi
-	else
-		echo "Defaulting to Claude Code (non-interactive)"
-		ai_choice="claude"
 	fi
+	echo "$ai_choice" > "$AI_CONFIG"
+elif [ -n "$ai_prev" ]; then
+	ai_choice="$ai_prev"
+	echo "Installing AI tool: $ai_choice (from previous selection)"
+else
+	echo "Defaulting to Claude Code (non-interactive)"
+	ai_choice="claude"
 	echo "$ai_choice" > "$AI_CONFIG"
 fi
 
@@ -328,34 +345,53 @@ done
 # SDKs
 SDK_CONFIG="/workspace/.squarebox/sdks"
 
+sdk_prev=""
 if [ -f "$SDK_CONFIG" ]; then
-	sdk_list=$(cat "$SDK_CONFIG")
-	echo "Installing SDKs: $sdk_list (from previous selection)"
-else
-	if $INTERACTIVE; then
-		echo
-		if $HAS_GUM; then
-			selected=$(gum choose --no-limit \
-				--header "Select SDKs to install (space=toggle, enter=confirm):" \
-				"Node.js" "Python" "Go" ".NET") || true
-			sdk_list=""
-			while IFS= read -r line; do
-				case "$line" in
-					"Node.js") sdk_list="${sdk_list:+$sdk_list,}node" ;;
-					"Python")  sdk_list="${sdk_list:+$sdk_list,}python" ;;
-					"Go")      sdk_list="${sdk_list:+$sdk_list,}go" ;;
-					".NET")    sdk_list="${sdk_list:+$sdk_list,}dotnet" ;;
-				esac
-			done <<< "$selected"
-			# Empty gum output means nothing selected
-			[ -z "$selected" ] && sdk_list=""
+	sdk_prev=$(cat "$SDK_CONFIG")
+fi
+
+if $INTERACTIVE; then
+	echo
+	if $HAS_GUM; then
+		# Build --selected from previously saved SDKs
+		gum_selected=""
+		for sdk in $(echo "$sdk_prev" | tr ',' ' '); do
+			case "$sdk" in
+				node)   gum_selected="${gum_selected:+$gum_selected,}Node.js" ;;
+				python) gum_selected="${gum_selected:+$gum_selected,}Python" ;;
+				go)     gum_selected="${gum_selected:+$gum_selected,}Go" ;;
+				dotnet) gum_selected="${gum_selected:+$gum_selected,}.NET" ;;
+			esac
+		done
+		gum_args=(--no-limit --header "Select SDKs to install (space=toggle, enter=confirm):")
+		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
+		selected=$(gum choose "${gum_args[@]}" \
+			"Node.js" "Python" "Go" ".NET") || true
+		sdk_list=""
+		while IFS= read -r line; do
+			case "$line" in
+				"Node.js") sdk_list="${sdk_list:+$sdk_list,}node" ;;
+				"Python")  sdk_list="${sdk_list:+$sdk_list,}python" ;;
+				"Go")      sdk_list="${sdk_list:+$sdk_list,}go" ;;
+				".NET")    sdk_list="${sdk_list:+$sdk_list,}dotnet" ;;
+			esac
+		done <<< "$selected"
+		# Empty gum output means nothing selected
+		[ -z "$selected" ] && sdk_list=""
+	else
+		echo "Select SDKs to install (comma-separated, or 'all', or 'none'):"
+		for sdk_item in "1:node:Node.js" "2:python:Python" "3:go:Go" "4:dotnet:.NET"; do
+			num="${sdk_item%%:*}"; rest="${sdk_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
+			if [[ ",$sdk_prev," == *",${key},"* ]]; then
+				echo "  ${num}) ${label} [installed]"
+			else
+				echo "  ${num}) ${label}"
+			fi
+		done
+		read -rp "Selection [1,2,3,4/all/none]: " sdk_selection
+		if [ -z "$sdk_selection" ] && [ -n "$sdk_prev" ]; then
+			sdk_list="$sdk_prev"
 		else
-			echo "Select SDKs to install (comma-separated, or 'all', or 'none'):"
-			echo "  1) Node.js"
-			echo "  2) Python"
-			echo "  3) Go"
-			echo "  4) .NET"
-			read -rp "Selection [1,2,3,4/all/none]: " sdk_selection
 			sdk_list=""
 			if [ "$sdk_selection" = "all" ]; then
 				sdk_list="node,python,go,dotnet"
@@ -370,10 +406,14 @@ else
 				done
 			fi
 		fi
-	else
-		echo "Skipping SDK selection (non-interactive)"
-		sdk_list=""
 	fi
+	echo "$sdk_list" > "$SDK_CONFIG"
+elif [ -n "$sdk_prev" ]; then
+	sdk_list="$sdk_prev"
+	echo "Installing SDKs: $sdk_list (from previous selection)"
+else
+	echo "Skipping SDK selection (non-interactive)"
+	sdk_list=""
 	echo "$sdk_list" > "$SDK_CONFIG"
 fi
 

@@ -35,6 +35,10 @@ Items are ordered by priority within each section. Sections are ordered by prior
 - [ ] **Fix SECURITY.md wrong alias** — references `sqrbx-update` but `install.sh` actually creates `sqrbx-rebuild`
 - [ ] **Fix CLAUDE.md `sqrbx-update` description** — says "pull latest repo changes and rebuild" but it actually updates tool binaries in-place
 
+## P2 — Structural simplification
+
+- [ ] **Extract a shared tool registry to eliminate 3-way install duplication** — `setup.sh`, `squarebox-update.sh`, and `update-versions.sh` each independently define how to download, extract, and install the same tools (URL patterns, arch mappings, extract steps). Adding a tool or changing a URL format requires updating all three files. A shared config (e.g. a declarative tool manifest or sourced shell library) could define each tool once and let the three scripts consume it.
+
 ## P2 — Dockerfile improvements
 
 - [ ] Split the monolithic binary tools `RUN` block (lines 50-90) into smaller per-tool `RUN` blocks for better cache behavior
