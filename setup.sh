@@ -231,7 +231,7 @@ if $INTERACTIVE; then
 			esac
 		done
 		echo "Nano is always available as the default editor."
-		gum_args=(--no-limit --header "Select text editors to install (space=toggle, enter=confirm):")
+		gum_args=(--no-limit --header "Select text editors to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		selected=$(gum choose "${gum_args[@]}" \
 			"micro" "edit" "fresh" "helix" "nvim") || true
@@ -361,7 +361,7 @@ if $INTERACTIVE; then
 				zellij) gum_selected="${gum_selected:+$gum_selected,}zellij" ;;
 			esac
 		done
-		gum_args=(--no-limit --header "Select terminal multiplexer (space=toggle, enter=confirm, or enter to skip):")
+		gum_args=(--no-limit --header "Select terminal multiplexer:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		selected=$(gum choose "${gum_args[@]}" \
 			"tmux" "zellij") || true
@@ -458,7 +458,7 @@ if $INTERACTIVE; then
 				dotnet) gum_selected="${gum_selected:+$gum_selected,}.NET" ;;
 			esac
 		done
-		gum_args=(--no-limit --header "Select SDKs to install (space=toggle, enter=confirm, or enter with none selected to skip):")
+		gum_args=(--no-limit --header "Select SDKs to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		selected=$(gum choose "${gum_args[@]}" \
 			"Node.js" "Python" "Go" ".NET") || true
