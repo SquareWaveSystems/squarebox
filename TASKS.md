@@ -19,10 +19,10 @@ Items are ordered by priority within each section. Sections are ordered by prior
 - [x] **Verify SDK install success** before continuing (e.g. check `nvm install --lts` exit code, verify binaries exist)
 - [x] Add cleanup trap in setup.sh to remove temp files on failure
 - [x] Handle partial setup failure — clean up half-configured state so retries work cleanly
-- [ ] **Guard gh config persistence on auth failure** — `setup.sh` lines 71-72 copy `~/.config/gh/*` unconditionally after `gh auth login`. If the user cancels, this errors out and kills the entire setup script due to `set -e`. Wrap in `gh auth status` check.
-- [ ] **Fix delta install fallback in `sqrbx-update`** — `sudo dpkg -i ... 2>/dev/null || dpkg -i ...` swallows the real error and the non-sudo fallback also fails. Emit a clear error instead.
-- [ ] **Clean up temp dirs on failure in `sqrbx-update`** — each `*_install` function creates `mktemp -d` but never cleans up on error. Add trap or explicit cleanup.
-- [ ] **Use `mktemp` for `sqrbx-update` log file** — currently writes to predictable `/tmp/sqrbx-update-log.txt`.
+- [x] **Guard gh config persistence on auth failure** — `setup.sh` lines 71-72 copy `~/.config/gh/*` unconditionally after `gh auth login`. If the user cancels, this errors out and kills the entire setup script due to `set -e`. Wrap in `gh auth status` check.
+- [x] **Fix delta install fallback in `sqrbx-update`** — `sudo dpkg -i ... 2>/dev/null || dpkg -i ...` swallows the real error and the non-sudo fallback also fails. Emit a clear error instead.
+- [x] **Clean up temp dirs on failure in `sqrbx-update`** — each `*_install` function creates `mktemp -d` but never cleans up on error. Add trap or explicit cleanup.
+- [x] **Use `mktemp` for `sqrbx-update` log file** — currently writes to predictable `/tmp/sqrbx-update-log.txt`.
 
 ## P1 — install.sh
 

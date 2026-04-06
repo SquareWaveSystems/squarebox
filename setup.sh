@@ -77,9 +77,13 @@ if ! gh auth status &>/dev/null; then
 		echo
 		echo "Logging into GitHub..."
 		BROWSER=echo gh auth login
-		# Persist gh config for future rebuilds
-		mkdir -p "$GH_PERSIST"
-		cp -r ~/.config/gh/* "$GH_PERSIST"/
+		# Persist gh config for future rebuilds (only if auth succeeded)
+		if gh auth status &>/dev/null; then
+			mkdir -p "$GH_PERSIST"
+			cp -r ~/.config/gh/* "$GH_PERSIST"/
+		else
+			echo "GitHub CLI auth was not completed — skipping config persistence"
+		fi
 	else
 		echo "Skipping GitHub CLI auth (non-interactive)"
 	fi
