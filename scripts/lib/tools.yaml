@@ -1,0 +1,179 @@
+# tools.yaml — single source of truth for squarebox tool metadata.
+# Consumed by: Dockerfile, setup.sh, squarebox-update.sh, update-versions.sh
+#
+# Artifact patterns use arch tokens resolved at runtime:
+#   {dpkg_arch}  amd64 / arm64        (Debian-style)
+#   {zarch}      x86_64 / aarch64     (musl/Rust-style)
+#   {larch}      x86_64 / arm64       (mixed convention)
+#   {goarch}     amd64 / arm64        (Go-style)
+#   {ocarch}     x64 / arm64          (OpenCode-style)
+#   {march}      64 / -arm64          (Micro's quirky format)
+#   {version}    version number (no prefix)
+#   {asset_version}  asset version when it differs from tag (edit)
+
+tools:
+
+  # ── Dockerfile tools (installed as root to /usr/local/bin) ──────────
+
+  delta:
+    repo: dandavison/delta
+    version_prefix: ""
+    artifact: git-delta_{version}_{dpkg_arch}.deb
+    method: deb
+    binaries: delta
+    dest: system
+    group: dockerfile
+
+  yq:
+    repo: mikefarah/yq
+    version_prefix: v
+    artifact: yq_linux_{dpkg_arch}
+    method: binary
+    binaries: yq
+    dest: system
+    group: dockerfile
+
+  lazygit:
+    repo: jesseduffield/lazygit
+    version_prefix: v
+    artifact: lazygit_{version}_Linux_{larch}.tar.gz
+    method: tar.gz
+    binaries: lazygit
+    tar_extract: lazygit
+    dest: system
+    group: dockerfile
+
+  gh-dash:
+    repo: dlvhdr/gh-dash
+    version_prefix: v
+    artifact: gh-dash_v{version}_linux-{goarch}
+    method: binary
+    binaries: gh-dash
+    dest: system
+    group: dockerfile
+
+  xh:
+    repo: ducaale/xh
+    version_prefix: v
+    artifact: xh-v{version}-{zarch}-unknown-linux-musl.tar.gz
+    method: tar.gz
+    binaries: xh
+    tar_strip: 1
+    dest: system
+    group: dockerfile
+
+  yazi:
+    repo: sxyazi/yazi
+    version_prefix: v
+    artifact: yazi-{zarch}-unknown-linux-musl.zip
+    method: zip
+    binaries: yazi,ya
+    zip_subdir: yazi-{zarch}-unknown-linux-musl
+    dest: system
+    group: dockerfile
+
+  glow:
+    repo: charmbracelet/glow
+    version_prefix: v
+    artifact: glow_{version}_Linux_{larch}.tar.gz
+    method: tar.gz
+    binaries: glow
+    find_binary: true
+    dest: system
+    group: dockerfile
+
+  gum:
+    repo: charmbracelet/gum
+    version_prefix: v
+    artifact: gum_{version}_Linux_{larch}.tar.gz
+    method: tar.gz
+    binaries: gum
+    find_binary: true
+    dest: system
+    group: dockerfile
+
+  starship:
+    repo: starship/starship
+    version_prefix: v
+    artifact: starship-{zarch}-unknown-linux-musl.tar.gz
+    method: tar.gz
+    binaries: starship
+    tar_extract: starship
+    dest: system
+    group: dockerfile
+
+  # ── setup.sh tools (installed as user to ~/.local/bin) ──────────────
+
+  opencode:
+    repo: anomalyco/opencode
+    version_prefix: v
+    artifact: opencode-linux-{ocarch}.tar.gz
+    method: tar.gz
+    binaries: opencode
+    find_binary: true
+    dest: user
+    group: setup
+
+  micro:
+    repo: micro-editor/micro
+    version_prefix: v
+    artifact: micro-{version}-linux{march}.tar.gz
+    method: tar.gz
+    binaries: micro
+    tar_strip: 1
+    dest: user
+    group: setup
+
+  edit:
+    repo: microsoft/edit
+    version_prefix: v
+    artifact: edit-{asset_version}-{zarch}-linux-gnu.tar.zst
+    method: tar.zst
+    binaries: edit
+    find_binary: true
+    asset_version_from_api: true
+    dest: user
+    group: setup
+
+  fresh:
+    repo: sinelaw/fresh
+    version_prefix: v
+    artifact: fresh-editor-{zarch}-unknown-linux-musl.tar.gz
+    method: tar.gz
+    binaries: fresh
+    find_binary: true
+    dest: user
+    group: setup
+
+  helix:
+    repo: helix-editor/helix
+    version_prefix: ""
+    artifact: helix-{version}-{zarch}-linux.tar.xz
+    method: tar.xz
+    binaries: hx
+    find_binary: true
+    post_install: helix_runtime
+    dest: user
+    group: setup
+
+  nvim:
+    repo: neovim/neovim
+    version_prefix: v
+    artifact: nvim-linux-{larch}.tar.gz
+    method: tar.gz-tree
+    binaries: nvim
+    tree_name: nvim-linux-{larch}
+    tree_dest: ~/.local/nvim
+    symlink: ~/.local/nvim/bin/nvim
+    dest: user
+    group: setup
+
+  zellij:
+    repo: zellij-org/zellij
+    version_prefix: v
+    artifact: zellij-{zarch}-unknown-linux-musl.tar.gz
+    method: tar.gz
+    binaries: zellij
+    tar_extract: zellij
+    dest: user
+    group: setup

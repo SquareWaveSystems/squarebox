@@ -1,33 +1,6 @@
 format = """
 $env_var\
-$directory\
-$git_branch\
-$git_status\
-$fill\
-$cmd_duration\
-$line_break\
-$character"""
-
-[directory]
-truncation_length = 3
-truncation_symbol = ".../"
-
-[git_branch]
-format = "[$symbol$branch]($style) "
-
-[git_status]
-format = '([$all_status$ahead_behind]($style) )'
-
-[fill]
-symbol = " "
-
-[cmd_duration]
-min_time = 2000
-format = "[$duration]($style)"
+$all"""
 
 [env_var.SQUAREBOX]
 format = "[🟧📦](yellow) "
-
-[character]
-success_symbol = "[>](green)"
-error_symbol = "[>](red)"

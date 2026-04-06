@@ -23,7 +23,7 @@ your home directory.
 If you prefer to inspect the script before running it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BrettKinny/SquareBox/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh -o install.sh
 less install.sh        # read it
 bash install.sh        # run it
 ```
