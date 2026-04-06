@@ -455,7 +455,7 @@ for editor in $(echo "$editor_list" | tr ',' ' '); do
 		micro) install_micro; [ -z "$editor_cmd" ] && editor_cmd="micro" ;;
 		edit) install_edit; [ -z "$editor_cmd" ] && editor_cmd="edit" ;;
 		fresh) install_fresh; [ -z "$editor_cmd" ] && editor_cmd="fresh" ;;
-		helix) { install_helix && [ -z "$editor_cmd" ] && editor_cmd="hx"; } || echo "Warning: Helix installation failed, skipping." ;;
+		helix) install_helix && { [ -z "$editor_cmd" ] && editor_cmd="hx"; true; } || echo "Warning: Helix installation failed, skipping." ;;
 		nvim) install_nvim; [ -z "$editor_cmd" ] && editor_cmd="nvim" ;;
 	esac
 done

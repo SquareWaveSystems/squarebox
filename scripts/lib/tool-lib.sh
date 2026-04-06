@@ -152,7 +152,7 @@ sb_install() {
 		tar.zst)
 			curl -fsSLo "$_sb_tmp/archive.tar.zst" "$url"
 			sb_verify "$_sb_tmp/archive.tar.zst" "$artifact"
-			zstd -d "$_sb_tmp/archive.tar.zst" -o "$_sb_tmp/archive.tar"
+			zstd -qd "$_sb_tmp/archive.tar.zst" -o "$_sb_tmp/archive.tar"
 			_sb_extract_tar "$tool" "$version" "$_sb_tmp" "$dest_dir" "$dest_type" "xf" "$_sb_tmp/archive.tar"
 			;;
 		zip)
