@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="https://github.com/SquareWaveSystems/SquareBox.git"
+REPO="https://github.com/SquareWaveSystems/squarebox.git"
 INSTALL_DIR="${HOME}/squarebox"
 IMAGE_NAME="squarebox"
 CONTAINER_NAME="squarebox"

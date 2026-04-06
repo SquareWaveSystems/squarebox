@@ -1,4 +1,4 @@
-# tools.yaml — single source of truth for SquareBox tool metadata.
+# tools.yaml — single source of truth for squarebox tool metadata.
 # Consumed by: Dockerfile, setup.sh, squarebox-update.sh, update-versions.sh
 #
 # Artifact patterns use arch tokens resolved at runtime:

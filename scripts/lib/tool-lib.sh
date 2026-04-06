@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tool-lib.sh — shared library for SquareBox tool management.
+# tool-lib.sh — shared library for squarebox tool management.
 # Source this file; do not execute directly.
 #
 # Provides:

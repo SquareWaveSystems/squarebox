@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# sqrbx-update — update SquareBox tools in-place from GitHub releases.
+# sqrbx-update — update squarebox tools in-place from GitHub releases.
 #
 # Usage:
 #   sqrbx-update              Show available updates (dry run)
@@ -35,7 +35,7 @@ fi
 # Fetches checksums.txt and setup-checksums.txt from the repo's main branch.
 # Only versions that have been vetted (committed to the repo) can be installed.
 
-REPO_RAW="https://raw.githubusercontent.com/SquareWaveSystems/SquareBox/main"
+REPO_RAW="https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main"
 CHECKSUM_DIR=$(mktemp -d)
 CHECKSUMS_FETCHED=false
 
@@ -197,7 +197,7 @@ yaml_name() {
 
 usage() {
 	cat <<-EOF
-	${BOLD}sqrbx-update${RESET} — update SquareBox tools from GitHub releases
+	${BOLD}sqrbx-update${RESET} — update squarebox tools from GitHub releases
 
 	${BOLD}Usage:${RESET}
 	  sqrbx-update              Show available updates (dry run)
@@ -363,7 +363,7 @@ main() {
 	fi
 
 	echo
-	echo "${BOLD}SquareBox Tool Updater${RESET}"
+	echo "${BOLD}squarebox Tool Updater${RESET}"
 	echo
 
 	if [ "$mode" = "list" ]; then
