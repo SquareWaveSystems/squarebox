@@ -1,7 +1,26 @@
+# macOS
 .DS_Store
+
+# Editor swap/backup files
 *.swp
 *.swo
 *~
+*.bak
+
+# IDE / editor directories
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Environment and secrets
+.env
+.env.*
+credentials.json
+
+# Docker build artifacts
 workspace/
 .config/
 
+# OS files
+Thumbs.db

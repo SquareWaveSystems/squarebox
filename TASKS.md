@@ -74,17 +74,20 @@ Items are ordered by priority within each section. Sections are ordered by prior
 
 ## P4 — Features & Polish
 
-- [ ] **Add tmux and zellij as optional installs** — offer both terminal multiplexers in the setup.sh selection menu, preconfigured with sensible defaults
+- [x] **Add tmux and zellij as optional installs** — offer both terminal multiplexers in the setup.sh selection menu, preconfigured with sensible defaults
 - [ ] **Custom colour theme** — ship a unified terminal colour palette (e.g. Catppuccin or Tokyo Night) so bat, delta, fzf, eza, starship, and tmux all look coordinated out of the box
 - [ ] **Dotfile portability** — let users mount or bootstrap their own dotfiles (starship.toml, tmux.conf, aliases, etc.) via a `~/.squarebox/` convention, with sensible merge/override behaviour against the defaults
 - [ ] **Versioned releases with changelogs** — publish GitHub Releases with semantic version tags and changelogs so users can pin to a known-good version and see what changed
 - [ ] **Animated GIF demo** — create a terminal recording (VHS or asciinema) showcasing the tools and workflow for the README
+- [ ] **figlet/toilet + lolcat** — rainbow ASCII art banner on login instead of (or alongside) fastfetch
+- [ ] **Custom MOTD** — replace the default with a styled SquareBox welcome showing what tools/SDKs are installed
+- [ ] **ASCII Banner in README**
 
 ## P5 — TBD / Minor
 
 - [x] Add a `.dockerignore` to exclude `.git/` and other unnecessary context from Docker builds
 - [ ] Support multiple concurrent container instances
-- [ ] Add `.editorconfig` for contributor consistency
-- [ ] Add `CONTRIBUTING.md` with build/test/PR instructions
-- [ ] Expand `.gitignore` — currently only covers `.DS_Store` and swap files
-- [ ] Add TASKS.md to `.dockerignore` to keep it out of build context
+- [x] Add `.editorconfig` for contributor consistency
+- [x] Add `CONTRIBUTING.md` with build/test/PR instructions
+- [x] Expand `.gitignore` — currently only covers `.DS_Store` and swap files
+- [x] Add TASKS.md to `.dockerignore` to keep it out of build context

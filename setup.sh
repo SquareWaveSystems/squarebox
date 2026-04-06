@@ -5,7 +5,7 @@ cleanup() {
 	rm -f /tmp/opencode.tar.gz /tmp/micro.tar.gz /tmp/micro /tmp/edit.tar.zst \
 		/tmp/edit.tar /tmp/fresh.tar.gz /tmp/helix.tar.xz /tmp/nvim.tar.gz \
 		/tmp/nvm-install.sh /tmp/go.tar.gz /tmp/yazi.zip
-	rm -rf /tmp/micro-* /tmp/fresh* /tmp/helix-* /tmp/nvim-linux-* /tmp/yazi-*
+	rm -rf /tmp/micro-* /tmp/fresh* /tmp/helix-* /tmp/nvim-linux-* /tmp/yazi-* /tmp/zellij*
 }
 trap cleanup EXIT
 
@@ -29,6 +29,11 @@ verify_checksum() {
 		return 1
 	fi
 }
+
+# Source shared tool library and wire up checksum verification
+export SB_TOOLS_YAML=/usr/local/lib/squarebox/tools.yaml
+source /usr/local/lib/squarebox/tool-lib.sh
+sb_verify() { verify_checksum "$1" "$2"; }
 
 # Detect interactive terminal
 INTERACTIVE=false
@@ -171,8 +176,9 @@ EDIT_ASSET_VERSION="1.2.0"
 FRESH_VERSION="0.2.21"
 HELIX_VERSION="25.07.1"
 NVIM_VERSION="0.12.0"
+ZELLIJ_VERSION="0.44.0"
 
-for _var in OPENCODE_VERSION MICRO_VERSION EDIT_VERSION EDIT_ASSET_VERSION FRESH_VERSION HELIX_VERSION NVIM_VERSION; do
+for _var in OPENCODE_VERSION MICRO_VERSION EDIT_VERSION EDIT_ASSET_VERSION FRESH_VERSION HELIX_VERSION NVIM_VERSION ZELLIJ_VERSION; do
 	if [ -z "${!_var:-}" ]; then
 		echo "Error: ${_var} is empty or unset" >&2
 		exit 1
@@ -184,15 +190,7 @@ if [ "$ai_choice" = "opencode" ] || [ "$ai_choice" = "both" ]; then
 		echo "OpenCode already installed, skipping."
 	else
 		echo "Installing OpenCode v${OPENCODE_VERSION}..."
-		ARCH=$(uname -m)
-		if [ "$ARCH" = "aarch64" ]; then OCARCH="arm64"; else OCARCH="x64"; fi
-		curl -fsSLo /tmp/opencode.tar.gz "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OCARCH}.tar.gz"
-		verify_checksum /tmp/opencode.tar.gz "opencode-linux-${OCARCH}.tar.gz"
-		tar xzf /tmp/opencode.tar.gz -C /tmp
-		local bin; bin=$(find /tmp -name 'opencode' -type f -executable | head -1)
-		[ -n "$bin" ] || { echo "Error: opencode binary not found in archive" >&2; return 1; }
-		mv "$bin" ~/.local/bin/opencode
-		rm -f /tmp/opencode.tar.gz
+		sb_install opencode "$OPENCODE_VERSION"
 	fi
 fi
 
@@ -268,78 +266,37 @@ fi
 install_micro() {
 	if command -v micro &>/dev/null; then echo "Micro already installed, skipping."; return 0; fi
 	echo "Installing Micro v${MICRO_VERSION}..."
-	ARCH=$(uname -m)
-	if [ "$ARCH" = "aarch64" ]; then MARCH="-arm64"; else MARCH="64"; fi
-	curl -fsSLo /tmp/micro.tar.gz "https://github.com/micro-editor/micro/releases/download/v${MICRO_VERSION}/micro-${MICRO_VERSION}-linux${MARCH}.tar.gz"
-	verify_checksum /tmp/micro.tar.gz "micro-${MICRO_VERSION}-linux${MARCH}.tar.gz"
-	tar xzf /tmp/micro.tar.gz --strip-components=1 -C /tmp
-	mv /tmp/micro ~/.local/bin/micro
-	rm -rf /tmp/micro*
+	sb_install micro "$MICRO_VERSION"
 }
 
 install_edit() {
 	if command -v edit &>/dev/null; then echo "Edit already installed, skipping."; return 0; fi
 	echo "Installing Edit v${EDIT_VERSION}..."
-	ARCH=$(uname -m)
-	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
-	curl -fsSLo /tmp/edit.tar.zst "https://github.com/microsoft/edit/releases/download/v${EDIT_VERSION}/edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst"
-	verify_checksum /tmp/edit.tar.zst "edit-${EDIT_ASSET_VERSION}-${ZARCH}-linux-gnu.tar.zst"
-	zstd -d /tmp/edit.tar.zst -o /tmp/edit.tar
-	tar xf /tmp/edit.tar -C /tmp
-	local bin; bin=$(find /tmp -name 'edit' -type f -executable | head -1)
-	[ -n "$bin" ] || { echo "Error: edit binary not found in archive" >&2; return 1; }
-	mv "$bin" ~/.local/bin/edit
-	rm -f /tmp/edit.tar.zst /tmp/edit.tar
+	SB_ASSET_VERSION="$EDIT_ASSET_VERSION" sb_install edit "$EDIT_VERSION"
 }
 
 install_fresh() {
 	if command -v fresh &>/dev/null; then echo "Fresh already installed, skipping."; return 0; fi
 	echo "Installing Fresh v${FRESH_VERSION}..."
-	ARCH=$(uname -m)
-	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
-	curl -fsSLo /tmp/fresh.tar.gz "https://github.com/sinelaw/fresh/releases/download/v${FRESH_VERSION}/fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
-	verify_checksum /tmp/fresh.tar.gz "fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
-	tar xf /tmp/fresh.tar.gz -C /tmp
-	local bin; bin=$(find /tmp -name 'fresh' -type f -executable | head -1)
-	[ -n "$bin" ] || { echo "Error: fresh binary not found in archive" >&2; return 1; }
-	mv "$bin" ~/.local/bin/fresh
-	rm -rf /tmp/fresh*
+	sb_install fresh "$FRESH_VERSION"
 }
 
 install_helix() {
 	if command -v hx &>/dev/null; then echo "Helix already installed, skipping."; return 0; fi
 	echo "Installing Helix v${HELIX_VERSION}..."
-	ARCH=$(uname -m)
-	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
 	if sudo -n true 2>/dev/null; then
 		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
 	elif ! command -v xz &>/dev/null; then
 		echo "Error: xz-utils required for Helix but sudo unavailable to install it. Skipping Helix." >&2
 		return 1
 	fi
-	curl -fsSLo /tmp/helix.tar.xz "https://github.com/helix-editor/helix/releases/download/${HELIX_VERSION}/helix-${HELIX_VERSION}-${ZARCH}-linux.tar.xz"
-	verify_checksum /tmp/helix.tar.xz "helix-${HELIX_VERSION}-${ZARCH}-linux.tar.xz"
-	tar xJf /tmp/helix.tar.xz -C /tmp
-	mv "/tmp/helix-${HELIX_VERSION}-${ZARCH}-linux/hx" ~/.local/bin/hx
-	mkdir -p ~/.config/helix
-	rm -rf ~/.config/helix/runtime
-	mv "/tmp/helix-${HELIX_VERSION}-${ZARCH}-linux/runtime" ~/.config/helix/runtime
-	rm -rf /tmp/helix*
+	sb_install helix "$HELIX_VERSION"
 }
 
 install_nvim() {
 	if command -v nvim &>/dev/null; then echo "Neovim already installed, skipping."; return 0; fi
-	rm -rf ~/.local/nvim
 	echo "Installing Neovim v${NVIM_VERSION}..."
-	ARCH=$(uname -m)
-	if [ "$ARCH" = "aarch64" ]; then NARCH="arm64"; else NARCH="x86_64"; fi
-	curl -fsSLo /tmp/nvim.tar.gz "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-${NARCH}.tar.gz"
-	verify_checksum /tmp/nvim.tar.gz "nvim-linux-${NARCH}.tar.gz"
-	tar xzf /tmp/nvim.tar.gz -C /tmp
-	rm -rf ~/.local/nvim
-	mv "/tmp/nvim-linux-${NARCH}" ~/.local/nvim
-	ln -sf ~/.local/nvim/bin/nvim ~/.local/bin/nvim
-	rm -f /tmp/nvim.tar.gz
+	sb_install nvim "$NVIM_VERSION"
 }
 
 editor_cmd=""
@@ -359,6 +316,80 @@ done
 		echo "export EDITOR='$editor_cmd'"
 	fi
 } > ~/.squarebox-editor-aliases
+
+# Terminal multiplexer
+MUX_CONFIG="/workspace/.squarebox/multiplexer"
+
+if [ -f "$MUX_CONFIG" ]; then
+	mux_list=$(cat "$MUX_CONFIG")
+	[ -n "$mux_list" ] && echo "Installing multiplexer(s): $mux_list (from previous selection)"
+else
+	if $INTERACTIVE; then
+		echo
+		if $HAS_GUM; then
+			selected=$(gum choose --no-limit \
+				--header "Select terminal multiplexer (space=toggle, enter=confirm, or enter to skip):" \
+				"tmux    — classic terminal multiplexer" \
+				"zellij  — friendly terminal workspace") || true
+			mux_list=""
+			while IFS= read -r line; do
+				[ -z "$line" ] && continue
+				name="${line%% *}"
+				mux_list="${mux_list:+$mux_list,}${name}"
+			done <<< "$selected"
+		else
+			echo "Select terminal multiplexer (comma-separated, or 'all', or press Enter to skip):"
+			echo "  1) tmux    — classic terminal multiplexer"
+			echo "  2) zellij  — friendly terminal workspace"
+			read -rp "Selection [1,2/all/skip]: " mux_selection
+			mux_list=""
+			if [ "$mux_selection" = "all" ]; then
+				mux_list="tmux,zellij"
+			elif [ -n "$mux_selection" ]; then
+				for item in $(echo "$mux_selection" | tr ',' ' '); do
+					case "$item" in
+						1) mux_list="${mux_list:+$mux_list,}tmux" ;;
+						2) mux_list="${mux_list:+$mux_list,}zellij" ;;
+					esac
+				done
+			fi
+		fi
+	else
+		echo "Skipping multiplexer selection (non-interactive)"
+		mux_list=""
+	fi
+	echo "$mux_list" > "$MUX_CONFIG"
+fi
+
+install_tmux() {
+	if command -v tmux &>/dev/null; then echo "Tmux already installed, skipping."; return 0; fi
+	echo "Installing tmux via apt..."
+	sudo apt-get update -qq && sudo apt-get install -y -qq tmux >/dev/null 2>&1
+	# Install default config
+	if [ ! -f ~/.tmux.conf ]; then
+		cat > ~/.tmux.conf <<-'TMUXCONF'
+		set -g mouse on
+		set -g default-terminal "tmux-256color"
+		set -g history-limit 10000
+		set -g prefix C-a
+		unbind C-b
+		bind C-a send-prefix
+		TMUXCONF
+	fi
+}
+
+install_zellij() {
+	if command -v zellij &>/dev/null; then echo "Zellij already installed, skipping."; return 0; fi
+	echo "Installing Zellij v${ZELLIJ_VERSION}..."
+	sb_install zellij "$ZELLIJ_VERSION"
+}
+
+for mux in $(echo "$mux_list" | tr ',' ' '); do
+	case "$mux" in
+		tmux) install_tmux ;;
+		zellij) install_zellij ;;
+	esac
+done
 
 # SDKs
 SDK_CONFIG="/workspace/.squarebox/sdks"
@@ -497,10 +528,8 @@ install_go() {
 	if [ -x "${HOME}/.local/go/bin/go" ]; then echo "Go already installed, skipping."; return 0; fi
 	rm -rf "$HOME/.local/go"
 	echo "Installing Go ${GO_VERSION}..."
-	ARCH=$(uname -m)
-	if [ "$ARCH" = "aarch64" ]; then GOARCH="arm64"; else GOARCH="amd64"; fi
-	curl -fsSLo /tmp/go.tar.gz "https://go.dev/dl/${GO_VERSION}.linux-${GOARCH}.tar.gz"
-	verify_checksum /tmp/go.tar.gz "${GO_VERSION}.linux-${GOARCH}.tar.gz"
+	curl -fsSLo /tmp/go.tar.gz "https://go.dev/dl/${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
+	verify_checksum /tmp/go.tar.gz "${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
 	tar xzf /tmp/go.tar.gz -C ~/.local
 	rm /tmp/go.tar.gz
 	if ! grep -q 'GOROOT' ~/.squarebox-sdk-paths 2>/dev/null; then
