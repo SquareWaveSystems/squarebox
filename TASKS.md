@@ -6,9 +6,9 @@ Items are ordered by priority within each section. Sections are ordered by prior
 
 - [x] **Pin all binary versions and add SHA256 checksum verification** for every download in Dockerfile and setup.sh
 - [x] **Audit and document the trust model for `curl | bash` install path** — users piping install.sh into their shell need to understand what it does; mitigate MITM and compromised-repo risks
-- [ ] **Add a LICENSE file** — without one, the project is legally "all rights reserved" and nobody can use it. MIT or Apache-2.0.
-- [ ] **Fix install URL case mismatch** — README and `install.sh` use lowercase `squarebox` in GitHub URLs, but the repo is `SquareBox` (mixed case). GitHub raw URLs are case-sensitive, so the one-liner install command will break.
-- [ ] **Remove `/usr/local/bin` ownership by dev user** (Dockerfile line ~151) — `chown dev:dev /usr/local/bin` lets any code in the container replace system binaries. Use `sudo` in `sqrbx-update` or install user-updatable tools to `~/.local/bin` instead.
+- [x] **Add a LICENSE file** — without one, the project is legally "all rights reserved" and nobody can use it. MIT or Apache-2.0.
+- [x] **Fix install URL case mismatch** — not a real issue; GitHub raw URLs and git clone URLs are case-insensitive for repo names. Both `squarebox` and `SquareBox` resolve identically.
+- [x] **Remove `/usr/local/bin` ownership by dev user** (Dockerfile line ~151) — `chown dev:dev /usr/local/bin` lets any code in the container replace system binaries. Use `sudo` in `sqrbx-update` or install user-updatable tools to `~/.local/bin` instead.
 - [ ] **Add checksum verification to `sqrbx-update`** — Dockerfile and setup.sh verify SHA256 checksums, but `squarebox-update.sh` downloads and installs binaries with zero integrity checking. Conspicuous gap in a project that emphasizes supply-chain security.
 - [ ] **Remove TASKS.md from the public repo before v1** — internal backlog with unchecked TODOs and commentary about gaps signals "unfinished." Move to GitHub Issues or a project board.
 
