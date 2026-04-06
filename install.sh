@@ -32,8 +32,8 @@ docker build -t "$IMAGE_NAME" "$INSTALL_DIR"
 # Remove old container if it exists
 if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
 	echo "Removing old container..."
-	docker stop "$CONTAINER_NAME" 2>/dev/null || true
-	docker rm "$CONTAINER_NAME"
+	docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+	docker rm "$CONTAINER_NAME" >/dev/null
 fi
 
 # Add shell aliases
@@ -94,8 +94,8 @@ docker create -it --name "$CONTAINER_NAME" \
 	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit" \
 	"$IMAGE_NAME" > /dev/null
 
-if [ -t 0 ]; then
-	docker start -ai "$CONTAINER_NAME"
+if [ -t 0 ] || [ -t 1 ]; then
+	docker start -ai "$CONTAINER_NAME" </dev/tty
 else
 	echo "Install complete. Run 'squarebox' (or 'sqrbx') to start (you may need to restart your shell first)."
 fi
