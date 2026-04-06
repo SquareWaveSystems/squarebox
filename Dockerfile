@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	nano \
 	zstd \
 	zoxide \
-	figlet \
-	lolcat \
+	toilet \
+	toilet-fonts \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& ln -s $(which fdfind) /usr/local/bin/fd \
 	&& ln -s $(which batcat) /usr/local/bin/bat

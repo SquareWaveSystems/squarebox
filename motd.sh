@@ -1,7 +1,7 @@
 #!/bin/bash
 # SquareBox MOTD — rainbow ASCII banner
 
-figlet -f slant "SquareBox" | lolcat -f
+toilet -f smslant --gay "SquareBox"
 echo ""
 echo "  $(date '+%A, %B %d %Y  %H:%M')"
 echo ""
