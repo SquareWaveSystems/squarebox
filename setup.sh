@@ -211,36 +211,62 @@ fi
 # Text editors
 EDITOR_CONFIG="/workspace/.squarebox/editors"
 
+editor_prev=""
 if [ -f "$EDITOR_CONFIG" ]; then
-	editor_list=$(cat "$EDITOR_CONFIG")
-	[ -n "$editor_list" ] && echo "Installing editors: $editor_list (from previous selection)"
-else
-	if $INTERACTIVE; then
-		echo
-		if $HAS_GUM; then
-			echo "Nano is always available as the default editor."
-			selected=$(gum choose --no-limit \
-				--header "Select text editors to install (space=toggle, enter=confirm):" \
-				"micro  — modern, intuitive terminal editor" \
-				"edit   — terminal text editor (Microsoft)" \
-				"fresh  — modern terminal text editor" \
-				"helix  — modal editor (Kakoune-inspired)" \
-				"nvim   — Neovim") || true
-			editor_list=""
-			while IFS= read -r line; do
-				[ -z "$line" ] && continue
-				name="${line%% *}"
-				editor_list="${editor_list:+$editor_list,}${name}"
-			done <<< "$selected"
+	editor_prev=$(cat "$EDITOR_CONFIG")
+fi
+
+if $INTERACTIVE; then
+	echo
+	if $HAS_GUM; then
+		# Build --selected from previously saved editors
+		gum_selected=""
+		for ed in $(echo "$editor_prev" | tr ',' ' '); do
+			case "$ed" in
+				micro) gum_selected="${gum_selected:+$gum_selected,}micro  — modern, intuitive terminal editor" ;;
+				edit)  gum_selected="${gum_selected:+$gum_selected,}edit   — terminal text editor (Microsoft)" ;;
+				fresh) gum_selected="${gum_selected:+$gum_selected,}fresh  — modern terminal text editor" ;;
+				helix) gum_selected="${gum_selected:+$gum_selected,}helix  — modal editor (Kakoune-inspired)" ;;
+				nvim)  gum_selected="${gum_selected:+$gum_selected,}nvim   — Neovim" ;;
+			esac
+		done
+		echo "Nano is always available as the default editor."
+		gum_args=(--no-limit --header "Select text editors to install (space=toggle, enter=confirm):")
+		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
+		selected=$(gum choose "${gum_args[@]}" \
+			"micro  — modern, intuitive terminal editor" \
+			"edit   — terminal text editor (Microsoft)" \
+			"fresh  — modern terminal text editor" \
+			"helix  — modal editor (Kakoune-inspired)" \
+			"nvim   — Neovim") || true
+		editor_list=""
+		while IFS= read -r line; do
+			[ -z "$line" ] && continue
+			name="${line%% *}"
+			editor_list="${editor_list:+$editor_list,}${name}"
+		done <<< "$selected"
+	else
+		echo "Select text editors to install (comma-separated, or 'all', or press Enter to skip):"
+		echo "  Nano is always available as the default editor."
+		for ed_item in "1:micro:micro" "2:edit:edit" "3:fresh:fresh" "4:helix:helix" "5:nvim:nvim"; do
+			num="${ed_item%%:*}"; rest="${ed_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
+			case "$key" in
+				micro) desc="modern, intuitive terminal editor" ;;
+				edit)  desc="terminal text editor (Microsoft)" ;;
+				fresh) desc="modern terminal text editor" ;;
+				helix) desc="modal editor (Kakoune-inspired)" ;;
+				nvim)  desc="Neovim" ;;
+			esac
+			if [[ ",$editor_prev," == *",${key},"* ]]; then
+				echo "  ${num}) ${label} — ${desc} [installed]"
+			else
+				echo "  ${num}) ${label} — ${desc}"
+			fi
+		done
+		read -rp "Selection [1,2,3,4,5/all/skip]: " editor_selection
+		if [ -z "$editor_selection" ] && [ -n "$editor_prev" ]; then
+			editor_list="$editor_prev"
 		else
-			echo "Select text editors to install (comma-separated, or 'all', or press Enter to skip):"
-			echo "  Nano is always available as the default editor."
-			echo "  1) micro    — modern, intuitive terminal editor"
-			echo "  2) edit     — terminal text editor (Microsoft)"
-			echo "  3) fresh    — modern terminal text editor"
-			echo "  4) helix    — modal editor (Kakoune-inspired)"
-			echo "  5) nvim     — Neovim"
-			read -rp "Selection [1,2,3,4,5/all/skip]: " editor_selection
 			editor_list=""
 			if [ "$editor_selection" = "all" ]; then
 				editor_list="micro,edit,fresh,helix,nvim"
@@ -256,10 +282,14 @@ else
 				done
 			fi
 		fi
-	else
-		echo "Skipping editor selection (non-interactive)"
-		editor_list=""
 	fi
+	echo "$editor_list" > "$EDITOR_CONFIG"
+elif [ -n "$editor_prev" ]; then
+	editor_list="$editor_prev"
+	[ -n "$editor_list" ] && echo "Installing editors: $editor_list (from previous selection)"
+else
+	echo "Skipping editor selection (non-interactive)"
+	editor_list=""
 	echo "$editor_list" > "$EDITOR_CONFIG"
 fi
 
@@ -320,28 +350,47 @@ done
 # Terminal multiplexer
 MUX_CONFIG="/workspace/.squarebox/multiplexer"
 
+mux_prev=""
 if [ -f "$MUX_CONFIG" ]; then
-	mux_list=$(cat "$MUX_CONFIG")
-	[ -n "$mux_list" ] && echo "Installing multiplexer(s): $mux_list (from previous selection)"
-else
-	if $INTERACTIVE; then
-		echo
-		if $HAS_GUM; then
-			selected=$(gum choose --no-limit \
-				--header "Select terminal multiplexer (space=toggle, enter=confirm, or enter to skip):" \
-				"tmux    — classic terminal multiplexer" \
-				"zellij  — friendly terminal workspace") || true
-			mux_list=""
-			while IFS= read -r line; do
-				[ -z "$line" ] && continue
-				name="${line%% *}"
-				mux_list="${mux_list:+$mux_list,}${name}"
-			done <<< "$selected"
+	mux_prev=$(cat "$MUX_CONFIG")
+fi
+
+if $INTERACTIVE; then
+	echo
+	if $HAS_GUM; then
+		# Build --selected from previously saved multiplexers
+		gum_selected=""
+		for mux in $(echo "$mux_prev" | tr ',' ' '); do
+			case "$mux" in
+				tmux)   gum_selected="${gum_selected:+$gum_selected,}tmux    — classic terminal multiplexer" ;;
+				zellij) gum_selected="${gum_selected:+$gum_selected,}zellij  — friendly terminal workspace" ;;
+			esac
+		done
+		gum_args=(--no-limit --header "Select terminal multiplexer (space=toggle, enter=confirm, or enter to skip):")
+		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
+		selected=$(gum choose "${gum_args[@]}" \
+			"tmux    — classic terminal multiplexer" \
+			"zellij  — friendly terminal workspace") || true
+		mux_list=""
+		while IFS= read -r line; do
+			[ -z "$line" ] && continue
+			name="${line%% *}"
+			mux_list="${mux_list:+$mux_list,}${name}"
+		done <<< "$selected"
+	else
+		echo "Select terminal multiplexer (comma-separated, or 'all', or press Enter to skip):"
+		for mux_item in "1:tmux:classic terminal multiplexer" "2:zellij:friendly terminal workspace"; do
+			num="${mux_item%%:*}"; rest="${mux_item#*:}"; key="${rest%%:*}"; desc="${rest#*:}"
+			if [[ ",$mux_prev," == *",${key},"* ]]; then
+				echo "  ${num}) ${key} — ${desc} [installed]"
+			else
+				echo "  ${num}) ${key} — ${desc}"
+			fi
+		done
+		read -rp "Selection [1,2/all/skip]: " mux_selection
+		if [ -z "$mux_selection" ] && [ -n "$mux_prev" ]; then
+			mux_list="$mux_prev"
 		else
-			echo "Select terminal multiplexer (comma-separated, or 'all', or press Enter to skip):"
-			echo "  1) tmux    — classic terminal multiplexer"
-			echo "  2) zellij  — friendly terminal workspace"
-			read -rp "Selection [1,2/all/skip]: " mux_selection
 			mux_list=""
 			if [ "$mux_selection" = "all" ]; then
 				mux_list="tmux,zellij"
@@ -354,10 +403,14 @@ else
 				done
 			fi
 		fi
-	else
-		echo "Skipping multiplexer selection (non-interactive)"
-		mux_list=""
 	fi
+	echo "$mux_list" > "$MUX_CONFIG"
+elif [ -n "$mux_prev" ]; then
+	mux_list="$mux_prev"
+	[ -n "$mux_list" ] && echo "Installing multiplexer(s): $mux_list (from previous selection)"
+else
+	echo "Skipping multiplexer selection (non-interactive)"
+	mux_list=""
 	echo "$mux_list" > "$MUX_CONFIG"
 fi
 
