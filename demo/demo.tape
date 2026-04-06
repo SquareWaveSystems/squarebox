@@ -1,30 +1,33 @@
 # SquareBox first-run demo — https://github.com/charmbracelet/vhs
 #
-# Generate the GIF:
+# Generate:
 #   vhs demo/demo.tape
 #
-# Requires: vhs (brew install vhs), ttyd, ffmpeg
+# Requires: vhs, ttyd, ffmpeg
 
-Output demo/squarebox-setup.webp
+Output demo/squarebox-setup.gif
 
 Set Shell "bash"
-Set FontSize 16
-Set Width 900
-Set Height 550
-Set Padding 20
+Set FontSize 18
+Set Width 1200
+Set Height 700
+Set Padding 24
 Set Theme "Catppuccin Frappe"
 Set TypingSpeed 60ms
-Set WindowBar Colorful
-Set WindowBarSize 40
+Set WindowBar ""
 Set CursorBlink false
+Set LoopOffset 0
+Set LoopOffset 0%
 
 Sleep 500ms
 
-# Show the install command being typed
-Type "curl -fsSL https://raw.githubusercontent.com/BrettKinny/SquareBox/main/install.sh | bash"
-Sleep 600ms
+# Paste the install command (instant, not typed)
+Hide
+Type "curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/SquareBox/main/install.sh | bash"
+Show
+Sleep 1s
 
-# Secretly swap to the demo script and press Enter — all while hidden
+# Secretly swap to the demo script and press Enter
 Hide
 Ctrl+U
 Type "bash demo/install-demo.sh"
@@ -33,6 +36,6 @@ Sleep 500ms
 Show
 
 # Wait for the full simulation to play out
-Sleep 20s
+Sleep 28s
 
-Sleep 3s
+Sleep 2s
