@@ -79,6 +79,8 @@ Items are ordered by priority within each section. Sections are ordered by prior
 - [ ] **Dotfile portability** — let users mount or bootstrap their own dotfiles (starship.toml, tmux.conf, aliases, etc.) via a `~/.squarebox/` convention, with sensible merge/override behaviour against the defaults
 - [ ] **Versioned releases with changelogs** — publish GitHub Releases with semantic version tags and changelogs so users can pin to a known-good version and see what changed
 - [ ] **Animated GIF demo** — create a terminal recording (VHS or asciinema) showcasing the tools and workflow for the README
+- [ ] **figlet/toilet + lolcat** — rainbow ASCII art banner on login instead of (or alongside) fastfetch
+- [ ] **Custom MOTD** — replace the default with a styled SquareBox welcome showing what tools/SDKs are installed
 
 ## P5 — TBD / Minor
 
