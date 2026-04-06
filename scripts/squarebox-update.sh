@@ -79,8 +79,23 @@ verify_checksum() {
 	return 0
 }
 
-cleanup_checksums() { rm -rf "$CHECKSUM_DIR"; }
-trap cleanup_checksums EXIT
+UPDATE_LOG=$(mktemp /tmp/sqrbx-update-log.XXXXXX)
+TEMP_DIRS=("$CHECKSUM_DIR" "$UPDATE_LOG")
+
+# Track temp dirs so they're cleaned up on exit (including on failure)
+make_tmp() {
+	local d
+	d=$(mktemp -d)
+	TEMP_DIRS+=("$d")
+	echo "$d"
+}
+
+cleanup_temp() {
+	for d in "${TEMP_DIRS[@]}"; do
+		rm -rf "$d" 2>/dev/null || true
+	done
+}
+trap cleanup_temp EXIT
 
 # ── GitHub helpers ──────────────────────────────────────────────────
 
@@ -127,7 +142,7 @@ delta_latest() { gh_latest_tag "$delta_repo"; }
 delta_install() {
 	local ver="$1"
 	local artifact="git-delta_${ver}_${DPKG_ARCH}.deb"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/delta.deb" "https://github.com/${delta_repo}/releases/download/${ver}/${artifact}"
 	verify_checksum "$tmp/delta.deb" "$artifact" || { rm -rf "$tmp"; return 1; }
 	sudo dpkg -i "$tmp/delta.deb"
@@ -154,7 +169,7 @@ lazygit_latest() { strip_v "$(gh_latest_tag "$lazygit_repo")"; }
 lazygit_install() {
 	local ver="$1"
 	local artifact="lazygit_${ver}_Linux_${LARCH}.tar.gz"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/lazygit.tar.gz" "https://github.com/${lazygit_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/lazygit.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xf "$tmp/lazygit.tar.gz" -C "$tmp" lazygit
@@ -169,7 +184,7 @@ xh_latest() { strip_v "$(gh_latest_tag "$xh_repo")"; }
 xh_install() {
 	local ver="$1"
 	local artifact="xh-v${ver}-${ZARCH}-unknown-linux-musl.tar.gz"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/xh.tar.gz" "https://github.com/${xh_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/xh.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/xh.tar.gz" --strip-components=1 -C "$tmp"
@@ -184,7 +199,7 @@ yazi_latest() { strip_v "$(gh_latest_tag "$yazi_repo")"; }
 yazi_install() {
 	local ver="$1"
 	local artifact="yazi-${ZARCH}-unknown-linux-musl.zip"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/yazi.zip" "https://github.com/${yazi_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/yazi.zip" "$artifact" || { rm -rf "$tmp"; return 1; }
 	unzip -q "$tmp/yazi.zip" -d "$tmp"
@@ -200,7 +215,7 @@ starship_latest() { strip_v "$(gh_latest_tag "$starship_repo")"; }
 starship_install() {
 	local ver="$1"
 	local artifact="starship-${ZARCH}-unknown-linux-musl.tar.gz"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/starship.tar.gz" "https://github.com/${starship_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/starship.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xf "$tmp/starship.tar.gz" -C "$tmp"
@@ -232,7 +247,7 @@ glow_latest() { strip_v "$(gh_latest_tag "$glow_repo")"; }
 glow_install() {
 	local ver="$1"
 	local artifact="glow_${ver}_Linux_${LARCH}.tar.gz"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/glow.tar.gz" "https://github.com/${glow_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/glow.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/glow.tar.gz" -C "$tmp"
@@ -248,7 +263,7 @@ micro_install() {
 	local ver="$1"
 	local march; if [ "$ZARCH" = "aarch64" ]; then march="-arm64"; else march="64"; fi
 	local artifact="micro-${ver}-linux${march}.tar.gz"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/micro.tar.gz" "https://github.com/${micro_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/micro.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/micro.tar.gz" --strip-components=1 -C "$tmp"
@@ -263,7 +278,7 @@ fresh_latest() { strip_v "$(gh_latest_tag "$fresh_repo")"; }
 fresh_install() {
 	local ver="$1"
 	local artifact="fresh-editor-${ZARCH}-unknown-linux-musl.tar.gz"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/fresh.tar.gz" "https://github.com/${fresh_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/fresh.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xf "$tmp/fresh.tar.gz" -C "$tmp"
@@ -296,7 +311,7 @@ edit_install() {
 		echo "  Could not find edit asset for ${ZARCH}" >&2
 		return 1
 	fi
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/edit.tar.zst" "https://github.com/${edit_repo}/releases/download/v${ver}/${asset_name}"
 	verify_checksum "$tmp/edit.tar.zst" "$asset_name" || { rm -rf "$tmp"; return 1; }
 	# Check if zstd is available; install temporarily if not
@@ -321,7 +336,7 @@ helix_latest() { gh_latest_tag "$helix_repo"; }
 helix_install() {
 	local ver="$1"
 	local artifact="helix-${ver}-${ZARCH}-linux.tar.xz"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	if ! command -v xz &>/dev/null; then
 		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
 	fi
@@ -343,7 +358,7 @@ nvim_install() {
 	local ver="$1"
 	local narch; if [ "$ZARCH" = "aarch64" ]; then narch="arm64"; else narch="x86_64"; fi
 	local artifact="nvim-linux-${narch}.tar.gz"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/nvim.tar.gz" "https://github.com/${nvim_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/nvim.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/nvim.tar.gz" -C "$tmp"
@@ -360,7 +375,7 @@ opencode_latest() { strip_v "$(gh_latest_tag "$opencode_repo")"; }
 opencode_install() {
 	local ver="$1"
 	local artifact="opencode-linux-${OCARCH}.tar.gz"
-	local tmp=$(mktemp -d)
+	local tmp=$(make_tmp)
 	curl -fsSLo "$tmp/opencode.tar.gz" "https://github.com/${opencode_repo}/releases/download/v${ver}/${artifact}"
 	verify_checksum "$tmp/opencode.tar.gz" "$artifact" || { rm -rf "$tmp"; return 1; }
 	tar xzf "$tmp/opencode.tar.gz" -C "$tmp"
@@ -455,11 +470,11 @@ update_tool() {
 	latest_clean=$(echo "$latest" | sed 's/^v//')
 
 	printf "  ${CYAN}Updating %s to %s...${RESET}" "$display" "$latest_clean"
-	if "${tool}_install" "$latest_clean" &>/tmp/sqrbx-update-log.txt; then
+	if (set -e; "${tool}_install" "$latest_clean") &>"$UPDATE_LOG"; then
 		printf " ${GREEN}done${RESET}\n"
 	else
 		printf " ${RED}failed${RESET}\n"
-		echo "    See /tmp/sqrbx-update-log.txt for details" >&2
+		echo "    See ${UPDATE_LOG} for details" >&2
 	fi
 }
 
