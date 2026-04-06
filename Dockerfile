@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	nano \
 	zstd \
 	zoxide \
+	figlet \
+	lolcat \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& ln -s $(which fdfind) /usr/local/bin/fd \
 	&& ln -s $(which batcat) /usr/local/bin/bat
@@ -106,6 +108,9 @@ RUN printf '[core]\n\tpager = delta\n[interactive]\n\tdiffFilter = delta --color
 
 # 6. Setup script
 
+COPY --chown=dev:dev motd.sh /home/dev/motd.sh
+RUN chmod +x /home/dev/motd.sh
+
 COPY --chown=dev:dev setup.sh /home/dev/setup.sh
 COPY --chown=dev:dev setup-checksums.txt /home/dev/setup-checksums.txt
 COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
@@ -158,6 +163,9 @@ if [ ! -f ~/.squarebox-setup-done ]; then
 	fi
 fi
 EOFRC
+
+# Display MOTD on interactive shell login
+RUN echo '~/motd.sh' >> ~/.bashrc
 
 WORKDIR /workspace
 CMD ["/bin/bash"]
