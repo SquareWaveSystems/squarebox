@@ -8,6 +8,27 @@ spin up on any machine.
 
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
 
+Why squarebox?
+--------------
+
+**One command, everything works.** No chasing dotfiles across machines, no
+"works on my laptop" surprises. Build once, resume anywhere.
+
+- **Modern tools out of the box** — Rust/Go replacements for grep, find, ls,
+  cat, and cd are pre-installed and pre-configured. No setup required.
+- **Pick your AI assistant** — Claude Code, Copilot, Gemini, Codex, or
+  OpenCode. Install any combination during first-run setup.
+- **Persistent by design** — the container suspends on exit and resumes on
+  start. Shell history, packages, and config survive between sessions. Your
+  code lives on the host and survives even if the container is deleted.
+- **Stays current without rebuilding** — `sqrbx-update` upgrades tool binaries
+  in-place from GitHub releases. No image rebuild, no state loss.
+- **Verified and reproducible** — every binary is pinned to a specific version
+  and checked against SHA256 checksums at build time, install time, and update
+  time.
+- **Runs anywhere Docker runs** — macOS, Linux, Windows (WSL), GitHub
+  Codespaces, or any CI runner. Same tools, same config, same experience.
+
 Prerequisites
 -------------
 
