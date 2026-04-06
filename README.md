@@ -6,7 +6,7 @@ Curated Rust/Go replacements for everyday Unix tools, multiple AI-powered
 editors, and sensible defaults, all in a reproducible Docker container you can
 spin up on any machine.
 
-![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/improve-demo/demo/squarebox-setup.gif)
+![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
 
 Prerequisites
 -------------
