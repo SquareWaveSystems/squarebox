@@ -27,7 +27,7 @@ environment they can spin up on any machine with Docker. Useful as a daily
 driver, a sandbox for trying out TUI tools, or a starting point for your own
 container-based dev setup.
 
-![SquareBox first-run setup](https://raw.githubusercontent.com/BrettKinny/SquareBox/demo/demo/squarebox-setup.webp)
+![SquareBox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/SquareBox/demo/demo/squarebox-setup.webp)
 
 Prerequisites
 -------------
@@ -38,7 +38,7 @@ Prerequisites
 Install
 -------
 
-    curl -fsSL https://raw.githubusercontent.com/BrettKinny/SquareBox/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/SquareBox/main/install.sh | bash
 
 This clones the repo, builds the Docker image, and drops you into the container.
 On first login, a setup script runs automatically to configure git, GitHub CLI,

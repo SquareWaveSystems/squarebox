@@ -35,7 +35,7 @@ fi
 # Fetches checksums.txt and setup-checksums.txt from the repo's main branch.
 # Only versions that have been vetted (committed to the repo) can be installed.
 
-REPO_RAW="https://raw.githubusercontent.com/BrettKinny/SquareBox/main"
+REPO_RAW="https://raw.githubusercontent.com/SquareWaveSystems/SquareBox/main"
 CHECKSUM_DIR=$(mktemp -d)
 CHECKSUMS_FETCHED=false
 
