@@ -160,6 +160,7 @@ if [ ! -f ~/.squarebox-setup-done ]; then
 		touch ~/.squarebox-setup-done
 	else
 		~/setup.sh && touch ~/.squarebox-setup-done
+		[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
 	fi
 fi
 EOFRC
