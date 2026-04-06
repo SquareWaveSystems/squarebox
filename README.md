@@ -42,7 +42,7 @@ your choice of AI coding assistant, and language SDKs.
 Start
 -----
 
-    sqrbx
+    squarebox        # or: sqrbx
 
 The container is persistent — it suspends on exit and resumes on start, keeping
 installed packages, config, and shell history intact between sessions. Your code
