@@ -84,7 +84,7 @@ Items are ordered by priority within each section. Sections are ordered by prior
 
 - [x] Add a `.dockerignore` to exclude `.git/` and other unnecessary context from Docker builds
 - [ ] Support multiple concurrent container instances
-- [ ] Add `.editorconfig` for contributor consistency
-- [ ] Add `CONTRIBUTING.md` with build/test/PR instructions
-- [ ] Expand `.gitignore` — currently only covers `.DS_Store` and swap files
-- [ ] Add TASKS.md to `.dockerignore` to keep it out of build context
+- [x] Add `.editorconfig` for contributor consistency
+- [x] Add `CONTRIBUTING.md` with build/test/PR instructions
+- [x] Expand `.gitignore` — currently only covers `.DS_Store` and swap files
+- [x] Add TASKS.md to `.dockerignore` to keep it out of build context
