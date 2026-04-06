@@ -4,3 +4,6 @@ $all"""
 
 [env_var.SQUAREBOX]
 format = "[🟧📦](yellow) "
+
+[container]
+format = "[$symbol]($style) "
