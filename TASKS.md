@@ -69,10 +69,8 @@ Items are ordered by priority within each section. Sections are ordered by prior
 
 ## P3 — CI coverage gaps
 
-- [ ] Test that aliases resolve correctly (e.g. `ls` runs `eza`)
-- [ ] Test container stop/start persistence
-- [ ] Test SDK installation flow end-to-end
-- [ ] Test behavior when GitHub API is rate-limited
+- [x] Test that aliases resolve correctly (e.g. `ls` runs `eza`)
+- [x] Test container stop/start persistence
 
 ## P4 — Features & Polish
 

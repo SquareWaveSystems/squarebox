@@ -57,6 +57,34 @@ jobs:
       - name: Shell config loads without errors
         run: docker run --rm squarebox:test bash -lc 'echo ok'
 
+      - name: Aliases resolve correctly
+        run: |
+          docker run --rm squarebox:test bash -lic '
+            [[ $(type -t ls) == "alias" ]] || { echo "FAIL: ls not aliased"; exit 1; }
+            [[ $(alias ls) == *eza* ]] || { echo "FAIL: ls not aliased to eza"; exit 1; }
+            [[ $(alias cat) == *bat* ]] || { echo "FAIL: cat not aliased to bat"; exit 1; }
+            [[ $(alias ll) == *eza* ]] || { echo "FAIL: ll not aliased to eza"; exit 1; }
+            [[ $(alias g) == *git* ]] || { echo "FAIL: g not aliased to git"; exit 1; }
+            [[ $(alias lg) == *lazygit* ]] || { echo "FAIL: lg not aliased to lazygit"; exit 1; }
+            # Functional: aliases actually run the right binary
+            ls --version 2>&1 | grep -qi eza || { echo "FAIL: ls does not run eza"; exit 1; }
+            cat --version 2>&1 | grep -qi bat || { echo "FAIL: cat does not run bat"; exit 1; }
+            echo "All alias checks passed"
+          '
+
+      - name: Container stop/start persistence
+        run: |
+          docker run --name sqrbx-persist squarebox:test \
+            bash -c 'echo "persist-ok" > /home/dev/testfile'
+          docker start sqrbx-persist
+          docker exec sqrbx-persist cat /home/dev/testfile | grep -q "persist-ok" \
+            || { echo "FAIL: file did not persist"; exit 1; }
+          docker stop sqrbx-persist
+          docker rm sqrbx-persist
+          echo "Persistence test passed"
+
       - name: Cleanup
         if: always()
-        run: docker rm -f squarebox-test 2>/dev/null || true
+        run: |
+          docker rm -f squarebox-test 2>/dev/null || true
+          docker rm -f sqrbx-persist 2>/dev/null || true
