@@ -1,15 +1,13 @@
 format = """
-$all
+$all\
+$line_break\
 $env_var$character"""
 
 [env_var.SQUAREBOX]
-format = "[🟧📦](yellow) "
+format = "[🟧📦](yellow)"
 
 [container]
 disabled = true
-
-[line_break]
-disabled = false
 
 [character]
 success_symbol = "[❯](bold green)"
