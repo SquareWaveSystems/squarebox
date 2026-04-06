@@ -6,14 +6,17 @@ Before piping anything to bash, you should know exactly what it does. The
 install script performs these actions on your **host** system:
 
 1. Clones this repo to `~/squarebox` (or pulls if it already exists)
-2. Creates `~/squarebox/workspace`, `~/squarebox/.config`, and `~/.config/git` directories
+2. Creates `~/squarebox/workspace`, `~/squarebox/.config/lazygit`, and `~/.config/git`
+   directories, and seeds a default `starship.toml` into `~/squarebox/.config/`
 3. Builds a Docker image tagged `squarebox` from the Dockerfile
 4. Creates a Docker container named `squarebox` with volume mounts for your
    workspace (`~/squarebox/workspace`), SSH keys (`~/.ssh`, read-only),
-   git config (`~/.config/git`), and starship/lazygit config (`~/squarebox/.config`)
-5. Appends two shell aliases (`sqrbx`, `sqrbx-rebuild`) to your `~/.bashrc`
-   or `~/.zshrc`
-6. Starts the container interactively
+   git config (`~/.config/git`, read-write), and starship/lazygit config
+   (`~/squarebox/.config`)
+5. Appends shell aliases (`sqrbx`, `squarebox`, `sqrbx-rebuild`,
+   `squarebox-rebuild`) to your `~/.bashrc` or `~/.zshrc`
+6. Starts the container interactively (or prints a start command if no TTY is
+   attached, e.g. when run via `curl | bash`)
 
 It does **not** use `sudo`, install system packages, or modify anything outside
 your home directory.
@@ -38,9 +41,9 @@ at each layer:
 |-------|---------------|-----------|-----------------|-----------------|
 | **install.sh** | Git repo from GitHub | HTTPS | Git transport verification | Tracks `main` branch |
 | **Dockerfile — APT packages** | Ubuntu 24.04 packages, GitHub CLI, Eza | HTTPS | APT GPG signatures | Distro versions (not pinned) |
-| **Dockerfile — binary tools** | 10 tools from GitHub Releases (delta, lazygit, starship, etc.) | HTTPS | SHA256 checksum — build fails on mismatch | Yes, all pinned |
-| **setup.sh — SDKs with checksums** | OpenCode, nvm, Go | HTTPS | SHA256 checksum | Yes, all pinned |
-| **sqrbx-update** | Same tools as above | HTTPS | SHA256 checksum — fetched from repo, update refused on mismatch or missing checksum | Only vetted versions |
+| **Dockerfile — binary tools** | 9 tools from GitHub Releases (delta, yq, lazygit, gh-dash, xh, yazi, glow, gum, starship) | HTTPS | SHA256 checksum — build fails on mismatch | Yes, all pinned |
+| **setup.sh — tools with checksums** | OpenCode, nvm, Go, editors (micro, edit, fresh, helix, nvim), zellij | HTTPS | SHA256 checksum | Yes, all pinned |
+| **sqrbx-update** | All tools from both layers above | HTTPS | SHA256 checksum — fetched from repo, update refused on mismatch or missing checksum | Only vetted versions |
 | **setup.sh — third-party installers** | Claude Code, uv, .NET | HTTPS | Delegates to vendor installer | No (latest/LTS) |
 
 **What this means in practice:**
@@ -48,10 +51,23 @@ at each layer:
 - The Dockerfile binary tools have the strongest guarantees — pinned versions
   with SHA256 checksums covering both x86_64 and aarch64. A compromised release
   or man-in-the-middle attack causes the build to fail immediately.
+- The setup.sh checksum-verified tools (editors, OpenCode, nvm, Go, zellij) have
+  the same SHA256 guarantees as Dockerfile tools — pinned versions with checksums
+  for both architectures.
 - Third-party install scripts (Claude Code from Anthropic, uv from Astral, .NET
   from Microsoft) manage their own binary verification. We trust these vendors'
   HTTPS endpoints and their installers' built-in integrity checks.
 - APT packages are verified by Ubuntu's and each repo's GPG signatures.
+
+## Container isolation
+
+The container cannot access your host filesystem beyond the explicit volume
+mounts listed above. The `dev` user has passwordless `sudo` inside the
+container (for installing packages), but this grants root only within the
+container — not on the host.
+
+The read-write host mounts are limited to `~/squarebox/workspace` and
+`~/.config/git`. SSH keys (`~/.ssh`) are mounted read-only.
 
 ## Binary integrity
 
