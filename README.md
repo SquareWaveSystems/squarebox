@@ -19,8 +19,8 @@ Why squarebox?
 - **Pick your AI assistant** — Claude Code, Copilot, Gemini, Codex, or
   OpenCode. Install any combination during first-run setup.
 - **Persistent by design** — the container suspends on exit and resumes on
-  start. Shell history, packages, and config survive between sessions. Your
-  code lives on the host and survives even if the container is deleted.
+  start. Shell history, packages, and config survive between sessions.
+  Code and config survive deletion and rebuilds.
 - **Stays current without rebuilding** — `sqrbx-update` upgrades tool binaries
   in-place from GitHub releases. No image rebuild, no state loss.
 - **Verified and reproducible** — every binary is pinned to a specific version
