@@ -76,6 +76,7 @@ if ! gh auth status &>/dev/null; then
 	if $INTERACTIVE; then
 		echo
 		echo "Logging into GitHub..."
+		# BROWSER=echo makes gh print the auth URL instead of trying to open a browser
 		BROWSER=echo gh auth login
 		# Persist gh config for future rebuilds (only if auth succeeded)
 		if gh auth status &>/dev/null; then
@@ -293,7 +294,6 @@ install_fresh() {
 
 install_helix() {
 	if command -v hx &>/dev/null; then echo "Helix already installed, skipping."; return 0; fi
-	rm -rf ~/.config/helix/runtime
 	echo "Installing Helix v${HELIX_VERSION}..."
 	ARCH=$(uname -m)
 	if [ "$ARCH" = "aarch64" ]; then ZARCH="aarch64"; else ZARCH="x86_64"; fi
@@ -414,7 +414,9 @@ if $INTERACTIVE; then
 	echo "$sdk_list" > "$SDK_CONFIG"
 elif [ -n "$sdk_prev" ]; then
 	sdk_list="$sdk_prev"
-	echo "Installing SDKs: $sdk_list (from previous selection)"
+	if [ -n "$sdk_list" ]; then
+		echo "Installing SDKs: $sdk_list (from previous selection)"
+	fi
 else
 	echo "Skipping SDK selection (non-interactive)"
 	sdk_list=""

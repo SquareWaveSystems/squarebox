@@ -61,13 +61,13 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 	&& echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
 	# Eza
 	&& curl -fsSL https://raw.githubusercontent.com/eza-community/eza/main/deb.asc | gpg --dearmor -o /etc/apt/keyrings/gierens.gpg \
-	&& echo "deb [signed-by=/etc/apt/keyrings/gierens.gpg] http://deb.gierens.de stable main" | tee /etc/apt/sources.list.d/gierens.list \
+	&& echo "deb [signed-by=/etc/apt/keyrings/gierens.gpg] https://deb.gierens.de stable main" | tee /etc/apt/sources.list.d/gierens.list \
 	# Install from repos
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends gh eza \
-	&& rm -rf /var/lib/apt/lists/* \
 	# Purge build-only dependency
 	&& apt-get purge -y --auto-remove gnupg \
+	&& rm -rf /var/lib/apt/lists/* \
 	# Delta (arch-aware deb)
 	&& curl -fsSLo /tmp/delta.deb "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_${ARCH}.deb" \
 	&& verify-checksum /tmp/delta.deb "git-delta_${DELTA_VERSION}_${ARCH}.deb" \
@@ -201,3 +201,4 @@ fi
 EOFRC
 
 WORKDIR /workspace
+CMD ["/bin/bash"]

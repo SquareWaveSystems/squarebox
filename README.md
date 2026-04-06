@@ -121,7 +121,7 @@ Inspired by [Omarchy](https://omarchy.com).
 |-------|---------|-------------|
 | `ls` | `eza --icons` | Modern ls with icons |
 | `ll` | `eza -la --icons` | Long listing with icons |
-| `lsa` | `ls -a` | List all including hidden files |
+| `lsa` | `ls -a` (resolves to `eza --icons -a`) | List all including hidden files |
 | `lt` | `eza --tree --level=2 --long --icons --git` | Tree view with git status |
 | `lta` | `lt -a` | Tree view including hidden files |
 | `cat` | `bat --paging=never` | Syntax-highlighted cat |
@@ -219,6 +219,7 @@ First-run selections add to that:
 | .NET | ~800 MB |
 
 A typical setup (Claude Code + Node.js + one editor) lands around **~800 MB**.
+Sizes are approximate and will vary as tools are updated.
 
 Security
 --------
@@ -252,8 +253,13 @@ Uninstall
 
 Remove the aliases from your shell config (~/.bashrc or ~/.zshrc):
 
+    # Linux
     sed -i '/alias sqrbx=/d' ~/.bashrc ~/.zshrc 2>/dev/null
     sed -i '/alias sqrbx-rebuild=/d' ~/.bashrc ~/.zshrc 2>/dev/null
+
+    # macOS (BSD sed requires '' after -i)
+    sed -i '' '/alias sqrbx=/d' ~/.bashrc ~/.zshrc 2>/dev/null
+    sed -i '' '/alias sqrbx-rebuild=/d' ~/.bashrc ~/.zshrc 2>/dev/null
 
 This removes everything including your workspace and config. Back up
 ~/squarebox/workspace first if you need your code.

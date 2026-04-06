@@ -60,7 +60,6 @@ echo "Fetching latest versions..."
 # --- Dockerfile tools ---
 
 DELTA_TAG=$(gh_latest_tag dandavison/delta)
-DELTA_VERSION=$(strip_v "$DELTA_TAG")
 # Delta tags don't have a 'v' prefix
 DELTA_VERSION="${DELTA_TAG}"
 
@@ -95,7 +94,8 @@ OPENCODE_VERSION=$(strip_v "$OPENCODE_TAG")
 
 GO_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1)
 
-NVM_VERSION="0.40.3"
+NVM_TAG=$(gh_latest_tag nvm-sh/nvm)
+NVM_VERSION=$(strip_v "$NVM_TAG")
 
 MICRO_TAG=$(gh_latest_tag micro-editor/micro)
 MICRO_VERSION=$(strip_v "$MICRO_TAG")
