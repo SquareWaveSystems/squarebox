@@ -21,8 +21,6 @@ credentials.json
 # Docker build artifacts
 workspace/
 .config/
-demo/*.gif
-demo/*.mp4
 
 # OS files
 Thumbs.db
