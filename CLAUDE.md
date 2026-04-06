@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SquareBox is a containerized development environment (Docker) combining modern CLI/TUI tools with Claude Code. It uses a persistent container model — the container suspends on exit and resumes on restart, preserving state. Workspace code lives on the host at `~/squarebox/workspace` via volume mount.
+squarebox is a containerized development environment (Docker) combining modern CLI/TUI tools with Claude Code. It uses a persistent container model — the container suspends on exit and resumes on restart, preserving state. Workspace code lives on the host at `~/squarebox/workspace` via volume mount.
 
 ## Build & Run
 
@@ -60,14 +60,21 @@ GitHub Actions workflow (`.github/workflows/build.yml`) validates the Dockerfile
 The Dockerfile (Ubuntu 24.04 base) is organized into sequential stages:
 
 1. **Base packages** — git, curl, ripgrep, bat, fzf, zoxide, fd, etc. via apt
-2. **External APT repos + binary tools** — GitHub CLI, Eza via apt; delta and yq via direct download
-3. **Binary tool installs** (split into 3a/3b/3c layers):
-   - **3a Git tools** — lazygit, gh-dash
-   - **3b File & HTTP tools** — xh, yazi, glow
-   - **3c Shell tools** — starship
+2. **External APT repos** — GitHub CLI, Eza via apt (requires gnupg, stays combined)
+3. **Per-tool binary installs** — one `RUN` layer per tool via `sb_install` from the shared library
 4. **User setup** — creates non-root `dev` user with workspace directory
 5. **Config files** — git and lazygit configs with delta as default pager
 6. **Setup script & configs** — copies `setup.sh`, `sqrbx-update`, starship.toml
 7. **Shell config** — bashrc with starship prompt, zoxide, aliases
 
-All tool versions are pinned via Dockerfile `ARG` directives and verified against SHA256 checksums in `checksums.txt`. Tools installed during `setup.sh` (AI assistants, editors, SDKs) use a separate `setup-checksums.txt`. Each binary install detects architecture (x86_64/aarch64), downloads, verifies checksum, extracts, and installs.
+The Dockerfile uses `SHELL ["/bin/bash", "-c"]` because `tool-lib.sh` relies on bash parameter substitution. All tool versions are pinned via `ARG` directives and verified against SHA256 checksums.
+
+## Tool Registry
+
+`scripts/lib/tools.yaml` is the single source of truth for tool metadata (repos, artifact patterns, arch mappings, extract methods). `scripts/lib/tool-lib.sh` is a shared shell library that consumes it.
+
+- **YAML parsing uses awk** (not yq) to avoid a bootstrap problem — yq is one of the tools being installed
+- **Architecture tokens**: `{dpkg_arch}` (amd64/arm64), `{zarch}` (x86_64/aarch64), `{larch}` (x86_64/arm64), `{goarch}`, `{ocarch}`, `{march}` — each tool uses whichever convention its upstream releases follow
+- **Build-time**: library at `/tmp/tool-lib.sh`, consumers override `sb_verify()` for checksum verification
+- **Runtime**: library at `/usr/local/lib/squarebox/tool-lib.sh`, used by `sqrbx-update` and `setup.sh`
+- **Adding a new tool**: add an entry to `tools.yaml`, then run `scripts/update-versions.sh`

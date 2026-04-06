@@ -1,5 +1,5 @@
 {
-  "name": "SquareBox",
+  "name": "squarebox",
   "build": {
     "context": "..",
     "dockerfile": "../Dockerfile"
