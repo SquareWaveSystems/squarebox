@@ -1,6 +1,6 @@
-# 🟧📦 squarebox [batteries included]
+# 🟧📦 squarebox
 
-**A containerized dev environment packed with modern CLI/TUI tools and AI coding assistants — batteries included.**
+**A containerized dev environment packed with modern CLI/TUI tools and AI coding assistants [batteries included].**
 
 Curated Rust/Go replacements for everyday Unix tools, multiple AI-powered
 editors, and sensible defaults — all in a reproducible Docker container you can
