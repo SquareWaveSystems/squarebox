@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in SquareBox! This guide covers the basics of building,
+Thanks for your interest in squarebox! This guide covers the basics of building,
 testing, and submitting changes.
 
 ## Prerequisites

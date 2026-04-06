@@ -1,9 +1,9 @@
 #!/bin/bash
-# SquareBox MOTD — orange metallic banner with SDK info
+# squarebox MOTD — orange metallic banner with SDK info
 
 # Orange metallic: bright orange heading, muted orange date
 printf '\e[1;38;5;208m'
-toilet -f smslant --metal "SquareBox"
+toilet -f smslant --metal "squarebox"
 printf '\e[0m'
 
 # Detect installed SDKs

@@ -22,7 +22,7 @@ assistants. Curated Rust/Go replacements for everyday Unix tools, multiple
 AI-powered editors, and sensible defaults — all in a reproducible Docker
 container you can spin up on any machine.
 
-![SquareBox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/SquareBox/demo/demo/squarebox-setup.webp)
+![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.webp)
 
 Prerequisites
 -------------
@@ -33,7 +33,7 @@ Prerequisites
 Install
 -------
 
-    curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/SquareBox/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash
 
 This clones the repo, builds the Docker image, and drops you into the container.
 On first login, a setup script runs automatically to configure git, GitHub CLI,
@@ -223,7 +223,7 @@ Devcontainer / Codespaces
 Open this repo in VS Code with the
 [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers),
 or launch it in [GitHub Codespaces](https://github.com/features/codespaces).
-The included `.devcontainer/devcontainer.json` builds the full SquareBox image
+The included `.devcontainer/devcontainer.json` builds the full squarebox image
 automatically.
 
 The interactive first-run setup is skipped in devcontainer mode. To configure
