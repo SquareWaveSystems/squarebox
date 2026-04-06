@@ -574,4 +574,4 @@ for sdk in $(echo "$sdk_list" | tr ',' ' '); do
 done
 
 echo
-echo "Done. Ready to go."
+echo "🟧📦 You're in the box."
