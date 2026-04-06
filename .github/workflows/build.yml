@@ -76,10 +76,9 @@ jobs:
         run: |
           docker run --name sqrbx-persist squarebox:test \
             bash -c 'echo "persist-ok" > /home/dev/testfile'
-          docker start sqrbx-persist
-          docker exec sqrbx-persist cat /home/dev/testfile | grep -q "persist-ok" \
+          docker cp sqrbx-persist:/home/dev/testfile /tmp/testfile
+          grep -q "persist-ok" /tmp/testfile \
             || { echo "FAIL: file did not persist"; exit 1; }
-          docker stop sqrbx-persist
           docker rm sqrbx-persist
           echo "Persistence test passed"
 
