@@ -81,6 +81,7 @@ Items are ordered by priority within each section. Sections are ordered by prior
 - [ ] **Animated GIF demo** — create a terminal recording (VHS or asciinema) showcasing the tools and workflow for the README
 - [ ] **figlet/toilet + lolcat** — rainbow ASCII art banner on login instead of (or alongside) fastfetch
 - [ ] **Custom MOTD** — replace the default with a styled SquareBox welcome showing what tools/SDKs are installed
+- [ ] **ASCII Banner in README**
 
 ## P5 — TBD / Minor
 
