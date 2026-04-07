@@ -642,6 +642,170 @@ install_zellij() {
 	if command -v zellij &>/dev/null; then echo "Zellij already installed, skipping."; return 0; fi
 	echo "Installing Zellij v${ZELLIJ_VERSION}..."
 	sb_install zellij "$ZELLIJ_VERSION"
+	# Install default config (Omarchy-inspired defaults to match tmux)
+	mkdir -p ~/.config/zellij
+	if [ ! -f ~/.config/zellij/config.kdl ]; then
+		cat > ~/.config/zellij/config.kdl <<-'ZELLIJCONF'
+		// Omarchy-inspired defaults (matching tmux config)
+
+		// General
+		mouse_mode true
+		copy_on_select true
+		scrollback_lines 50000
+		default_layout "compact"
+		pane_frames false
+		auto_layout true
+		on_force_close "quit"
+
+		// UI
+		ui {
+		    pane_frames {
+		        rounded_corners true
+		    }
+		}
+
+		// Theme — blue accent, minimal styling
+		themes {
+		    squarebox {
+		        fg "#c0caf5"
+		        bg "#1a1b26"
+		        black "#15161e"
+		        red "#f7768e"
+		        green "#9ece6a"
+		        yellow "#e0af68"
+		        blue "#7aa2f7"
+		        magenta "#bb9af7"
+		        cyan "#7dcfff"
+		        white "#a9b1d6"
+		        orange "#ff9e64"
+		    }
+		}
+		theme "squarebox"
+
+		// Keybindings
+		keybinds clear-defaults=true {
+		    normal {
+		        // Pane navigation — Ctrl+Alt+Arrow
+		        bind "Ctrl Alt Left" { MoveFocus "Left"; }
+		        bind "Ctrl Alt Right" { MoveFocus "Right"; }
+		        bind "Ctrl Alt Up" { MoveFocus "Up"; }
+		        bind "Ctrl Alt Down" { MoveFocus "Down"; }
+
+		        // Pane resizing — Ctrl+Alt+Shift+Arrow
+		        bind "Ctrl Alt Shift Left" { Resize "Increase Left"; }
+		        bind "Ctrl Alt Shift Right" { Resize "Increase Right"; }
+		        bind "Ctrl Alt Shift Up" { Resize "Increase Up"; }
+		        bind "Ctrl Alt Shift Down" { Resize "Increase Down"; }
+
+		        // Tab navigation — Alt+1-9
+		        bind "Alt 1" { GoToTab 1; }
+		        bind "Alt 2" { GoToTab 2; }
+		        bind "Alt 3" { GoToTab 3; }
+		        bind "Alt 4" { GoToTab 4; }
+		        bind "Alt 5" { GoToTab 5; }
+		        bind "Alt 6" { GoToTab 6; }
+		        bind "Alt 7" { GoToTab 7; }
+		        bind "Alt 8" { GoToTab 8; }
+		        bind "Alt 9" { GoToTab 9; }
+
+		        // Tab cycling — Alt+Left/Right
+		        bind "Alt Left" { GoToPreviousTab; }
+		        bind "Alt Right" { GoToNextTab; }
+
+		        // Session switching — Alt+Up/Down
+		        bind "Alt Up" { FocusPreviousPane; }
+		        bind "Alt Down" { FocusNextPane; }
+
+		        // Prefix-style bindings via Ctrl+Space
+		        bind "Ctrl Space" { SwitchToMode "Tmux"; }
+		    }
+
+		    tmux {
+		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		        bind "Esc" { SwitchToMode "Normal"; }
+
+		        // Pane splitting
+		        bind "h" { NewPane "Down"; SwitchToMode "Normal"; }
+		        bind "v" { NewPane "Right"; SwitchToMode "Normal"; }
+		        bind "x" { CloseFocus; SwitchToMode "Normal"; }
+
+		        // Tab/window management
+		        bind "c" { NewTab; SwitchToMode "Normal"; }
+		        bind "k" { CloseTab; SwitchToMode "Normal"; }
+		        bind "r" { SwitchToMode "RenameTab"; TabNameInput 0; }
+
+		        // Session management
+		        bind "C" { Detach; }
+		        bind "R" { SwitchToMode "RenamePane"; PaneNameInput 0; }
+
+		        // Tab navigation
+		        bind "1" { GoToTab 1; SwitchToMode "Normal"; }
+		        bind "2" { GoToTab 2; SwitchToMode "Normal"; }
+		        bind "3" { GoToTab 3; SwitchToMode "Normal"; }
+		        bind "4" { GoToTab 4; SwitchToMode "Normal"; }
+		        bind "5" { GoToTab 5; SwitchToMode "Normal"; }
+		        bind "6" { GoToTab 6; SwitchToMode "Normal"; }
+		        bind "7" { GoToTab 7; SwitchToMode "Normal"; }
+		        bind "8" { GoToTab 8; SwitchToMode "Normal"; }
+		        bind "9" { GoToTab 9; SwitchToMode "Normal"; }
+
+		        // Pane navigation
+		        bind "Left" { MoveFocus "Left"; SwitchToMode "Normal"; }
+		        bind "Right" { MoveFocus "Right"; SwitchToMode "Normal"; }
+		        bind "Up" { MoveFocus "Up"; SwitchToMode "Normal"; }
+		        bind "Down" { MoveFocus "Down"; SwitchToMode "Normal"; }
+
+		        // Toggle fullscreen/floating
+		        bind "z" { ToggleFocusFullscreen; SwitchToMode "Normal"; }
+		        bind "f" { ToggleFloatingPanes; SwitchToMode "Normal"; }
+
+		        // Enter scroll/copy mode
+		        bind "[" { SwitchToMode "Scroll"; }
+		    }
+
+		    scroll {
+		        bind "Esc" { SwitchToMode "Normal"; }
+		        bind "q" { SwitchToMode "Normal"; }
+		        bind "j" { ScrollDown; }
+		        bind "k" { ScrollUp; }
+		        bind "d" { HalfPageScrollDown; }
+		        bind "u" { HalfPageScrollUp; }
+		        bind "/" { SwitchToMode "EnterSearch"; SearchInput 0; }
+		        bind "v" { SwitchToMode "Normal"; }
+		    }
+
+		    search {
+		        bind "Esc" { SwitchToMode "Normal"; }
+		        bind "q" { SwitchToMode "Normal"; }
+		        bind "j" { ScrollDown; }
+		        bind "k" { ScrollUp; }
+		        bind "n" { Search "down"; }
+		        bind "N" { Search "up"; }
+		        bind "d" { HalfPageScrollDown; }
+		        bind "u" { HalfPageScrollUp; }
+		    }
+
+		    entersearch {
+		        bind "Esc" { SwitchToMode "Scroll"; }
+		        bind "Enter" { SwitchToMode "Search"; }
+		    }
+
+		    renametab {
+		        bind "Esc" { UndoRenameTab; SwitchToMode "Normal"; }
+		        bind "Enter" { SwitchToMode "Normal"; }
+		    }
+
+		    renamepane {
+		        bind "Esc" { UndoRenamePane; SwitchToMode "Normal"; }
+		        bind "Enter" { SwitchToMode "Normal"; }
+		    }
+
+		    shared_except "normal" "tmux" {
+		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		    }
+		}
+		ZELLIJCONF
+	fi
 }
 
 for mux in $(echo "$mux_list" | tr ',' ' '); do
