@@ -109,10 +109,7 @@ jobs:
 
       - name: "Section 5: Tools verification"
         run: |
-          docker run --rm squarebox:test bash -c '
-            /home/dev/setup.sh 2>/dev/null || true  # ensure setup files exist
-            exec /workspace/scripts/e2e-test.sh tools 2>&1
-          ' || docker run --rm \
+          docker run --rm \
             -v "$PWD/scripts:/workspace/scripts:ro" \
             squarebox:test bash -c 'scripts/e2e-test.sh tools'
 
@@ -205,6 +202,11 @@ jobs:
 
           # Restart and verify files persist
           docker start sqrbx-e2e
+          # Wait for container to be running
+          for i in 1 2 3 4 5; do
+            docker inspect -f '{{.State.Running}}' sqrbx-e2e 2>/dev/null | grep -q true && break
+            sleep 1
+          done
           docker exec sqrbx-e2e cat /workspace/e2e-test | grep -q "workspace-ok" \
             || { echo "FAIL: workspace file lost"; exit 1; }
           echo "PASS: 6.3 files in /workspace persist"
@@ -280,8 +282,10 @@ jobs:
 
       - name: "8.5 DEVCONTAINER=1 skips setup"
         run: |
+          # DEVCONTAINER=1 causes bashrc to touch ~/.squarebox-setup-done and skip setup.sh
+          # Use bash -lic (interactive login) so bashrc is sourced
           docker run --rm -e DEVCONTAINER=1 squarebox:test \
-            bash -lc 'test -f ~/.squarebox-setup-done && echo "PASS: 8.5 setup skipped in devcontainer"'
+            bash -lic 'test -f ~/.squarebox-setup-done && echo "PASS: 8.5 setup skipped in devcontainer"'
 
   # ── Report ─────────────────────────────────────────────────────────────
   report:
