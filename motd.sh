@@ -24,9 +24,16 @@ printf '\e[38;5;172m  %s\e[0m\n' "$(date '+%A, %B %d %Y  %H:%M')"
 if [ ${#sdks[@]} -gt 0 ]; then
 	sdk_str=""
 	for i in "${!sdks[@]}"; do
-		[ $i -gt 0 ] && sdk_str+=" ◆ "
+		if [ $i -gt 0 ]; then
+			if (( i % 2 == 0 )); then
+				printf '\e[38;5;245m  %s\e[0m\n' "$sdk_str"
+				sdk_str=""
+			else
+				sdk_str+=" ◆ "
+			fi
+		fi
 		sdk_str+="${sdks[$i]}"
 	done
-	printf '\e[38;5;245m  %s\e[0m\n' "$sdk_str"
+	[ -n "$sdk_str" ] && printf '\e[38;5;245m  %s\e[0m\n' "$sdk_str"
 fi
 echo

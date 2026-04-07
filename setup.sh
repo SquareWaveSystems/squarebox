@@ -679,7 +679,7 @@ install_python() {
 	echo "Installing Python (via uv)..."
 	# Trust boundary: the uv install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
-	curl -fsSL https://astral.sh/uv/install.sh | bash 2>/dev/null
+	curl -fsSL https://astral.sh/uv/install.sh | bash &>/dev/null
 	if ! grep -q '\.local/bin' ~/.squarebox-sdk-paths 2>/dev/null; then
 		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export PATH="$HOME/.local/bin:$PATH"
