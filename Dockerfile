@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	zoxide \
 	toilet \
 	toilet-fonts \
+	libicu-dev \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& ln -s $(which fdfind) /usr/local/bin/fd \
 	&& ln -s $(which batcat) /usr/local/bin/bat

@@ -19,6 +19,7 @@ docker run -it --name squarebox \
   -v ~/.config/git:/home/dev/.config/git \
   -v ~/squarebox/.config/starship.toml:/home/dev/.config/starship.toml \
   -v ~/squarebox/.config/lazygit:/home/dev/.config/lazygit \
+  -v /etc/localtime:/etc/localtime:ro \
   squarebox
 
 # Resume an existing container

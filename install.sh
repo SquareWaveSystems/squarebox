@@ -92,6 +92,7 @@ docker create -it --name "$CONTAINER_NAME" \
 	-v ~/.config/git:/home/dev/.config/git \
 	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml" \
 	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit" \
+	-v /etc/localtime:/etc/localtime:ro \
 	"$IMAGE_NAME" > /dev/null
 
 if [ -t 0 ] || [ -t 1 ]; then
