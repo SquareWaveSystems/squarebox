@@ -63,6 +63,24 @@ if $INTERACTIVE && command -v gum &>/dev/null; then
 	HAS_GUM=true
 fi
 
+section_header() {
+	if $HAS_GUM; then
+		gum style --foreground 212 --bold "$1"
+	else
+		echo "--- $1 ---"
+	fi
+}
+
+run_with_spinner() {
+	local title="$1"; shift
+	if $HAS_GUM; then
+		gum spin --spinner dot --title "$title" -- "$@"
+	else
+		echo "$title"
+		"$@"
+	fi
+}
+
 if $HAS_GUM; then
 	gum style --border double --padding "0 2" --border-foreground 212 "squarebox setup"
 else
@@ -74,7 +92,11 @@ echo
 if [ -z "$(git config --global user.name 2>/dev/null)" ]; then
 	if $INTERACTIVE; then
 		while true; do
-			read -rp "Git name: " name
+			if $HAS_GUM; then
+				name=$(gum input --placeholder "Your Name" --header "Git name:" --width 40) || true
+			else
+				read -rp "Git name: " name
+			fi
 			[ -n "$name" ] && break
 			echo "Name cannot be empty."
 		done
@@ -87,7 +109,11 @@ fi
 if [ -z "$(git config --global user.email 2>/dev/null)" ]; then
 	if $INTERACTIVE; then
 		while true; do
-			read -rp "Git email: " email
+			if $HAS_GUM; then
+				email=$(gum input --placeholder "you@example.com" --header "Git email:" --width 40) || true
+			else
+				read -rp "Git email: " email
+			fi
 			[ -n "$email" ] && break
 			echo "Email cannot be empty."
 		done
@@ -138,6 +164,7 @@ fi
 
 if $INTERACTIVE; then
 	echo
+	section_header "AI Coding Assistants"
 	if $HAS_GUM; then
 		# Build --selected from previously saved AI tools
 		gum_selected=""
@@ -278,22 +305,19 @@ ensure_node_for_npm() {
 install_copilot() {
 	if command -v github-copilot-cli &>/dev/null; then echo "GitHub Copilot CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	echo "Installing GitHub Copilot CLI..."
-	npm install -g --silent @githubnext/github-copilot-cli 2>/dev/null
+	run_with_spinner "Installing GitHub Copilot CLI..." npm install -g --silent @githubnext/github-copilot-cli 2>/dev/null
 }
 
 install_gemini() {
 	if command -v gemini &>/dev/null; then echo "Google Gemini CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	echo "Installing Google Gemini CLI..."
-	npm install -g --silent @google/gemini-cli 2>/dev/null
+	run_with_spinner "Installing Google Gemini CLI..." npm install -g --silent @google/gemini-cli 2>/dev/null
 }
 
 install_codex() {
 	if command -v codex &>/dev/null; then echo "OpenAI Codex CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	echo "Installing OpenAI Codex CLI..."
-	npm install -g --silent @openai/codex 2>/dev/null
+	run_with_spinner "Installing OpenAI Codex CLI..." npm install -g --silent @openai/codex 2>/dev/null
 }
 
 for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
@@ -308,8 +332,7 @@ for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 			if command -v opencode &>/dev/null; then
 				echo "OpenCode already installed, skipping."
 			else
-				echo "Installing OpenCode v${OPENCODE_VERSION}..."
-				sb_install opencode "$OPENCODE_VERSION"
+				run_with_spinner "Installing OpenCode v${OPENCODE_VERSION}..." sb_install opencode "$OPENCODE_VERSION"
 			fi
 			;;
 		copilot)  install_copilot ;;
@@ -343,6 +366,7 @@ fi
 
 if $INTERACTIVE; then
 	echo
+	section_header "Text Editors"
 	if $HAS_GUM; then
 		# Build --selected from previously saved editors
 		gum_selected=""
@@ -415,20 +439,17 @@ fi
 
 install_micro() {
 	if command -v micro &>/dev/null; then echo "Micro already installed, skipping."; return 0; fi
-	echo "Installing Micro v${MICRO_VERSION}..."
-	sb_install micro "$MICRO_VERSION"
+	run_with_spinner "Installing Micro v${MICRO_VERSION}..." sb_install micro "$MICRO_VERSION"
 }
 
 install_edit() {
 	if command -v edit &>/dev/null; then echo "Edit already installed, skipping."; return 0; fi
-	echo "Installing Edit v${EDIT_VERSION}..."
-	SB_ASSET_VERSION="$EDIT_ASSET_VERSION" sb_install edit "$EDIT_VERSION"
+	run_with_spinner "Installing Edit v${EDIT_VERSION}..." env SB_ASSET_VERSION="$EDIT_ASSET_VERSION" sb_install edit "$EDIT_VERSION"
 }
 
 install_fresh() {
 	if command -v fresh &>/dev/null; then echo "Fresh already installed, skipping."; return 0; fi
-	echo "Installing Fresh v${FRESH_VERSION}..."
-	sb_install fresh "$FRESH_VERSION"
+	run_with_spinner "Installing Fresh v${FRESH_VERSION}..." sb_install fresh "$FRESH_VERSION"
 }
 
 install_helix() {
@@ -440,13 +461,12 @@ install_helix() {
 		echo "Error: xz-utils required for Helix but sudo unavailable to install it. Skipping Helix." >&2
 		return 1
 	fi
-	sb_install helix "$HELIX_VERSION"
+	run_with_spinner "Downloading Helix..." sb_install helix "$HELIX_VERSION"
 }
 
 install_nvim() {
 	if command -v nvim &>/dev/null; then echo "Neovim already installed, skipping."; return 0; fi
-	echo "Installing Neovim v${NVIM_VERSION}..."
-	sb_install nvim "$NVIM_VERSION"
+	run_with_spinner "Installing Neovim v${NVIM_VERSION}..." sb_install nvim "$NVIM_VERSION"
 }
 
 installed_editors=()
@@ -500,6 +520,7 @@ fi
 
 if $INTERACTIVE; then
 	echo
+	section_header "Terminal Multiplexer"
 	if $HAS_GUM; then
 		# Build --selected from previously saved multiplexers
 		gum_selected=""
@@ -574,8 +595,7 @@ install_tmux() {
 
 install_zellij() {
 	if command -v zellij &>/dev/null; then echo "Zellij already installed, skipping."; return 0; fi
-	echo "Installing Zellij v${ZELLIJ_VERSION}..."
-	sb_install zellij "$ZELLIJ_VERSION"
+	run_with_spinner "Installing Zellij v${ZELLIJ_VERSION}..." sb_install zellij "$ZELLIJ_VERSION"
 }
 
 for mux in $(echo "$mux_list" | tr ',' ' '); do
@@ -595,6 +615,7 @@ fi
 
 if $INTERACTIVE; then
 	echo
+	section_header "SDKs"
 	if $HAS_GUM; then
 		# Build --selected from previously saved SDKs
 		gum_selected=""
@@ -742,4 +763,8 @@ done
 
 echo
 
-echo "🟧📦 You're in the box."
+if $HAS_GUM; then
+	gum style --border double --padding "0 2" --border-foreground 212 "🟧📦 You're in the box."
+else
+	echo "🟧📦 You're in the box."
+fi
