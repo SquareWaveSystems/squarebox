@@ -510,7 +510,7 @@ if [ ${#installed_editors[@]} -gt 1 ] && $INTERACTIVE; then
 		fi
 	fi
 	[ "$editor_cmd" = "nano" ] && editor_cmd=""
-elif [ ${#installed_editors[@]} -eq 1 ]; then
+elif [ ${#installed_editors[@]} -ge 1 ]; then
 	editor_cmd="${installed_editors[0]}"
 fi
 
