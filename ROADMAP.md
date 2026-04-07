@@ -6,3 +6,4 @@
 - **Dotfile portability** — let users mount or bootstrap their own dotfiles (starship.toml, tmux.conf, aliases, etc.) via a `~/.squarebox/` convention, with sensible merge/override behaviour against the defaults
 - **Multiple concurrent container instances** — support running more than one squarebox container simultaneously
 - **Neovim defaults from omarchy** — bring across the neovim configuration defaults from omarchy so nvim works well out of the box
+- **Additional developer TUI tools** — add difftastic (syntax-aware structural diffs), hyperfine (command-line benchmarking), and just (modern task runner) to the default image
