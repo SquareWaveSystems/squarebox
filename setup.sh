@@ -74,7 +74,16 @@ section_header() {
 run_with_spinner() {
 	local title="$1"; shift
 	if $HAS_GUM; then
-		gum spin --spinner dot --title "$title" -- "$@"
+		# Run command in background — gum spin can't invoke shell functions directly
+		"$@" &>/dev/null &
+		local cmd_pid=$!
+		gum spin --spinner dot --title "$title" -- bash -c "tail --pid=$cmd_pid -f /dev/null"
+		local rc=0
+		wait "$cmd_pid" || rc=$?
+		if [ $rc -eq 0 ]; then
+			gum style --foreground 2 "✓ ${title%...}"
+		fi
+		return $rc
 	else
 		echo "$title"
 		"$@"
@@ -255,10 +264,8 @@ NVM_VERSION="0.40.3"
 # SDK path setup file (create if missing, preserve on retry)
 touch ~/.squarebox-sdk-paths
 
-install_node() {
-	if command -v node &>/dev/null; then echo "Node.js already installed, skipping."; return 0; fi
+_install_node_inner() {
 	rm -rf "$HOME/.nvm"
-	echo "Installing Node.js (via nvm v${NVM_VERSION})..."
 	curl -fsSo /tmp/nvm-install.sh "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
 	verify_checksum /tmp/nvm-install.sh "nvm-install-v${NVM_VERSION}.sh"
 	bash /tmp/nvm-install.sh >/dev/null 2>&1
@@ -274,16 +281,24 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 PATHS
 	fi
+}
+
+install_node() {
+	if command -v node &>/dev/null; then echo "Node.js already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Node.js (via nvm v${NVM_VERSION})..." _install_node_inner
+	# Source nvm in current shell (spinner runs in subshell)
+	export NVM_DIR="$HOME/.nvm"
+	# shellcheck source=/dev/null
+	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 	if ! command -v node &>/dev/null; then
 		echo "Error: Node.js binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
 # Ensure Node.js is available for npm-based AI tools
 ensure_node_for_npm() {
 	if command -v node &>/dev/null; then return 0; fi
-	echo "Installing Node.js (required for npm-based AI tools)..."
 	install_node
 	# Ensure node/npm are available in this session
 	export NVM_DIR="$HOME/.nvm"
@@ -305,39 +320,41 @@ ensure_node_for_npm() {
 install_copilot() {
 	if command -v github-copilot-cli &>/dev/null; then echo "GitHub Copilot CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	run_with_spinner "Installing GitHub Copilot CLI..." npm install -g --silent @githubnext/github-copilot-cli 2>/dev/null
+	run_with_spinner "Installing GitHub Copilot CLI..." npm install -g --silent @githubnext/github-copilot-cli
 }
 
 install_gemini() {
 	if command -v gemini &>/dev/null; then echo "Google Gemini CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	run_with_spinner "Installing Google Gemini CLI..." npm install -g --silent @google/gemini-cli 2>/dev/null
+	run_with_spinner "Installing Google Gemini CLI..." npm install -g --silent @google/gemini-cli
 }
 
 install_codex() {
 	if command -v codex &>/dev/null; then echo "OpenAI Codex CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	run_with_spinner "Installing OpenAI Codex CLI..." npm install -g --silent @openai/codex 2>/dev/null
+	run_with_spinner "Installing OpenAI Codex CLI..." npm install -g --silent @openai/codex
 }
 
 for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 	case "$ai_tool" in
 		claude)
-			echo "Installing Claude Code..."
 			# Trust boundary: the Claude Code install script manages its own binary
 			# fetching and verification. We rely on HTTPS for script integrity.
-			curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1
+			run_with_spinner "Installing Claude Code..." \
+				bash -c 'curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1' \
+				|| echo "Warning: Claude Code installation failed."
 			;;
 		opencode)
 			if command -v opencode &>/dev/null; then
 				echo "OpenCode already installed, skipping."
 			else
-				run_with_spinner "Installing OpenCode v${OPENCODE_VERSION}..." sb_install opencode "$OPENCODE_VERSION"
+				run_with_spinner "Installing OpenCode v${OPENCODE_VERSION}..." sb_install opencode "$OPENCODE_VERSION" \
+					|| echo "Warning: OpenCode installation failed."
 			fi
 			;;
-		copilot)  install_copilot ;;
-		gemini)   install_gemini ;;
-		codex)    install_codex ;;
+		copilot)  install_copilot || echo "Warning: GitHub Copilot CLI installation failed." ;;
+		gemini)   install_gemini || echo "Warning: Google Gemini CLI installation failed." ;;
+		codex)    install_codex || echo "Warning: OpenAI Codex CLI installation failed." ;;
 	esac
 done
 
@@ -444,7 +461,7 @@ install_micro() {
 
 install_edit() {
 	if command -v edit &>/dev/null; then echo "Edit already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Edit v${EDIT_VERSION}..." env SB_ASSET_VERSION="$EDIT_ASSET_VERSION" sb_install edit "$EDIT_VERSION"
+	SB_ASSET_VERSION="$EDIT_ASSET_VERSION" run_with_spinner "Installing Edit v${EDIT_VERSION}..." sb_install edit "$EDIT_VERSION"
 }
 
 install_fresh() {
@@ -452,16 +469,19 @@ install_fresh() {
 	run_with_spinner "Installing Fresh v${FRESH_VERSION}..." sb_install fresh "$FRESH_VERSION"
 }
 
-install_helix() {
-	if command -v hx &>/dev/null; then echo "Helix already installed, skipping."; return 0; fi
-	echo "Installing Helix v${HELIX_VERSION}..."
+_install_helix_inner() {
 	if sudo -n true 2>/dev/null; then
 		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
 	elif ! command -v xz &>/dev/null; then
 		echo "Error: xz-utils required for Helix but sudo unavailable to install it. Skipping Helix." >&2
 		return 1
 	fi
-	run_with_spinner "Downloading Helix..." sb_install helix "$HELIX_VERSION"
+	sb_install helix "$HELIX_VERSION"
+}
+
+install_helix() {
+	if command -v hx &>/dev/null; then echo "Helix already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Helix v${HELIX_VERSION}..." _install_helix_inner
 }
 
 install_nvim() {
@@ -472,11 +492,11 @@ install_nvim() {
 installed_editors=()
 for editor in $(echo "$editor_list" | tr ',' ' '); do
 	case "$editor" in
-		micro) install_micro && installed_editors+=("micro") ;;
-		edit) install_edit && installed_editors+=("edit") ;;
-		fresh) install_fresh && installed_editors+=("fresh") ;;
-		helix) install_helix && installed_editors+=("hx") || echo "Warning: Helix installation failed, skipping." ;;
-		nvim) install_nvim && installed_editors+=("nvim") ;;
+		micro) install_micro && installed_editors+=("micro") || echo "Warning: Micro installation failed." ;;
+		edit) install_edit && installed_editors+=("edit") || echo "Warning: Edit installation failed." ;;
+		fresh) install_fresh && installed_editors+=("fresh") || echo "Warning: Fresh installation failed." ;;
+		helix) install_helix && installed_editors+=("hx") || echo "Warning: Helix installation failed." ;;
+		nvim) install_nvim && installed_editors+=("nvim") || echo "Warning: Neovim installation failed." ;;
 	esac
 done
 
@@ -499,7 +519,7 @@ if [ ${#installed_editors[@]} -gt 1 ] && $INTERACTIVE; then
 		fi
 	fi
 	[ "$editor_cmd" = "nano" ] && editor_cmd=""
-elif [ ${#installed_editors[@]} -eq 1 ]; then
+elif [ ${#installed_editors[@]} -ge 1 ]; then
 	editor_cmd="${installed_editors[0]}"
 fi
 
@@ -576,9 +596,7 @@ else
 	echo "$mux_list" > "$MUX_CONFIG"
 fi
 
-install_tmux() {
-	if command -v tmux &>/dev/null; then echo "Tmux already installed, skipping."; return 0; fi
-	echo "Installing tmux via apt..."
+_install_tmux_inner() {
 	sudo apt-get update -qq && sudo apt-get install -y -qq tmux >/dev/null 2>&1
 	# Install default config
 	if [ ! -f ~/.tmux.conf ]; then
@@ -593,6 +611,11 @@ install_tmux() {
 	fi
 }
 
+install_tmux() {
+	if command -v tmux &>/dev/null; then echo "Tmux already installed, skipping."; return 0; fi
+	run_with_spinner "Installing tmux..." _install_tmux_inner
+}
+
 install_zellij() {
 	if command -v zellij &>/dev/null; then echo "Zellij already installed, skipping."; return 0; fi
 	run_with_spinner "Installing Zellij v${ZELLIJ_VERSION}..." sb_install zellij "$ZELLIJ_VERSION"
@@ -600,8 +623,8 @@ install_zellij() {
 
 for mux in $(echo "$mux_list" | tr ',' ' '); do
 	case "$mux" in
-		tmux) install_tmux ;;
-		zellij) install_zellij ;;
+		tmux) install_tmux || echo "Warning: tmux installation failed." ;;
+		zellij) install_zellij || echo "Warning: Zellij installation failed." ;;
 	esac
 done
 
@@ -695,9 +718,7 @@ done
 
 # install_node is defined earlier (needed by npm-based AI tools)
 
-install_python() {
-	if command -v uv &>/dev/null; then echo "uv already installed, skipping."; return 0; fi
-	echo "Installing Python (via uv)..."
+_install_python_inner() {
 	# Trust boundary: the uv install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
 	curl -fsSL https://astral.sh/uv/install.sh | bash &>/dev/null
@@ -706,16 +727,20 @@ install_python() {
 export PATH="$HOME/.local/bin:$PATH"
 PATHS
 	fi
+}
+
+install_python() {
+	if command -v uv &>/dev/null; then echo "uv already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Python (via uv)..." _install_python_inner
+	export PATH="$HOME/.local/bin:$PATH"
 	if ! command -v uv &>/dev/null; then
 		echo "Error: uv binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
-install_go() {
-	if [ -x "${HOME}/.local/go/bin/go" ]; then echo "Go already installed, skipping."; return 0; fi
+_install_go_inner() {
 	rm -rf "$HOME/.local/go"
-	echo "Installing Go ${GO_VERSION}..."
 	curl -fsSLo /tmp/go.tar.gz "https://go.dev/dl/${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
 	verify_checksum /tmp/go.tar.gz "${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
 	tar xzf /tmp/go.tar.gz -C ~/.local
@@ -727,16 +752,19 @@ export GOPATH="$HOME/go"
 export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
 PATHS
 	fi
+}
+
+install_go() {
+	if [ -x "${HOME}/.local/go/bin/go" ]; then echo "Go already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Go ${GO_VERSION}..." _install_go_inner
 	if [ ! -x "${HOME}/.local/go/bin/go" ]; then
 		echo "Error: Go binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
-install_dotnet() {
-	if [ -x "${HOME}/.dotnet/dotnet" ]; then echo ".NET already installed, skipping."; return 0; fi
+_install_dotnet_inner() {
 	rm -rf "$HOME/.dotnet"
-	echo "Installing .NET..."
 	# Trust boundary: the .NET install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
 	curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS >/dev/null 2>&1
@@ -746,18 +774,23 @@ export DOTNET_ROOT="$HOME/.dotnet"
 export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
 PATHS
 	fi
+}
+
+install_dotnet() {
+	if [ -x "${HOME}/.dotnet/dotnet" ]; then echo ".NET already installed, skipping."; return 0; fi
+	run_with_spinner "Installing .NET..." _install_dotnet_inner
 	if [ ! -x "${HOME}/.dotnet/dotnet" ]; then
 		echo "Error: .NET binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
 for sdk in $(echo "$sdk_list" | tr ',' ' '); do
 	case "$sdk" in
-		node) install_node ;;
-		python) install_python ;;
-		go) install_go ;;
-		dotnet) install_dotnet ;;
+		node) install_node || echo "Warning: Node.js installation failed." ;;
+		python) install_python || echo "Warning: Python (uv) installation failed." ;;
+		go) install_go || echo "Warning: Go installation failed." ;;
+		dotnet) install_dotnet || echo "Warning: .NET installation failed." ;;
 	esac
 done
 
