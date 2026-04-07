@@ -646,25 +646,20 @@ install_zellij() {
 	mkdir -p ~/.config/zellij
 	if [ ! -f ~/.config/zellij/config.kdl ]; then
 		cat > ~/.config/zellij/config.kdl <<-'ZELLIJCONF'
-		// Omarchy-inspired defaults (matching tmux config)
+		// squarebox — Omarchy-inspired defaults (mirroring tmux keybindings)
 
-		// General
+		// ── General options ─────────────────────────────────────────────
 		mouse_mode true
 		copy_on_select true
-		scrollback_lines 50000
-		default_layout "compact"
+		scroll_buffer_size 50000
 		pane_frames false
 		auto_layout true
 		on_force_close "quit"
+		simplified_ui true
+		session_serialization true
+		support_kitty_keyboard_protocol true
 
-		// UI
-		ui {
-		    pane_frames {
-		        rounded_corners true
-		    }
-		}
-
-		// Theme — blue accent, minimal styling
+		// ── Theme — blue accent, minimal styling, transparent bg ────────
 		themes {
 		    squarebox {
 		        fg "#c0caf5"
@@ -682,7 +677,16 @@ install_zellij() {
 		}
 		theme "squarebox"
 
-		// Keybindings
+		// ── Plugins ─────────────────────────────────────────────────────
+		plugins {
+		    tab-bar location="zellij:tab-bar"
+		    status-bar location="zellij:status-bar"
+		    compact-bar location="zellij:compact-bar"
+		    session-manager location="zellij:session-manager"
+		    configuration location="zellij:configuration"
+		}
+
+		// ── Keybindings ─────────────────────────────────────────────────
 		keybinds clear-defaults=true {
 		    normal {
 		        // Pane navigation — Ctrl+Alt+Arrow
@@ -692,12 +696,12 @@ install_zellij() {
 		        bind "Ctrl Alt Down" { MoveFocus "Down"; }
 
 		        // Pane resizing — Ctrl+Alt+Shift+Arrow
-		        bind "Ctrl Alt Shift Left" { Resize "Increase Left"; }
-		        bind "Ctrl Alt Shift Right" { Resize "Increase Right"; }
-		        bind "Ctrl Alt Shift Up" { Resize "Increase Up"; }
-		        bind "Ctrl Alt Shift Down" { Resize "Increase Down"; }
+		        bind "Ctrl Alt Shift Left" { Resize "Left"; }
+		        bind "Ctrl Alt Shift Right" { Resize "Right"; }
+		        bind "Ctrl Alt Shift Up" { Resize "Up"; }
+		        bind "Ctrl Alt Shift Down" { Resize "Down"; }
 
-		        // Tab navigation — Alt+1-9
+		        // Tab navigation — Alt+1-9 (base index 1)
 		        bind "Alt 1" { GoToTab 1; }
 		        bind "Alt 2" { GoToTab 2; }
 		        bind "Alt 3" { GoToTab 3; }
@@ -712,19 +716,37 @@ install_zellij() {
 		        bind "Alt Left" { GoToPreviousTab; }
 		        bind "Alt Right" { GoToNextTab; }
 
-		        // Session switching — Alt+Up/Down
-		        bind "Alt Up" { FocusPreviousPane; }
-		        bind "Alt Down" { FocusNextPane; }
+		        // Tab reordering — Alt+Shift+Left/Right
+		        bind "Alt Shift Left" { MoveTab "Left"; }
+		        bind "Alt Shift Right" { MoveTab "Right"; }
 
-		        // Prefix-style bindings via Ctrl+Space
+		        // Session switching — Alt+Up/Down (launches session manager)
+		        bind "Alt Up" {
+		            LaunchOrFocusPlugin "session-manager" {
+		                floating true
+		                move_to_focused_tab true
+		            };
+		        }
+		        bind "Alt Down" {
+		            LaunchOrFocusPlugin "session-manager" {
+		                floating true
+		                move_to_focused_tab true
+		            };
+		        }
+
+		        // Prefix-style bindings via Ctrl+Space (tmux-like leader)
 		        bind "Ctrl Space" { SwitchToMode "Tmux"; }
+		    }
+
+		    locked {
+		        bind "Ctrl Space" { SwitchToMode "Normal"; }
 		    }
 
 		    tmux {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
 		        bind "Esc" { SwitchToMode "Normal"; }
 
-		        // Pane splitting
+		        // Pane splitting (h=horizontal, v=vertical — matching tmux)
 		        bind "h" { NewPane "Down"; SwitchToMode "Normal"; }
 		        bind "v" { NewPane "Right"; SwitchToMode "Normal"; }
 		        bind "x" { CloseFocus; SwitchToMode "Normal"; }
@@ -735,10 +757,19 @@ install_zellij() {
 		        bind "r" { SwitchToMode "RenameTab"; TabNameInput 0; }
 
 		        // Session management
-		        bind "C" { Detach; }
+		        bind "d" { Detach; }
+		        bind "w" {
+		            LaunchOrFocusPlugin "session-manager" {
+		                floating true
+		                move_to_focused_tab true
+		            };
+		            SwitchToMode "Normal";
+		        }
+
+		        // Rename pane
 		        bind "R" { SwitchToMode "RenamePane"; PaneNameInput 0; }
 
-		        // Tab navigation
+		        // Tab navigation (1-9 in prefix mode)
 		        bind "1" { GoToTab 1; SwitchToMode "Normal"; }
 		        bind "2" { GoToTab 2; SwitchToMode "Normal"; }
 		        bind "3" { GoToTab 3; SwitchToMode "Normal"; }
@@ -749,7 +780,7 @@ install_zellij() {
 		        bind "8" { GoToTab 8; SwitchToMode "Normal"; }
 		        bind "9" { GoToTab 9; SwitchToMode "Normal"; }
 
-		        // Pane navigation
+		        // Pane navigation (arrow keys in prefix mode)
 		        bind "Left" { MoveFocus "Left"; SwitchToMode "Normal"; }
 		        bind "Right" { MoveFocus "Right"; SwitchToMode "Normal"; }
 		        bind "Up" { MoveFocus "Up"; SwitchToMode "Normal"; }
@@ -759,52 +790,80 @@ install_zellij() {
 		        bind "z" { ToggleFocusFullscreen; SwitchToMode "Normal"; }
 		        bind "f" { ToggleFloatingPanes; SwitchToMode "Normal"; }
 
-		        // Enter scroll/copy mode
+		        // Enter scroll/copy mode (vi-style — like tmux [ )
 		        bind "[" { SwitchToMode "Scroll"; }
 		    }
 
+		    // ── Scroll mode (vi-style copy mode) ────────────────────────
 		    scroll {
 		        bind "Esc" { SwitchToMode "Normal"; }
-		        bind "q" { SwitchToMode "Normal"; }
-		        bind "j" { ScrollDown; }
-		        bind "k" { ScrollUp; }
+		        bind "q" { ScrollToBottom; SwitchToMode "Normal"; }
+		        bind "j" "Down" { ScrollDown; }
+		        bind "k" "Up" { ScrollUp; }
+		        bind "Ctrl f" "PageDown" { PageScrollDown; }
+		        bind "Ctrl b" "PageUp" { PageScrollUp; }
 		        bind "d" { HalfPageScrollDown; }
 		        bind "u" { HalfPageScrollUp; }
+		        bind "G" { ScrollToBottom; }
+		        bind "g" { ScrollToTop; }
 		        bind "/" { SwitchToMode "EnterSearch"; SearchInput 0; }
-		        bind "v" { SwitchToMode "Normal"; }
 		    }
 
 		    search {
 		        bind "Esc" { SwitchToMode "Normal"; }
-		        bind "q" { SwitchToMode "Normal"; }
-		        bind "j" { ScrollDown; }
-		        bind "k" { ScrollUp; }
-		        bind "n" { Search "down"; }
-		        bind "N" { Search "up"; }
+		        bind "q" { ScrollToBottom; SwitchToMode "Normal"; }
+		        bind "j" "Down" { ScrollDown; }
+		        bind "k" "Up" { ScrollUp; }
+		        bind "Ctrl f" "PageDown" { PageScrollDown; }
+		        bind "Ctrl b" "PageUp" { PageScrollUp; }
 		        bind "d" { HalfPageScrollDown; }
 		        bind "u" { HalfPageScrollUp; }
+		        bind "n" { Search "down"; }
+		        bind "N" { Search "up"; }
+		        bind "c" { SearchToggleOption "CaseSensitivity"; }
+		        bind "w" { SearchToggleOption "Wrap"; }
+		        bind "o" { SearchToggleOption "WholeWord"; }
+		        bind "G" { ScrollToBottom; }
+		        bind "g" { ScrollToTop; }
 		    }
 
 		    entersearch {
 		        bind "Esc" { SwitchToMode "Scroll"; }
+		        bind "Ctrl c" { SwitchToMode "Scroll"; }
 		        bind "Enter" { SwitchToMode "Search"; }
 		    }
 
 		    renametab {
 		        bind "Esc" { UndoRenameTab; SwitchToMode "Normal"; }
+		        bind "Ctrl c" { UndoRenameTab; SwitchToMode "Normal"; }
 		        bind "Enter" { SwitchToMode "Normal"; }
 		    }
 
 		    renamepane {
 		        bind "Esc" { UndoRenamePane; SwitchToMode "Normal"; }
+		        bind "Ctrl c" { UndoRenamePane; SwitchToMode "Normal"; }
 		        bind "Enter" { SwitchToMode "Normal"; }
 		    }
 
-		    shared_except "normal" "tmux" {
+		    // Allow Ctrl+Space to return to normal from any non-normal mode
+		    shared_except "normal" "locked" "tmux" {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
 		    }
 		}
 		ZELLIJCONF
+
+		# Create a default layout with the compact bar at the top
+		mkdir -p ~/.config/zellij/layouts
+		if [ ! -f ~/.config/zellij/layouts/default.kdl ]; then
+			cat > ~/.config/zellij/layouts/default.kdl <<-'ZELLIJLAYOUT'
+			layout {
+			    pane size=1 borderless=true {
+			        plugin location="compact-bar"
+			    }
+			    pane
+			}
+			ZELLIJLAYOUT
+		fi
 	fi
 }
 
