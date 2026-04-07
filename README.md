@@ -224,6 +224,9 @@ automatically.
 The interactive first-run setup is skipped in devcontainer mode. To configure
 AI tools or SDKs, run `~/setup.sh` from the integrated terminal.
 
+You can also attach to a running codespace directly from your local terminal
+using `gh codespace ssh`.
+
 Uninstall
 ---------
 
