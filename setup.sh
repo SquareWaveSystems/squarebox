@@ -276,7 +276,7 @@ PATHS
 	fi
 	if ! command -v node &>/dev/null; then
 		echo "Error: Node.js binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
@@ -326,18 +326,20 @@ for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 			echo "Installing Claude Code..."
 			# Trust boundary: the Claude Code install script manages its own binary
 			# fetching and verification. We rely on HTTPS for script integrity.
-			curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1
+			curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1 \
+				|| echo "Warning: Claude Code installation failed."
 			;;
 		opencode)
 			if command -v opencode &>/dev/null; then
 				echo "OpenCode already installed, skipping."
 			else
-				run_with_spinner "Installing OpenCode v${OPENCODE_VERSION}..." sb_install opencode "$OPENCODE_VERSION"
+				run_with_spinner "Installing OpenCode v${OPENCODE_VERSION}..." sb_install opencode "$OPENCODE_VERSION" \
+					|| echo "Warning: OpenCode installation failed."
 			fi
 			;;
-		copilot)  install_copilot ;;
-		gemini)   install_gemini ;;
-		codex)    install_codex ;;
+		copilot)  install_copilot || echo "Warning: GitHub Copilot CLI installation failed." ;;
+		gemini)   install_gemini || echo "Warning: Google Gemini CLI installation failed." ;;
+		codex)    install_codex || echo "Warning: OpenAI Codex CLI installation failed." ;;
 	esac
 done
 
@@ -472,11 +474,11 @@ install_nvim() {
 installed_editors=()
 for editor in $(echo "$editor_list" | tr ',' ' '); do
 	case "$editor" in
-		micro) install_micro && installed_editors+=("micro") ;;
-		edit) install_edit && installed_editors+=("edit") ;;
-		fresh) install_fresh && installed_editors+=("fresh") ;;
-		helix) install_helix && installed_editors+=("hx") || echo "Warning: Helix installation failed, skipping." ;;
-		nvim) install_nvim && installed_editors+=("nvim") ;;
+		micro) install_micro && installed_editors+=("micro") || echo "Warning: Micro installation failed." ;;
+		edit) install_edit && installed_editors+=("edit") || echo "Warning: Edit installation failed." ;;
+		fresh) install_fresh && installed_editors+=("fresh") || echo "Warning: Fresh installation failed." ;;
+		helix) install_helix && installed_editors+=("hx") || echo "Warning: Helix installation failed." ;;
+		nvim) install_nvim && installed_editors+=("nvim") || echo "Warning: Neovim installation failed." ;;
 	esac
 done
 
@@ -600,8 +602,8 @@ install_zellij() {
 
 for mux in $(echo "$mux_list" | tr ',' ' '); do
 	case "$mux" in
-		tmux) install_tmux ;;
-		zellij) install_zellij ;;
+		tmux) install_tmux || echo "Warning: tmux installation failed." ;;
+		zellij) install_zellij || echo "Warning: Zellij installation failed." ;;
 	esac
 done
 
@@ -708,7 +710,7 @@ PATHS
 	fi
 	if ! command -v uv &>/dev/null; then
 		echo "Error: uv binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
@@ -729,7 +731,7 @@ PATHS
 	fi
 	if [ ! -x "${HOME}/.local/go/bin/go" ]; then
 		echo "Error: Go binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
@@ -748,16 +750,16 @@ PATHS
 	fi
 	if [ ! -x "${HOME}/.dotnet/dotnet" ]; then
 		echo "Error: .NET binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
 for sdk in $(echo "$sdk_list" | tr ',' ' '); do
 	case "$sdk" in
-		node) install_node ;;
-		python) install_python ;;
-		go) install_go ;;
-		dotnet) install_dotnet ;;
+		node) install_node || echo "Warning: Node.js installation failed." ;;
+		python) install_python || echo "Warning: Python (uv) installation failed." ;;
+		go) install_go || echo "Warning: Go installation failed." ;;
+		dotnet) install_dotnet || echo "Warning: .NET installation failed." ;;
 	esac
 done
 
