@@ -78,7 +78,12 @@ run_with_spinner() {
 		"$@" &>/dev/null &
 		local cmd_pid=$!
 		gum spin --spinner dot --title "$title" -- bash -c "tail --pid=$cmd_pid -f /dev/null"
-		wait "$cmd_pid"
+		local rc=0
+		wait "$cmd_pid" || rc=$?
+		if [ $rc -eq 0 ]; then
+			gum style --foreground 2 "✓ ${title%...}"
+		fi
+		return $rc
 	else
 		echo "$title"
 		"$@"
@@ -450,7 +455,7 @@ install_micro() {
 
 install_edit() {
 	if command -v edit &>/dev/null; then echo "Edit already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Edit v${EDIT_VERSION}..." env SB_ASSET_VERSION="$EDIT_ASSET_VERSION" sb_install edit "$EDIT_VERSION"
+	SB_ASSET_VERSION="$EDIT_ASSET_VERSION" run_with_spinner "Installing Edit v${EDIT_VERSION}..." sb_install edit "$EDIT_VERSION"
 }
 
 install_fresh() {
