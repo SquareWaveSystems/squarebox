@@ -30,6 +30,8 @@ Start
 
     squarebox        # or: sqrbx
 
+Shell aliases are added automatically for Bash, Zsh, and PowerShell 7+.
+
 The container is persistent: it suspends on exit and resumes on start, keeping
 installed packages, config, and shell history intact between sessions. Your code
 lives on the host at `~/squarebox/workspace` via volume mount, so it survives
@@ -236,5 +238,5 @@ Uninstall
     rm -rf ~/squarebox
 
 Then remove the `sqrbx` and `sqrbx-rebuild` aliases from your shell config
-(`~/.bashrc` or `~/.zshrc`). Back up `~/squarebox/workspace` first if you need
-your code.
+(`~/.bashrc`, `~/.zshrc`, or `~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1`).
+Back up `~/squarebox/workspace` first if you need your code.

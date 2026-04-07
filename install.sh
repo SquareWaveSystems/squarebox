@@ -90,6 +90,30 @@ if [ "$ALIASES_ADDED" = true ]; then
 	echo "Added squarebox aliases to $SHELL_RC — restart your shell or run: source $SHELL_RC"
 fi
 
+# PowerShell profile (Windows) — uses functions since PS aliases can't take arguments
+if [ -n "${USERPROFILE:-}" ]; then
+	_ps_dir="$(cygpath -u "$USERPROFILE" 2>/dev/null || echo "$USERPROFILE")/Documents/PowerShell"
+	_ps_profile="${_ps_dir}/Microsoft.PowerShell_profile.ps1"
+	if [ -d "$_ps_dir" ] || command -v pwsh &>/dev/null; then
+		mkdir -p "$_ps_dir"
+		PS_ADDED=false
+		if ! grep -q 'function sqrbx ' "$_ps_profile" 2>/dev/null; then
+			cat >> "$_ps_profile" <<-'PSEOF'
+
+			# squarebox aliases
+			function sqrbx { docker start -ai squarebox }
+			function squarebox { docker start -ai squarebox }
+			function sqrbx-rebuild { & "$HOME/squarebox/install.sh" }
+			function squarebox-rebuild { & "$HOME/squarebox/install.sh" }
+			PSEOF
+			PS_ADDED=true
+		fi
+		if [ "$PS_ADDED" = true ]; then
+			echo "Added squarebox functions to PowerShell profile — restart PowerShell to use them."
+		fi
+	fi
+fi
+
 # Prepare host directories
 mkdir -p "${HOME}/.config/git" "${INSTALL_DIR}/workspace" "${INSTALL_DIR}/.config/lazygit"
 
