@@ -1,9 +1,12 @@
 # squarebox UAT Checklist (Manual)
 
-> **Automated tests**: 57 of 71 checklist items are covered by the [E2E workflow](/.github/workflows/e2e.yml).
+> **Automated tests**: 55 of 71 checklist items are covered by the [E2E workflow](/.github/workflows/e2e.yml).
 > Run it via `workflow_dispatch` or push a `v*` tag. See the generated `e2e-report.md` artifact for full results.
 >
-> This file lists only the **14 items that require manual verification**.
+> This file lists only the **16 items that require manual verification**.
+
+## Host Install
+- [ ] `sqrbx` launches container and drops into interactive shell
 
 ## First-Run Setup (Interactive)
 - [ ] Git identity prompt appears (name + email UX)
@@ -26,3 +29,4 @@
 
 ## Dev Container
 - [ ] VS Code "Reopen in Container" builds and connects
+- [ ] Manual `~/setup.sh` works in VS Code integrated terminal
