@@ -320,19 +320,19 @@ ensure_node_for_npm() {
 install_copilot() {
 	if command -v github-copilot-cli &>/dev/null; then echo "GitHub Copilot CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	run_with_spinner "Installing GitHub Copilot CLI..." npm install -g --silent @githubnext/github-copilot-cli 2>/dev/null
+	run_with_spinner "Installing GitHub Copilot CLI..." npm install -g --silent @githubnext/github-copilot-cli
 }
 
 install_gemini() {
 	if command -v gemini &>/dev/null; then echo "Google Gemini CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	run_with_spinner "Installing Google Gemini CLI..." npm install -g --silent @google/gemini-cli 2>/dev/null
+	run_with_spinner "Installing Google Gemini CLI..." npm install -g --silent @google/gemini-cli
 }
 
 install_codex() {
 	if command -v codex &>/dev/null; then echo "OpenAI Codex CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	run_with_spinner "Installing OpenAI Codex CLI..." npm install -g --silent @openai/codex 2>/dev/null
+	run_with_spinner "Installing OpenAI Codex CLI..." npm install -g --silent @openai/codex
 }
 
 for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
