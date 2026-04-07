@@ -536,15 +536,104 @@ install_tmux() {
 	if command -v tmux &>/dev/null; then echo "Tmux already installed, skipping."; return 0; fi
 	echo "Installing tmux via apt..."
 	sudo apt-get update -qq && sudo apt-get install -y -qq tmux >/dev/null 2>&1
-	# Install default config
-	if [ ! -f ~/.tmux.conf ]; then
-		cat > ~/.tmux.conf <<-'TMUXCONF'
-		set -g mouse on
+	# Install default config (Omarchy-inspired defaults)
+	mkdir -p ~/.config/tmux
+	if [ ! -f ~/.config/tmux/tmux.conf ]; then
+		cat > ~/.config/tmux/tmux.conf <<-'TMUXCONF'
+		# Prefix
+		set -g prefix C-Space
+		set -g prefix2 C-b
+		bind C-Space send-prefix
+
+		# Reload config
+		bind q source-file ~/.config/tmux/tmux.conf \; display "Configuration reloaded"
+
+		# Vi mode for copy
+		setw -g mode-keys vi
+		bind -T copy-mode-vi v send -X begin-selection
+		bind -T copy-mode-vi y send -X copy-selection-and-cancel
+
+		# Pane Controls
+		bind h split-window -v -c "#{pane_current_path}"
+		bind v split-window -h -c "#{pane_current_path}"
+		bind x kill-pane
+
+		bind -n C-M-Left select-pane -L
+		bind -n C-M-Right select-pane -R
+		bind -n C-M-Up select-pane -U
+		bind -n C-M-Down select-pane -D
+
+		bind -n C-M-S-Left resize-pane -L 5
+		bind -n C-M-S-Down resize-pane -D 5
+		bind -n C-M-S-Up resize-pane -U 5
+		bind -n C-M-S-Right resize-pane -R 5
+
+		# Window navigation
+		bind r command-prompt -I "#W" "rename-window -- '%%'"
+		bind c new-window -c "#{pane_current_path}"
+		bind k kill-window
+
+		bind -n M-1 select-window -t 1
+		bind -n M-2 select-window -t 2
+		bind -n M-3 select-window -t 3
+		bind -n M-4 select-window -t 4
+		bind -n M-5 select-window -t 5
+		bind -n M-6 select-window -t 6
+		bind -n M-7 select-window -t 7
+		bind -n M-8 select-window -t 8
+		bind -n M-9 select-window -t 9
+
+		bind -n M-Left select-window -t -1
+		bind -n M-Right select-window -t +1
+		bind -n M-S-Left swap-window -t -1 \; select-window -t -1
+		bind -n M-S-Right swap-window -t +1 \; select-window -t +1
+
+		# Session controls
+		bind R command-prompt -I "#S" "rename-session -- '%%'"
+		bind C new-session -c "#{pane_current_path}"
+		bind K kill-session
+		bind P switch-client -p
+		bind N switch-client -n
+
+		bind -n M-Up switch-client -p
+		bind -n M-Down switch-client -n
+
+		# General
 		set -g default-terminal "tmux-256color"
-		set -g history-limit 10000
-		set -g prefix C-a
-		unbind C-b
-		bind C-a send-prefix
+		set -ag terminal-overrides ",*:RGB"
+		set -g mouse on
+		set -g base-index 1
+		setw -g pane-base-index 1
+		set -g renumber-windows on
+		set -g history-limit 50000
+		set -g escape-time 0
+		set -g focus-events on
+		set -g set-clipboard on
+		set -g allow-passthrough on
+		setw -g aggressive-resize on
+		set -g detach-on-destroy off
+
+		# Status bar
+		set -g status-position top
+		set -g status-interval 5
+		set -g status-left-length 30
+		set -g status-right-length 50
+		set -g window-status-separator ""
+		set -gw automatic-rename on
+		set -gw automatic-rename-format '#{b:pane_current_path}'
+
+		# Theme
+		set -g status-style "bg=default,fg=default"
+		set -g status-left "#[fg=black,bg=blue,bold] #S #[bg=default] "
+		set -g status-right "#[fg=blue]#{?pane_in_mode,COPY ,}#{?client_prefix,PREFIX ,}#{?window_zoomed_flag,ZOOM ,}#[fg=brightblack]#h "
+		set -g window-status-format "#[fg=brightblack] #I:#W "
+		set -g window-status-current-format "#[fg=blue,bold] #I:#W "
+		set -g pane-border-style "fg=brightblack"
+		set -g pane-active-border-style "fg=blue"
+		set -g message-style "bg=default,fg=blue"
+		set -g message-command-style "bg=default,fg=blue"
+		set -g mode-style "bg=blue,fg=black"
+		setw -g clock-mode-colour blue
 		TMUXCONF
 	fi
 }
