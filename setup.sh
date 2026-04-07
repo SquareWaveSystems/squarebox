@@ -74,7 +74,11 @@ section_header() {
 run_with_spinner() {
 	local title="$1"; shift
 	if $HAS_GUM; then
-		gum spin --spinner dot --title "$title" -- "$@"
+		# Run command in background — gum spin can't invoke shell functions directly
+		"$@" &>/dev/null &
+		local cmd_pid=$!
+		gum spin --spinner dot --title "$title" -- bash -c "tail --pid=$cmd_pid -f /dev/null"
+		wait "$cmd_pid"
 	else
 		echo "$title"
 		"$@"
