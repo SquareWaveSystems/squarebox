@@ -234,13 +234,13 @@ install_node() {
 	echo "Installing Node.js (via nvm v${NVM_VERSION})..."
 	curl -fsSo /tmp/nvm-install.sh "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
 	verify_checksum /tmp/nvm-install.sh "nvm-install-v${NVM_VERSION}.sh"
-	bash /tmp/nvm-install.sh
+	bash /tmp/nvm-install.sh >/dev/null 2>&1
 	rm /tmp/nvm-install.sh
 	export NVM_DIR="$HOME/.nvm"
 	# shellcheck source=/dev/null
 	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 	# Node.js binary verification is handled by nvm
-	nvm install --lts
+	nvm install --lts >/dev/null 2>&1
 	if ! grep -q 'NVM_DIR' ~/.squarebox-sdk-paths 2>/dev/null; then
 		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export NVM_DIR="$HOME/.nvm"
@@ -279,21 +279,21 @@ install_copilot() {
 	if command -v github-copilot-cli &>/dev/null; then echo "GitHub Copilot CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
 	echo "Installing GitHub Copilot CLI..."
-	npm install -g @githubnext/github-copilot-cli
+	npm install -g --silent @githubnext/github-copilot-cli 2>/dev/null
 }
 
 install_gemini() {
 	if command -v gemini &>/dev/null; then echo "Google Gemini CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
 	echo "Installing Google Gemini CLI..."
-	npm install -g @google/gemini-cli
+	npm install -g --silent @google/gemini-cli 2>/dev/null
 }
 
 install_codex() {
 	if command -v codex &>/dev/null; then echo "OpenAI Codex CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
 	echo "Installing OpenAI Codex CLI..."
-	npm install -g @openai/codex
+	npm install -g --silent @openai/codex 2>/dev/null
 }
 
 for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
@@ -302,7 +302,7 @@ for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 			echo "Installing Claude Code..."
 			# Trust boundary: the Claude Code install script manages its own binary
 			# fetching and verification. We rely on HTTPS for script integrity.
-			curl -fsSL https://claude.ai/install.sh | bash
+			curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1
 			;;
 		opencode)
 			if command -v opencode &>/dev/null; then
@@ -656,7 +656,7 @@ install_python() {
 	echo "Installing Python (via uv)..."
 	# Trust boundary: the uv install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
-	curl -fsSL https://astral.sh/uv/install.sh | bash
+	curl -fsSL https://astral.sh/uv/install.sh | bash 2>/dev/null
 	if ! grep -q '\.local/bin' ~/.squarebox-sdk-paths 2>/dev/null; then
 		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export PATH="$HOME/.local/bin:$PATH"
@@ -695,7 +695,7 @@ install_dotnet() {
 	echo "Installing .NET..."
 	# Trust boundary: the .NET install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
-	curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS
+	curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS 2>&1 | grep -E '^dotnet-install: (Installed|.*finished)' || true
 	if ! grep -q 'DOTNET_ROOT' ~/.squarebox-sdk-paths 2>/dev/null; then
 		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export DOTNET_ROOT="$HOME/.dotnet"
