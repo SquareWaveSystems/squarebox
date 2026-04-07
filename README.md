@@ -93,7 +93,7 @@ Installed during first-run setup. Nano is always available as the default editor
 
 ### Aliases
 
-Inspired by [Omarchy](https://omarchy.com).
+Inspired by [Omarchy](https://omarchy.org).
 
 | Alias | Command | Description |
 |-------|---------|-------------|
