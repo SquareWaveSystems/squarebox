@@ -10,7 +10,7 @@ Output demo/squarebox-setup.gif
 Set Shell "bash"
 Set FontSize 16
 Set Width 900
-Set Height 550
+Set Height 600
 Set Padding 20
 Set Theme "Catppuccin Frappe"
 Set TypingSpeed 60ms

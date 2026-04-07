@@ -126,3 +126,9 @@ printf '\e[0m'
 printf '\e[38;5;172m  %s\e[0m\n' "$(date '+%A, %B %d %Y  %H:%M')"
 printf '\e[38;5;172m  Node 24.14.1 ◆ Python uv 0.11.3\e[0m\n'
 printf '\e[38;5;172m  Go 1.26.1 ◆ .NET 10.0.201\e[0m\n'
+
+# Fake starship prompt
+echo
+printf '\e[1;36m/workspace\e[0m took \e[1;33m3m35s\e[0m\n'
+echo
+printf '📦 \e[1;32m❯\e[0m '
