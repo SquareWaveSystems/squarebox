@@ -3,45 +3,26 @@
 # Keep in sync with setup.sh when prompts or options change.
 set -euo pipefail
 
-BOLD='\033[1m'
-DIM='\033[2m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-RESET='\033[0m'
-
-spinner() {
-    local msg="$1" duration="${2:-0.8}"
-    local chars="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-    local end=$((SECONDS + ${duration%.*} + 1))
-    while [ $SECONDS -lt $end ]; do
-        for (( i=0; i<${#chars}; i++ )); do
-            printf "\r  ${CYAN}${chars:$i:1}${RESET} %s" "$msg"
-            sleep 0.08
-        done
-    done
+# Simulated run_with_spinner: shows gum spinner briefly, then green checkmark
+run_with_spinner() {
+    local title="$1"
+    local duration="${2:-0.8}"
+    gum spin --spinner dot --title "$title" -- sleep "$duration"
+    gum style --foreground 2 "✓ ${title%...}"
 }
 
-# --- Simulated install phase (skip clone/build, start at success) ---
+section_header() {
+    gum style --foreground 212 --bold "$1"
+}
+
+# --- Simulated container creation ---
 clear
-echo -e "${GREEN}✓ Image built successfully${RESET}"
-sleep 0.2
-echo -e "${GREEN}✓ Container created${RESET}"
-sleep 0.3
-echo "Entering container..."
-sleep 0.6
+echo "Creating container..."
+sleep 0.5
 
-# --- Real setup.sh UI (gum prompts) ---
+# --- Header ---
 echo
-
-# Header — exact same command as setup.sh
 gum style --border double --padding "0 2" --border-foreground 208 "squarebox setup"
-echo
-
-# Git identity (pre-filled)
-sleep 0.3
-echo -e "Git name: ${BOLD}dev${RESET}"
-sleep 0.2
-echo -e "Git email: ${BOLD}dev@example.com${RESET}"
 echo
 
 # GitHub CLI (already authenticated)
@@ -50,101 +31,98 @@ echo "GitHub CLI: already authenticated"
 
 # AI assistant — real gum choose (same as setup.sh)
 echo
+section_header "AI Coding Assistants"
 selected=$(gum choose --no-limit \
     --header "Select AI coding assistants (space=toggle, enter=confirm):" \
-    --cursor.foreground 208 --header.foreground 208 --selected.foreground 208 \
     "Claude Code" "GitHub Copilot CLI" "Google Gemini CLI" \
     "OpenAI Codex CLI" "OpenCode") || true
 
+node_installed=false
 while IFS= read -r line; do
     [ -z "$line" ] && continue
-    echo "Installing ${line}..."
-    spinner "Downloading ${line}..." 1
-    printf "\r  ${GREEN}✓${RESET} ${line} installed            \n"
-    sleep 0.15
+    case "$line" in
+        "Claude Code")
+            run_with_spinner "Installing Claude Code..." 0.8
+            ;;
+        "GitHub Copilot CLI"|"Google Gemini CLI"|"OpenAI Codex CLI")
+            if ! $node_installed; then
+                run_with_spinner "Installing Node.js (via nvm v0.40.3)..." 1
+                node_installed=true
+            fi
+            run_with_spinner "Installing ${line}..." 0.8
+            ;;
+        "OpenCode")
+            run_with_spinner "Installing OpenCode v1.3.15..." 0.8
+            ;;
+    esac
 done <<< "$selected"
-sleep 0.3
 
 # Editors — real gum choose (same as setup.sh)
 echo
+section_header "Text Editors"
 echo "Nano is always available as the default editor."
 selected=$(gum choose --no-limit \
-    --header "Select text editors to install (space=toggle, enter=confirm):" \
-    --cursor.foreground 208 --header.foreground 208 --selected.foreground 208 \
-    "micro  — modern, intuitive terminal editor" \
-    "edit   — terminal text editor (Microsoft)" \
-    "fresh  — modern terminal text editor" \
-    "helix  — modal editor (Kakoune-inspired)" \
-    "nvim   — Neovim") || true
+    --header "Select text editors to install:" \
+    "micro" "edit" "fresh" "helix" "nvim") || true
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue
-    name="${line%% *}"
-    echo "Installing ${name}..."
-    sleep 0.2
-    echo -e "  ${GREEN}✓${RESET} ${name} installed"
-    sleep 0.15
+    case "$line" in
+        micro) run_with_spinner "Installing Micro v2.0.15..." 0.6 ;;
+        edit)  run_with_spinner "Installing Edit v1.2.1..." 0.6 ;;
+        fresh) run_with_spinner "Installing Fresh v0.2.21..." 0.6 ;;
+        helix) run_with_spinner "Installing Helix v25.07.1..." 0.6 ;;
+        nvim)  run_with_spinner "Installing Neovim v0.12.0..." 0.6 ;;
+    esac
 done <<< "$selected"
-sleep 0.3
 
 # Terminal multiplexer — real gum choose (same as setup.sh)
 echo
+section_header "Terminal Multiplexer"
 selected=$(gum choose --no-limit \
-    --header "Select terminal multiplexer (space=toggle, enter=confirm, or enter to skip):" \
-    --cursor.foreground 208 --header.foreground 208 --selected.foreground 208 \
-    "tmux    — classic terminal multiplexer" \
-    "zellij  — friendly terminal workspace") || true
+    --header "Select terminal multiplexer:" \
+    "tmux" "zellij") || true
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue
-    name="${line%% *}"
-    echo "Installing ${name}..."
-    spinner "Installing ${name}..." 0.8
-    printf "\r  ${GREEN}✓${RESET} ${name} installed            \n"
-    sleep 0.15
+    case "$line" in
+        tmux)   run_with_spinner "Installing tmux..." 0.6 ;;
+        zellij) run_with_spinner "Installing Zellij v0.44.0..." 0.6 ;;
+    esac
 done <<< "$selected"
-sleep 0.3
 
 # SDKs — real gum choose (same as setup.sh)
 echo
+section_header "SDKs"
 selected=$(gum choose --no-limit \
-    --header "Select SDKs to install (space=toggle, enter=confirm):" \
-    --cursor.foreground 208 --header.foreground 208 --selected.foreground 208 \
+    --header "Select SDKs to install:" \
     "Node.js" "Python" "Go" ".NET") || true
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue
     case "$line" in
         "Node.js")
-            echo "Installing Node.js (via nvm)..."
-            spinner "Installing Node.js LTS..." 1
-            printf "\r  ${GREEN}✓${RESET} Node.js v22 (LTS) installed\n"
+            if $node_installed; then
+                echo "Node.js already installed, skipping."
+            else
+                run_with_spinner "Installing Node.js (via nvm v0.40.3)..." 1
+                node_installed=true
+            fi
             ;;
-        "Python")
-            echo "Installing Python (via uv)..."
-            spinner "Installing uv..." 0.8
-            printf "\r  ${GREEN}✓${RESET} uv installed                \n"
-            ;;
-        "Go")
-            echo "Installing Go..."
-            spinner "Installing Go..." 0.8
-            printf "\r  ${GREEN}✓${RESET} Go installed                \n"
-            ;;
-        ".NET")
-            echo "Installing .NET..."
-            spinner "Installing .NET..." 0.8
-            printf "\r  ${GREEN}✓${RESET} .NET installed              \n"
-            ;;
+        "Python") run_with_spinner "Installing Python (via uv)..." 0.8 ;;
+        "Go")     run_with_spinner "Installing Go go1.26.1..." 0.8 ;;
+        ".NET")   run_with_spinner "Installing .NET..." 0.8 ;;
     esac
-    sleep 0.15
 done <<< "$selected"
 
 echo
-echo "🟧📦 You're in the box."
+gum style --border double --padding "0 2" --border-foreground 212 "🟧📦 You're in the box."
 
 # MOTD
 echo
 printf '\e[1;38;5;208m'
 toilet -f smblock --metal "squarebox"
 printf '\e[0m'
-printf '\e[38;5;172m  %s\e[0m\n\n' "$(date '+%A, %B %d %Y  %H:%M')  |  Node 22.16.0, Python 3.12.3"
+printf '\e[38;5;172m  %s\e[0m\n' "$(date '+%A, %B %d %Y  %H:%M')"
+printf '\e[38;5;172m  Node 24.14.1 ◆ Python uv 0.11.3\e[0m\n'
+printf '\e[38;5;172m  Go 1.26.1 ◆ .NET 10.0.201\e[0m\n'

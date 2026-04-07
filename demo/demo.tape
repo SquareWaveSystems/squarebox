@@ -27,58 +27,96 @@ Type "bash demo/setup-demo.sh"
 Enter
 Show
 
-# --- Install phase + header + git identity + gh auth ---
+# --- Container creation + header + gh auth ---
 Sleep 3s
 
 # --- AI assistant (gum choose --no-limit) ---
-# Select Claude Code (1st)
+# Select all 5: Claude Code, GitHub Copilot CLI, Google Gemini CLI, OpenAI Codex CLI, OpenCode
 Sleep 500ms
 Space
-Sleep 500ms
-Enter
-
-# Wait for Claude Code "install"
-Sleep 2s
-
-# --- Editors (gum choose --no-limit) ---
-# Select micro (1st) and fresh (3rd)
-Sleep 500ms
-Space
-Sleep 400ms
-Down
 Sleep 300ms
 Down
-Sleep 400ms
+Sleep 300ms
+Space
+Sleep 300ms
+Down
+Sleep 300ms
+Space
+Sleep 300ms
+Down
+Sleep 300ms
+Space
+Sleep 300ms
+Down
+Sleep 300ms
 Space
 Sleep 500ms
 Enter
 
-# Wait for editor "installs"
-Sleep 1.5s
+# Wait for AI tool "installs" (6 spinners: Claude + Node + Copilot + Gemini + Codex + OpenCode)
+Sleep 8s
+
+# --- Editors (gum choose --no-limit) ---
+# Select all 5: micro, edit, fresh, helix, nvim
+Sleep 500ms
+Space
+Sleep 300ms
+Down
+Sleep 300ms
+Space
+Sleep 300ms
+Down
+Sleep 300ms
+Space
+Sleep 300ms
+Down
+Sleep 300ms
+Space
+Sleep 300ms
+Down
+Sleep 300ms
+Space
+Sleep 500ms
+Enter
+
+# Wait for editor "installs" (5 spinners)
+Sleep 5s
 
 # --- Terminal multiplexer (gum choose --no-limit) ---
-# Select tmux (1st)
+# Select all 2: tmux, zellij
 Sleep 500ms
+Space
+Sleep 300ms
+Down
+Sleep 300ms
 Space
 Sleep 500ms
 Enter
 
-# Wait for multiplexer "install"
-Sleep 1.5s
+# Wait for multiplexer "installs" (2 spinners)
+Sleep 3s
 
 # --- SDKs (gum choose --no-limit) ---
-# Select Node.js and Python
+# Select all 4: Node.js, Python, Go, .NET
 Sleep 500ms
 Space
-Sleep 400ms
+Sleep 300ms
 Down
-Sleep 400ms
+Sleep 300ms
+Space
+Sleep 300ms
+Down
+Sleep 300ms
+Space
+Sleep 300ms
+Down
+Sleep 300ms
 Space
 Sleep 500ms
 Enter
 
-# Wait for SDK "installs" + Done + MOTD
-Sleep 3s
+# Wait for SDK "installs" (Node skip + 3 spinners) + Done + MOTD
+Sleep 5s
 
 # Linger on MOTD
 Sleep 5s
