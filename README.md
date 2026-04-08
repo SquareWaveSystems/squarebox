@@ -3,24 +3,24 @@
 **A curated set of modern CLI/TUI tools and AI coding assistants in a single container. Batteries included.**
 
 Setting up a new dev machine means hours of installing tools, tweaking configs,
-and getting everything just right — then doing it all again on the next machine.
+and getting everything just right - then doing it all again on the next machine.
 squarebox packages a complete terminal-based development environment into a
 single Docker container: modern file-listing and search tools, git UIs, AI
 coding assistants, language SDKs, and a curated set of shell aliases. Run the
-same box anywhere — on your desktop, a VPS, or a Codespace — and SSH in
+same box anywhere - on your desktop, a VPS, or a Codespace - and SSH in
 from your laptop (any OS), tablet, or phone. Run the install command below
 and you're ready to code.
 
 Inspired by [Omarchy](https://omarchy.org).
 
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
-*For demonstration purposes only — actual setup may involve more staring at the screen.*
+*For demonstration purposes only - actual setup may involve more staring at the screen.*
 
 Prerequisites
 -------------
 
 - [Docker](https://docs.docker.com/get-docker/)
-- [Git](https://git-scm.com/) — on Windows, install [Git for Windows](https://gitforwindows.org/)
+- [Git](https://git-scm.com/) - on Windows, install [Git for Windows](https://gitforwindows.org/)
   (provides `bash` and `winpty` needed by the install script)
 
 Install
@@ -99,7 +99,7 @@ Installed during first-run setup. Nano is always available as the default editor
 | [micro](https://github.com/micro-editor/micro) | Go | Modern, intuitive terminal editor |
 | [edit](https://github.com/microsoft/edit) | Rust | Terminal text editor (Microsoft) |
 | [fresh](https://github.com/sinelaw/fresh) | Rust | Modern terminal text editor |
-| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) — *coming soon* |
+| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
 
 ### Aliases
