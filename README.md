@@ -20,6 +20,11 @@ Install
 
     curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash
 
+By default this installs the latest tagged release. To use the latest commit on
+main instead:
+
+    SQUAREBOX_EDGE=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh)"
+
 This clones the repo, builds the Docker image, and drops you into the container.
 On first login, a setup script runs automatically to configure git, GitHub CLI,
 your choice of AI coding assistant, and language SDKs.
