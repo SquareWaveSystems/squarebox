@@ -130,6 +130,13 @@ if [ -z "$(git config --global user.email 2>/dev/null)" ]; then
 	fi
 fi
 
+# Restore GitHub CLI config from persistent storage if available
+GH_PERSIST="/workspace/.squarebox/gh"
+if [ -d "$GH_PERSIST" ] && [ ! -d ~/.config/gh ]; then
+	mkdir -p ~/.config
+	cp -r "$GH_PERSIST" ~/.config/gh
+fi
+
 # GitHub CLI
 if ! gh auth status &>/dev/null; then
 	if $INTERACTIVE; then
@@ -137,8 +144,12 @@ if ! gh auth status &>/dev/null; then
 		echo "Logging into GitHub..."
 		# BROWSER=echo makes gh print the auth URL instead of trying to open a browser
 		BROWSER=echo gh auth login
-		if ! gh auth status &>/dev/null; then
-			echo "GitHub CLI auth was not completed"
+		# Persist gh config for future rebuilds (only if auth succeeded)
+		if gh auth status &>/dev/null; then
+			mkdir -p "$GH_PERSIST"
+			cp -r ~/.config/gh/* "$GH_PERSIST"/
+		else
+			echo "GitHub CLI auth was not completed — skipping config persistence"
 		fi
 	else
 		echo "Skipping GitHub CLI auth (non-interactive)"

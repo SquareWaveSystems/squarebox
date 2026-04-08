@@ -173,8 +173,8 @@ installed packages, and custom config files inside the container are lost.
 | Code in ~/squarebox/workspace (host volume) | Shell history (~/.bash_history) |
 | Starship and lazygit config (host volume) | Manually installed apt packages |
 | AI tool / editor / SDK selections | Custom dotfiles in /home/dev/ |
-| SSH keys (on host, forwarded via agent) | GitHub CLI auth (re-login required) |
-| | Caches and temp files |
+| GitHub CLI auth | Caches and temp files |
+| SSH keys (on host, forwarded via agent) | |
 
 To preserve extra files across rebuilds, store them in `/workspace/.squarebox/`.
 

@@ -82,10 +82,6 @@ detected, `~/.ssh` is mounted read-only as a fallback.
 capabilities like `NET_RAW`, `SYS_CHROOT`, `MKNOD`, and `SETFCAP` are not
 available.
 
-**Credentials:** GitHub CLI tokens are stored inside the container only and
-are not persisted to the workspace volume. They must be re-created after a
-container rebuild.
-
 The read-write host mounts are limited to `~/squarebox/workspace` and
 `~/.config/git`.
 

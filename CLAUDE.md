@@ -17,7 +17,7 @@ docker run -it --name squarebox \
   --cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE \
   --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --cap-add=KILL \
   -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock \
-  -v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock:ro" \
+  -v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock" \
   -v ~/.ssh/config:/home/dev/.ssh/config:ro \
   -v ~/.ssh/known_hosts:/home/dev/.ssh/known_hosts:ro \
   -v ~/squarebox/workspace:/workspace \
@@ -38,7 +38,7 @@ The `install.sh` script automates initial setup (clone, build, create container,
 `setup.sh` runs automatically on first container launch and prompts for:
 
 1. **Git identity** — name and email (skipped if already configured)
-2. **GitHub CLI auth** — stored inside the container only (not persisted across rebuilds)
+2. **GitHub CLI auth** — persisted to `/workspace/.squarebox/gh` across rebuilds
 3. **AI coding assistant** — Claude Code, GitHub Copilot CLI, Google Gemini CLI, OpenAI Codex CLI, OpenCode (any combination)
 4. **Text editors** — micro, edit (Microsoft), fresh, helix, nvim (nano is always available)
 5. **SDKs** — Node.js (via nvm), Python (via uv), Go, .NET
