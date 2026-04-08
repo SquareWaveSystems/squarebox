@@ -7,13 +7,13 @@ editors, and sensible defaults, all in a reproducible Docker container you can
 spin up on any machine.
 
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
-*For demonstration purposes only — actual setup may involve more staring at the screen.*
+*Actual setup may involve more staring at the screen.*
 
 Prerequisites
 -------------
 
 - [Docker](https://docs.docker.com/get-docker/)
-- [Git](https://git-scm.com/) — on Windows, install [Git for Windows](https://gitforwindows.org/)
+- [Git](https://git-scm.com/) - on Windows, install [Git for Windows](https://gitforwindows.org/)
   (provides `bash` and `winpty` needed by the install script)
 
 Install
