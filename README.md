@@ -206,7 +206,7 @@ installed packages, and custom config files inside the container are lost.
 | Starship and lazygit config (host volume) | Manually installed apt packages |
 | AI tool / editor / SDK selections | Custom dotfiles in /home/dev/ |
 | GitHub CLI auth | Caches and temp files |
-| SSH keys (read-only mount from host) | |
+| SSH keys (on host, forwarded via agent) | |
 
 To preserve extra files across rebuilds, store them in `/workspace/.squarebox/`.
 

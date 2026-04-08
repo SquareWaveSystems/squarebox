@@ -12,10 +12,15 @@ squarebox is a containerized development environment (Docker) combining modern C
 # Build the Docker image
 docker build -t squarebox .
 
-# Create and run a new container
+# Create and run a new container (SSH agent forwarding, capability-restricted)
 docker run -it --name squarebox \
+  --cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE \
+  --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --cap-add=KILL \
+  -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock \
+  -v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock" \
+  -v ~/.ssh/config:/home/dev/.ssh/config:ro \
+  -v ~/.ssh/known_hosts:/home/dev/.ssh/known_hosts:ro \
   -v ~/squarebox/workspace:/workspace \
-  -v ~/.ssh:/home/dev/.ssh:ro \
   -v ~/.config/git:/home/dev/.config/git \
   -v ~/squarebox/.config/starship.toml:/home/dev/.config/starship.toml \
   -v ~/squarebox/.config/lazygit:/home/dev/.config/lazygit \

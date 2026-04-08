@@ -13,16 +13,18 @@ install script performs these actions on your **host** system:
    `~/.config/git/config` so the container can see it — no other git settings
    (credential helpers, tokens, signing keys) are propagated
 5. Creates a Docker container named `squarebox` with volume mounts for your
-   workspace (`~/squarebox/workspace`), SSH keys (`~/.ssh`, read-only),
-   git config (`~/.config/git`, read-write), and starship/lazygit config
-   (`~/squarebox/.config`)
+   workspace (`~/squarebox/workspace`), git config (`~/.config/git`,
+   read-write), and starship/lazygit config (`~/squarebox/.config`). SSH
+   access uses agent forwarding when available (private keys never enter the
+   container); falls back to mounting `~/.ssh` read-only if no agent is
+   detected. Linux capabilities are dropped to a minimal set.
 6. Appends shell aliases (`sqrbx`, `squarebox`, `sqrbx-rebuild`,
    `squarebox-rebuild`) to your `~/.bashrc` or `~/.zshrc`
 7. Starts the container interactively (or prints a start command if no TTY is
    attached, e.g. when run via `curl | bash`)
 
 It does **not** use `sudo`, install system packages, or modify anything outside
-your home directory.
+your home directory (the install script runs entirely as your user).
 
 ## Verify before running
 
@@ -65,12 +67,23 @@ at each layer:
 ## Container isolation
 
 The container cannot access your host filesystem beyond the explicit volume
-mounts listed above. The `dev` user has passwordless `sudo` inside the
-container (for installing packages), but this grants root only within the
-container — not on the host.
+mounts listed above.
+
+**Sudo:** The `dev` user has passwordless `sudo` scoped to package management
+commands only (`apt-get`, `dpkg`, `chown`, `install`). General-purpose root
+access (arbitrary commands, shell access) is not available.
+
+**SSH:** When an SSH agent is running on the host, only the agent socket is
+forwarded into the container — private keys never enter it. If no agent is
+detected, `~/.ssh` is mounted read-only as a fallback.
+
+**Capabilities:** Linux capabilities are dropped to a minimal set
+(`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`, `KILL`). Dangerous
+capabilities like `NET_RAW`, `SYS_CHROOT`, `MKNOD`, and `SETFCAP` are not
+available.
 
 The read-write host mounts are limited to `~/squarebox/workspace` and
-`~/.config/git`. SSH keys (`~/.ssh`) are mounted read-only.
+`~/.config/git`.
 
 ## Binary integrity
 

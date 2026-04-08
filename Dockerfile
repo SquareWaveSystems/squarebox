@@ -104,8 +104,8 @@ RUN rm -f /tmp/checksums.txt /tmp/tools.yaml /tmp/tool-lib.sh /tmp/sb-init.sh
 
 RUN userdel -r ubuntu 2>/dev/null || true \
 	&& useradd -m -s /bin/bash -u 1000 dev \
-	&& echo 'dev ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/dev \
-	&& mkdir -p /home/dev/.claude /home/dev/.config/lazygit \
+	&& echo 'dev ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/dpkg, /usr/bin/chown, /usr/bin/install' > /etc/sudoers.d/dev \
+	&& mkdir -p /home/dev/.claude /home/dev/.config/lazygit /home/dev/.ssh \
 	&& chown -R dev:dev /home/dev
 
 # 5. Config Files

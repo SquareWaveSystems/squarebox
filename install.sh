@@ -171,16 +171,32 @@ if [ ! -f "${INSTALL_DIR}/.config/lazygit/config.yml" ]; then
 fi
 
 echo "Creating container..."
+DOCKER_OPTS=()
 DOCKER_VOLUMES=(
 	-v "${INSTALL_DIR}/workspace:/workspace"
-	-v "${USER_HOME}/.ssh:/home/dev/.ssh:ro"
 	-v "${USER_HOME}/.config/git:/home/dev/.config/git"
 	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml"
 	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit"
 	-v /etc/localtime:/etc/localtime:ro
 )
 
+# SSH: prefer agent forwarding (private keys never enter the container).
+# Falls back to mounting ~/.ssh read-only if no agent is detected.
+if [ -n "${SSH_AUTH_SOCK:-}" ] && [ -S "$SSH_AUTH_SOCK" ]; then
+	DOCKER_VOLUMES+=(-v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock")
+	DOCKER_OPTS+=(-e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
+	[ -f "${USER_HOME}/.ssh/config" ] && DOCKER_VOLUMES+=(-v "${USER_HOME}/.ssh/config:/home/dev/.ssh/config:ro")
+	[ -f "${USER_HOME}/.ssh/known_hosts" ] && DOCKER_VOLUMES+=(-v "${USER_HOME}/.ssh/known_hosts:/home/dev/.ssh/known_hosts:ro")
+elif [ -d "${USER_HOME}/.ssh" ]; then
+	echo "Note: SSH agent not detected — mounting ~/.ssh read-only"
+	DOCKER_VOLUMES+=(-v "${USER_HOME}/.ssh:/home/dev/.ssh:ro")
+fi
+
+# Drop all Linux capabilities except those needed for scoped sudo
+DOCKER_OPTS+=(--cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --cap-add=KILL)
+
 docker create -it --name "$CONTAINER_NAME" \
+	"${DOCKER_OPTS[@]}" \
 	"${DOCKER_VOLUMES[@]}" \
 	"$IMAGE_NAME" > /dev/null
 
