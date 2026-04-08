@@ -78,7 +78,8 @@ What's included
 | [lazygit](https://github.com/jesseduffield/lazygit) | Go | Git terminal UI |
 | [yazi](https://github.com/sxyazi/yazi) | Rust | Terminal file manager |
 
-### Aliases
+Aliases
+-------
 
 | Alias | Command | Description |
 |-------|---------|-------------|
