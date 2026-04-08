@@ -2,7 +2,29 @@
 set -euo pipefail
 
 REPO="https://github.com/SquareWaveSystems/squarebox.git"
-INSTALL_DIR="${HOME}/squarebox"
+
+# On Windows/mintty (Git Bash), docker needs winpty for interactive TTY
+# passthrough. mintty uses named pipes instead of the Windows Console API,
+# which breaks interactive docker commands. winpty bridges the gap.
+# PowerShell and CMD work natively — this only activates in MSYS2/mintty.
+docker_interactive() {
+    if [[ -n "${MSYSTEM:-}" || "${TERM_PROGRAM:-}" == "mintty" ]] \
+        && command -v winpty &>/dev/null; then
+        winpty docker "$@"
+    else
+        docker "$@"
+    fi
+}
+
+# On MSYS2/Git Bash, HOME points to the MSYS home (/home/user) which maps to
+# an obscure Windows path (e.g. C:\Program Files\Git\home\user). Use USERPROFILE
+# instead so the install lands at a normal location (C:\Users\user\squarebox).
+if [ -n "${USERPROFILE:-}" ]; then
+	USER_HOME="$(cygpath -u "$USERPROFILE" 2>/dev/null || echo "$USERPROFILE")"
+else
+	USER_HOME="${HOME}"
+fi
+INSTALL_DIR="${USER_HOME}/squarebox"
 IMAGE_NAME="squarebox"
 CONTAINER_NAME="squarebox"
 
@@ -42,40 +64,79 @@ case "${SHELL:-}" in
 	*)     SHELL_RC="${HOME}/.bashrc" ;;
 esac
 
+# Determine docker start command (winpty needed on mintty/MSYS2)
+if [[ -n "${MSYSTEM:-}" || "${TERM_PROGRAM:-}" == "mintty" ]] \
+    && command -v winpty &>/dev/null; then
+	DOCKER_START="winpty docker start -ai squarebox"
+else
+	DOCKER_START="docker start -ai squarebox"
+fi
+
 ALIASES_ADDED=false
 
-if ! grep -q 'alias sqrbx=' "$SHELL_RC" 2>/dev/null; then
-	echo "alias sqrbx='docker start -ai squarebox'" >> "$SHELL_RC"
-	ALIASES_ADDED=true
-fi
-
-if ! grep -q 'alias squarebox=' "$SHELL_RC" 2>/dev/null; then
-	echo "alias squarebox='docker start -ai squarebox'" >> "$SHELL_RC"
-	ALIASES_ADDED=true
-fi
-
-if ! grep -q 'alias sqrbx-rebuild=' "$SHELL_RC" 2>/dev/null; then
-	echo "alias sqrbx-rebuild='~/squarebox/install.sh'" >> "$SHELL_RC"
-	ALIASES_ADDED=true
-fi
-
-if ! grep -q 'alias squarebox-rebuild=' "$SHELL_RC" 2>/dev/null; then
-	echo "alias squarebox-rebuild='~/squarebox/install.sh'" >> "$SHELL_RC"
-	ALIASES_ADDED=true
-fi
+for entry in \
+	"sqrbx=${DOCKER_START}" \
+	"squarebox=${DOCKER_START}" \
+	"sqrbx-rebuild=~/squarebox/install.sh" \
+	"squarebox-rebuild=~/squarebox/install.sh"; do
+	name="${entry%%=*}"
+	value="${entry#*=}"
+	if ! grep -q "alias ${name}=" "$SHELL_RC" 2>/dev/null; then
+		echo "alias ${name}='${value}'" >> "$SHELL_RC"
+		ALIASES_ADDED=true
+	fi
+done
 
 if [ "$ALIASES_ADDED" = true ]; then
 	echo "Added squarebox aliases to $SHELL_RC — restart your shell or run: source $SHELL_RC"
 fi
 
-# Prepare host directories
-mkdir -p ~/.config/git "${INSTALL_DIR}/workspace" "${INSTALL_DIR}/.config/lazygit"
+# PowerShell profile (Windows) — uses functions since PS aliases can't take arguments.
+# Query pwsh for the actual $PROFILE path since Documents may be redirected (e.g. OneDrive).
+if command -v pwsh &>/dev/null; then
+	_ps_profile="$(pwsh -NoProfile -Command '$PROFILE' 2>/dev/null || true)"
+	if [ -n "$_ps_profile" ]; then
+		_ps_profile="$(cygpath -u "$_ps_profile" 2>/dev/null || echo "$_ps_profile")"
+		mkdir -p "$(dirname "$_ps_profile")"
+		if ! grep -q 'function sqrbx ' "$_ps_profile" 2>/dev/null; then
+			cat >> "$_ps_profile" <<-'PSEOF'
 
-# Migrate from old layout if needed
-if [ -d "${HOME}/squarebox-workspace" ] && [ ! -d "${INSTALL_DIR}/workspace" ]; then
-	echo "Migrating ~/squarebox-workspace to ~/squarebox/workspace..."
-	mv "${HOME}/squarebox-workspace" "${INSTALL_DIR}/workspace"
+			# squarebox aliases
+			function sqrbx { docker start -ai squarebox }
+			function squarebox { docker start -ai squarebox }
+			function sqrbx-rebuild { & "$HOME/squarebox/install.sh" }
+			function squarebox-rebuild { & "$HOME/squarebox/install.sh" }
+			PSEOF
+			echo "Added squarebox functions to PowerShell profile — restart PowerShell to use them."
+		fi
+	fi
 fi
+
+# Prepare host directories
+mkdir -p "${USER_HOME}/.config/git" "${INSTALL_DIR}/workspace" "${INSTALL_DIR}/.config/lazygit"
+
+# Propagate host git identity into the container's config directory.
+# This avoids fragile file mounts on Windows/MSYS2 and prevents leaking
+# credential helpers or tokens from the host's full git config.
+#
+# On MSYS2/Git Bash, HOME may point to the MSYS home (/home/user) rather than
+# the Windows profile (C:/Users/user), so git config --global misses the real
+# gitconfig. Fall back to reading from the Windows profile path via USERPROFILE.
+_git_cfg="${USER_HOME}/.config/git/config"
+
+_host_name="$(git config --global user.name 2>/dev/null || true)"
+_host_email="$(git config --global user.email 2>/dev/null || true)"
+
+if [ -z "$_host_name" ] && [ -n "${USERPROFILE:-}" ]; then
+	_win_gitcfg="$(cygpath -u "$USERPROFILE" 2>/dev/null || echo "$USERPROFILE")/.gitconfig"
+	if [ -f "$_win_gitcfg" ]; then
+		_host_name="$(git config --file "$_win_gitcfg" user.name 2>/dev/null || true)"
+		_host_email="$(git config --file "$_win_gitcfg" user.email 2>/dev/null || true)"
+	fi
+fi
+
+[ -n "$_host_name" ] && git config --file "$_git_cfg" user.name "$_host_name"
+[ -n "$_host_email" ] && git config --file "$_git_cfg" user.email "$_host_email"
 
 # Seed default configs (preserves existing customizations)
 if [ ! -f "${INSTALL_DIR}/.config/starship.toml" ]; then
@@ -86,16 +147,21 @@ if [ ! -f "${INSTALL_DIR}/.config/lazygit/config.yml" ]; then
 fi
 
 echo "Creating container..."
+DOCKER_VOLUMES=(
+	-v "${INSTALL_DIR}/workspace:/workspace"
+	-v "${USER_HOME}/.ssh:/home/dev/.ssh:ro"
+	-v "${USER_HOME}/.config/git:/home/dev/.config/git"
+	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml"
+	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit"
+	-v /etc/localtime:/etc/localtime:ro
+)
+
 docker create -it --name "$CONTAINER_NAME" \
-	-v "${INSTALL_DIR}/workspace:/workspace" \
-	-v ~/.ssh:/home/dev/.ssh:ro \
-	-v ~/.config/git:/home/dev/.config/git \
-	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml" \
-	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit" \
+	"${DOCKER_VOLUMES[@]}" \
 	"$IMAGE_NAME" > /dev/null
 
-if [ -t 0 ] || [ -t 1 ]; then
-	docker start -ai "$CONTAINER_NAME" </dev/tty
+if [ -t 0 ]; then
+	docker_interactive start -ai "$CONTAINER_NAME"
 else
 	echo "Install complete. Run 'squarebox' (or 'sqrbx') to start (you may need to restart your shell first)."
 fi

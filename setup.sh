@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cleanup() {
-	rm -f /tmp/opencode.tar.gz /tmp/micro.tar.gz /tmp/micro /tmp/edit.tar.zst \
-		/tmp/edit.tar /tmp/fresh.tar.gz /tmp/helix.tar.xz /tmp/nvim.tar.gz \
-		/tmp/nvm-install.sh /tmp/go.tar.gz /tmp/yazi.zip
-	rm -rf /tmp/micro-* /tmp/fresh* /tmp/helix-* /tmp/nvim-linux-* /tmp/yazi-* /tmp/zellij*
-}
-trap cleanup EXIT
+SB_TMPDIR=$(mktemp -d)
+export SB_TMPDIR
+trap 'rm -rf "$SB_TMPDIR"' EXIT
 
 SETUP_CHECKSUMS="${HOME}/setup-checksums.txt"
 
@@ -63,6 +59,33 @@ if $INTERACTIVE && command -v gum &>/dev/null; then
 	HAS_GUM=true
 fi
 
+section_header() {
+	if $HAS_GUM; then
+		gum style --foreground 212 --bold "$1"
+	else
+		echo "--- $1 ---"
+	fi
+}
+
+run_with_spinner() {
+	local title="$1"; shift
+	if $HAS_GUM; then
+		# Run command in background — gum spin can't invoke shell functions directly
+		"$@" &>/dev/null &
+		local cmd_pid=$!
+		gum spin --spinner dot --title "$title" -- bash -c "tail --pid=$cmd_pid -f /dev/null"
+		local rc=0
+		wait "$cmd_pid" || rc=$?
+		if [ $rc -eq 0 ]; then
+			gum style --foreground 2 "✓ ${title%...}"
+		fi
+		return $rc
+	else
+		echo "$title"
+		"$@"
+	fi
+}
+
 if $HAS_GUM; then
 	gum style --border double --padding "0 2" --border-foreground 212 "squarebox setup"
 else
@@ -74,11 +97,15 @@ echo
 if [ -z "$(git config --global user.name 2>/dev/null)" ]; then
 	if $INTERACTIVE; then
 		while true; do
-			read -rp "Git name: " name
+			if $HAS_GUM; then
+				name=$(gum input --placeholder "Your Name" --header "Git name:" --width 40) || true
+			else
+				read -rp "Git name: " name
+			fi
 			[ -n "$name" ] && break
 			echo "Name cannot be empty."
 		done
-		git config --global user.name "$name"
+		git config --file ~/.config/git/config user.name "$name"
 	else
 		echo "Skipping git identity setup (non-interactive)"
 	fi
@@ -87,11 +114,15 @@ fi
 if [ -z "$(git config --global user.email 2>/dev/null)" ]; then
 	if $INTERACTIVE; then
 		while true; do
-			read -rp "Git email: " email
+			if $HAS_GUM; then
+				email=$(gum input --placeholder "you@example.com" --header "Git email:" --width 40) || true
+			else
+				read -rp "Git email: " email
+			fi
 			[ -n "$email" ] && break
 			echo "Email cannot be empty."
 		done
-		git config --global user.email "$email"
+		git config --file ~/.config/git/config user.email "$email"
 	fi
 fi
 
@@ -130,14 +161,11 @@ mkdir -p /workspace/.squarebox ~/.local/bin
 ai_prev=""
 if [ -f "$AI_CONFIG" ]; then
 	ai_prev=$(cat "$AI_CONFIG")
-	# Migrate legacy single-choice values
-	case "$ai_prev" in
-		both) ai_prev="claude,opencode" ;;
-	esac
 fi
 
 if $INTERACTIVE; then
 	echo
+	section_header "AI Coding Assistants"
 	if $HAS_GUM; then
 		# Build --selected from previously saved AI tools
 		gum_selected=""
@@ -211,11 +239,10 @@ MICRO_VERSION="2.0.15"
 EDIT_VERSION="1.2.1"
 EDIT_ASSET_VERSION="1.2.0"
 FRESH_VERSION="0.2.21"
-HELIX_VERSION="25.07.1"
 NVIM_VERSION="0.12.0"
 ZELLIJ_VERSION="0.44.0"
 
-for _var in OPENCODE_VERSION MICRO_VERSION EDIT_VERSION EDIT_ASSET_VERSION FRESH_VERSION HELIX_VERSION NVIM_VERSION ZELLIJ_VERSION; do
+for _var in OPENCODE_VERSION MICRO_VERSION EDIT_VERSION EDIT_ASSET_VERSION FRESH_VERSION NVIM_VERSION ZELLIJ_VERSION; do
 	if [ -z "${!_var:-}" ]; then
 		echo "Error: ${_var} is empty or unset" >&2
 		exit 1
@@ -228,35 +255,40 @@ NVM_VERSION="0.40.3"
 # SDK path setup file (create if missing, preserve on retry)
 touch ~/.squarebox-sdk-paths
 
-install_node() {
-	if command -v node &>/dev/null; then echo "Node.js already installed, skipping."; return 0; fi
+_install_node_inner() {
 	rm -rf "$HOME/.nvm"
-	echo "Installing Node.js (via nvm v${NVM_VERSION})..."
-	curl -fsSo /tmp/nvm-install.sh "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
-	verify_checksum /tmp/nvm-install.sh "nvm-install-v${NVM_VERSION}.sh"
-	bash /tmp/nvm-install.sh
-	rm /tmp/nvm-install.sh
+	curl -fsSo "${SB_TMPDIR}/nvm-install.sh" "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
+	verify_checksum "${SB_TMPDIR}/nvm-install.sh" "nvm-install-v${NVM_VERSION}.sh"
+	bash "${SB_TMPDIR}/nvm-install.sh" >/dev/null 2>&1
 	export NVM_DIR="$HOME/.nvm"
 	# shellcheck source=/dev/null
 	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 	# Node.js binary verification is handled by nvm
-	nvm install --lts
+	nvm install --lts >/dev/null 2>&1
 	if ! grep -q 'NVM_DIR' ~/.squarebox-sdk-paths 2>/dev/null; then
 		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 PATHS
 	fi
+}
+
+install_node() {
+	if command -v node &>/dev/null; then echo "Node.js already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Node.js (via nvm v${NVM_VERSION})..." _install_node_inner
+	# Source nvm in current shell (spinner runs in subshell)
+	export NVM_DIR="$HOME/.nvm"
+	# shellcheck source=/dev/null
+	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 	if ! command -v node &>/dev/null; then
 		echo "Error: Node.js binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
 # Ensure Node.js is available for npm-based AI tools
 ensure_node_for_npm() {
 	if command -v node &>/dev/null; then return 0; fi
-	echo "Installing Node.js (required for npm-based AI tools)..."
 	install_node
 	# Ensure node/npm are available in this session
 	export NVM_DIR="$HOME/.nvm"
@@ -278,43 +310,41 @@ ensure_node_for_npm() {
 install_copilot() {
 	if command -v github-copilot-cli &>/dev/null; then echo "GitHub Copilot CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	echo "Installing GitHub Copilot CLI..."
-	npm install -g @githubnext/github-copilot-cli
+	run_with_spinner "Installing GitHub Copilot CLI..." npm install -g --silent @githubnext/github-copilot-cli
 }
 
 install_gemini() {
 	if command -v gemini &>/dev/null; then echo "Google Gemini CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	echo "Installing Google Gemini CLI..."
-	npm install -g @google/gemini-cli
+	run_with_spinner "Installing Google Gemini CLI..." npm install -g --silent @google/gemini-cli
 }
 
 install_codex() {
 	if command -v codex &>/dev/null; then echo "OpenAI Codex CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm
-	echo "Installing OpenAI Codex CLI..."
-	npm install -g @openai/codex
+	run_with_spinner "Installing OpenAI Codex CLI..." npm install -g --silent @openai/codex
 }
 
 for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 	case "$ai_tool" in
 		claude)
-			echo "Installing Claude Code..."
 			# Trust boundary: the Claude Code install script manages its own binary
 			# fetching and verification. We rely on HTTPS for script integrity.
-			curl -fsSL https://claude.ai/install.sh | bash
+			run_with_spinner "Installing Claude Code..." \
+				bash -c 'curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1' \
+				|| echo "Warning: Claude Code installation failed."
 			;;
 		opencode)
 			if command -v opencode &>/dev/null; then
 				echo "OpenCode already installed, skipping."
 			else
-				echo "Installing OpenCode v${OPENCODE_VERSION}..."
-				sb_install opencode "$OPENCODE_VERSION"
+				run_with_spinner "Installing OpenCode v${OPENCODE_VERSION}..." sb_install opencode "$OPENCODE_VERSION" \
+					|| echo "Warning: OpenCode installation failed."
 			fi
 			;;
-		copilot)  install_copilot ;;
-		gemini)   install_gemini ;;
-		codex)    install_codex ;;
+		copilot)  install_copilot || echo "Warning: GitHub Copilot CLI installation failed." ;;
+		gemini)   install_gemini || echo "Warning: Google Gemini CLI installation failed." ;;
+		codex)    install_codex || echo "Warning: OpenAI Codex CLI installation failed." ;;
 	esac
 done
 
@@ -343,6 +373,7 @@ fi
 
 if $INTERACTIVE; then
 	echo
+	section_header "Text Editors"
 	if $HAS_GUM; then
 		# Build --selected from previously saved editors
 		gum_selected=""
@@ -351,7 +382,6 @@ if $INTERACTIVE; then
 				micro) gum_selected="${gum_selected:+$gum_selected,}micro" ;;
 				edit)  gum_selected="${gum_selected:+$gum_selected,}edit" ;;
 				fresh) gum_selected="${gum_selected:+$gum_selected,}fresh" ;;
-				helix) gum_selected="${gum_selected:+$gum_selected,}helix" ;;
 				nvim)  gum_selected="${gum_selected:+$gum_selected,}nvim" ;;
 			esac
 		done
@@ -359,7 +389,7 @@ if $INTERACTIVE; then
 		gum_args=(--no-limit --header "Select text editors to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		selected=$(gum choose "${gum_args[@]}" \
-			"micro" "edit" "fresh" "helix" "nvim") || true
+			"micro" "edit" "fresh" "nvim") || true
 		editor_list=""
 		while IFS= read -r line; do
 			[ -z "$line" ] && continue
@@ -368,13 +398,12 @@ if $INTERACTIVE; then
 	else
 		echo "Select text editors to install (comma-separated, or 'all', or press Enter to skip):"
 		echo "  Nano is always available as the default editor."
-		for ed_item in "1:micro:micro" "2:edit:edit" "3:fresh:fresh" "4:helix:helix" "5:nvim:nvim"; do
+		for ed_item in "1:micro:micro" "2:edit:edit" "3:fresh:fresh" "4:nvim:nvim"; do
 			num="${ed_item%%:*}"; rest="${ed_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
 			case "$key" in
 				micro) desc="modern, intuitive terminal editor" ;;
 				edit)  desc="terminal text editor (Microsoft)" ;;
 				fresh) desc="modern terminal text editor" ;;
-				helix) desc="modal editor (Kakoune-inspired)" ;;
 				nvim)  desc="Neovim" ;;
 			esac
 			if [[ ",$editor_prev," == *",${key},"* ]]; then
@@ -383,21 +412,20 @@ if $INTERACTIVE; then
 				echo "  ${num}) ${label} — ${desc}"
 			fi
 		done
-		read -rp "Selection [1,2,3,4,5/all/skip]: " editor_selection
+		read -rp "Selection [1,2,3,4/all/skip]: " editor_selection
 		if [ -z "$editor_selection" ] && [ -n "$editor_prev" ]; then
 			editor_list="$editor_prev"
 		else
 			editor_list=""
 			if [ "$editor_selection" = "all" ]; then
-				editor_list="micro,edit,fresh,helix,nvim"
+				editor_list="micro,edit,fresh,nvim"
 			elif [ -n "$editor_selection" ]; then
 				for item in $(echo "$editor_selection" | tr ',' ' '); do
 					case "$item" in
 						1) editor_list="${editor_list:+$editor_list,}micro" ;;
 						2) editor_list="${editor_list:+$editor_list,}edit" ;;
 						3) editor_list="${editor_list:+$editor_list,}fresh" ;;
-						4) editor_list="${editor_list:+$editor_list,}helix" ;;
-						5) editor_list="${editor_list:+$editor_list,}nvim" ;;
+						4) editor_list="${editor_list:+$editor_list,}nvim" ;;
 					esac
 				done
 			fi
@@ -415,52 +443,58 @@ fi
 
 install_micro() {
 	if command -v micro &>/dev/null; then echo "Micro already installed, skipping."; return 0; fi
-	echo "Installing Micro v${MICRO_VERSION}..."
-	sb_install micro "$MICRO_VERSION"
+	run_with_spinner "Installing Micro v${MICRO_VERSION}..." sb_install micro "$MICRO_VERSION"
 }
 
 install_edit() {
 	if command -v edit &>/dev/null; then echo "Edit already installed, skipping."; return 0; fi
-	echo "Installing Edit v${EDIT_VERSION}..."
-	SB_ASSET_VERSION="$EDIT_ASSET_VERSION" sb_install edit "$EDIT_VERSION"
+	SB_ASSET_VERSION="$EDIT_ASSET_VERSION" run_with_spinner "Installing Edit v${EDIT_VERSION}..." sb_install edit "$EDIT_VERSION"
 }
 
 install_fresh() {
 	if command -v fresh &>/dev/null; then echo "Fresh already installed, skipping."; return 0; fi
-	echo "Installing Fresh v${FRESH_VERSION}..."
-	sb_install fresh "$FRESH_VERSION"
-}
-
-install_helix() {
-	if command -v hx &>/dev/null; then echo "Helix already installed, skipping."; return 0; fi
-	echo "Installing Helix v${HELIX_VERSION}..."
-	if sudo -n true 2>/dev/null; then
-		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
-	elif ! command -v xz &>/dev/null; then
-		echo "Error: xz-utils required for Helix but sudo unavailable to install it. Skipping Helix." >&2
-		return 1
-	fi
-	sb_install helix "$HELIX_VERSION"
+	run_with_spinner "Installing Fresh v${FRESH_VERSION}..." sb_install fresh "$FRESH_VERSION"
 }
 
 install_nvim() {
 	if command -v nvim &>/dev/null; then echo "Neovim already installed, skipping."; return 0; fi
-	echo "Installing Neovim v${NVIM_VERSION}..."
-	sb_install nvim "$NVIM_VERSION"
+	run_with_spinner "Installing Neovim v${NVIM_VERSION}..." sb_install nvim "$NVIM_VERSION"
 }
 
-editor_cmd=""
+installed_editors=()
 for editor in $(echo "$editor_list" | tr ',' ' '); do
 	case "$editor" in
-		micro) install_micro; [ -z "$editor_cmd" ] && editor_cmd="micro" ;;
-		edit) install_edit; [ -z "$editor_cmd" ] && editor_cmd="edit" ;;
-		fresh) install_fresh; [ -z "$editor_cmd" ] && editor_cmd="fresh" ;;
-		helix) install_helix && { [ -z "$editor_cmd" ] && editor_cmd="hx"; true; } || echo "Warning: Helix installation failed, skipping." ;;
-		nvim) install_nvim; [ -z "$editor_cmd" ] && editor_cmd="nvim" ;;
+		micro) install_micro && installed_editors+=("micro") || echo "Warning: Micro installation failed." ;;
+		edit) install_edit && installed_editors+=("edit") || echo "Warning: Edit installation failed." ;;
+		fresh) install_fresh && installed_editors+=("fresh") || echo "Warning: Fresh installation failed." ;;
+		nvim) install_nvim && installed_editors+=("nvim") || echo "Warning: Neovim installation failed." ;;
 	esac
 done
 
-# Set EDITOR to the first selected editor
+# Prompt for default editor if multiple were installed
+editor_cmd=""
+if [ ${#installed_editors[@]} -gt 1 ] && $INTERACTIVE; then
+	echo
+	if $HAS_GUM; then
+		editor_cmd=$(gum choose --header "Select default editor (\$EDITOR):" \
+			"nano" "${installed_editors[@]}") || true
+	else
+		echo "Select default editor (\$EDITOR):"
+		echo "  0) nano"
+		for i in "${!installed_editors[@]}"; do
+			echo "  $((i+1))) ${installed_editors[$i]}"
+		done
+		read -rp "Selection [0-${#installed_editors[@]}]: " ed_sel
+		if [ -n "$ed_sel" ] && [ "$ed_sel" -ge 1 ] 2>/dev/null && [ "$ed_sel" -le ${#installed_editors[@]} ]; then
+			editor_cmd="${installed_editors[$((ed_sel-1))]}"
+		fi
+	fi
+	[ "$editor_cmd" = "nano" ] && editor_cmd=""
+elif [ ${#installed_editors[@]} -ge 1 ]; then
+	editor_cmd="${installed_editors[0]}"
+fi
+
+# Set EDITOR (nano is the default if nothing chosen)
 {
 	if [ -n "$editor_cmd" ]; then
 		echo "export EDITOR='$editor_cmd'"
@@ -477,6 +511,7 @@ fi
 
 if $INTERACTIVE; then
 	echo
+	section_header "Terminal Multiplexers"
 	if $HAS_GUM; then
 		# Build --selected from previously saved multiplexers
 		gum_selected=""
@@ -532,9 +567,7 @@ else
 	echo "$mux_list" > "$MUX_CONFIG"
 fi
 
-install_tmux() {
-	if command -v tmux &>/dev/null; then echo "Tmux already installed, skipping."; return 0; fi
-	echo "Installing tmux via apt..."
+_install_tmux_inner() {
 	sudo apt-get update -qq && sudo apt-get install -y -qq tmux >/dev/null 2>&1
 	# Install default config
 	if [ ! -f ~/.tmux.conf ]; then
@@ -549,16 +582,20 @@ install_tmux() {
 	fi
 }
 
+install_tmux() {
+	if command -v tmux &>/dev/null; then echo "Tmux already installed, skipping."; return 0; fi
+	run_with_spinner "Installing tmux..." _install_tmux_inner
+}
+
 install_zellij() {
 	if command -v zellij &>/dev/null; then echo "Zellij already installed, skipping."; return 0; fi
-	echo "Installing Zellij v${ZELLIJ_VERSION}..."
-	sb_install zellij "$ZELLIJ_VERSION"
+	run_with_spinner "Installing Zellij v${ZELLIJ_VERSION}..." sb_install zellij "$ZELLIJ_VERSION"
 }
 
 for mux in $(echo "$mux_list" | tr ',' ' '); do
 	case "$mux" in
-		tmux) install_tmux ;;
-		zellij) install_zellij ;;
+		tmux) install_tmux || echo "Warning: tmux installation failed." ;;
+		zellij) install_zellij || echo "Warning: Zellij installation failed." ;;
 	esac
 done
 
@@ -572,6 +609,7 @@ fi
 
 if $INTERACTIVE; then
 	echo
+	section_header "SDKs"
 	if $HAS_GUM; then
 		# Build --selected from previously saved SDKs
 		gum_selected=""
@@ -651,31 +689,32 @@ done
 
 # install_node is defined earlier (needed by npm-based AI tools)
 
-install_python() {
-	if command -v uv &>/dev/null; then echo "uv already installed, skipping."; return 0; fi
-	echo "Installing Python (via uv)..."
+_install_python_inner() {
 	# Trust boundary: the uv install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
-	curl -fsSL https://astral.sh/uv/install.sh | bash
+	curl -fsSL https://astral.sh/uv/install.sh | bash &>/dev/null
 	if ! grep -q '\.local/bin' ~/.squarebox-sdk-paths 2>/dev/null; then
 		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export PATH="$HOME/.local/bin:$PATH"
 PATHS
 	fi
+}
+
+install_python() {
+	if command -v uv &>/dev/null; then echo "uv already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Python (via uv)..." _install_python_inner
+	export PATH="$HOME/.local/bin:$PATH"
 	if ! command -v uv &>/dev/null; then
 		echo "Error: uv binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
-install_go() {
-	if [ -x "${HOME}/.local/go/bin/go" ]; then echo "Go already installed, skipping."; return 0; fi
+_install_go_inner() {
 	rm -rf "$HOME/.local/go"
-	echo "Installing Go ${GO_VERSION}..."
-	curl -fsSLo /tmp/go.tar.gz "https://go.dev/dl/${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
-	verify_checksum /tmp/go.tar.gz "${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
-	tar xzf /tmp/go.tar.gz -C ~/.local
-	rm /tmp/go.tar.gz
+	curl -fsSLo "${SB_TMPDIR}/go.tar.gz" "https://go.dev/dl/${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
+	verify_checksum "${SB_TMPDIR}/go.tar.gz" "${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
+	tar xzf "${SB_TMPDIR}/go.tar.gz" -C ~/.local
 	if ! grep -q 'GOROOT' ~/.squarebox-sdk-paths 2>/dev/null; then
 		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export GOROOT="$HOME/.local/go"
@@ -683,40 +722,52 @@ export GOPATH="$HOME/go"
 export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
 PATHS
 	fi
+}
+
+install_go() {
+	if [ -x "${HOME}/.local/go/bin/go" ]; then echo "Go already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Go ${GO_VERSION}..." _install_go_inner
 	if [ ! -x "${HOME}/.local/go/bin/go" ]; then
 		echo "Error: Go binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
-install_dotnet() {
-	if [ -x "${HOME}/.dotnet/dotnet" ]; then echo ".NET already installed, skipping."; return 0; fi
+_install_dotnet_inner() {
 	rm -rf "$HOME/.dotnet"
-	echo "Installing .NET..."
 	# Trust boundary: the .NET install script manages its own binary fetching
 	# and verification. We rely on HTTPS for script integrity.
-	curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS
+	curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS >/dev/null 2>&1
 	if ! grep -q 'DOTNET_ROOT' ~/.squarebox-sdk-paths 2>/dev/null; then
 		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export DOTNET_ROOT="$HOME/.dotnet"
 export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
 PATHS
 	fi
+}
+
+install_dotnet() {
+	if [ -x "${HOME}/.dotnet/dotnet" ]; then echo ".NET already installed, skipping."; return 0; fi
+	run_with_spinner "Installing .NET..." _install_dotnet_inner
 	if [ ! -x "${HOME}/.dotnet/dotnet" ]; then
 		echo "Error: .NET binary not found after installation" >&2
-		exit 1
+		return 1
 	fi
 }
 
 for sdk in $(echo "$sdk_list" | tr ',' ' '); do
 	case "$sdk" in
-		node) install_node ;;
-		python) install_python ;;
-		go) install_go ;;
-		dotnet) install_dotnet ;;
+		node) install_node || echo "Warning: Node.js installation failed." ;;
+		python) install_python || echo "Warning: Python (uv) installation failed." ;;
+		go) install_go || echo "Warning: Go installation failed." ;;
+		dotnet) install_dotnet || echo "Warning: .NET installation failed." ;;
 	esac
 done
 
 echo
 
-echo "🟧📦 You're in the box."
+if $HAS_GUM; then
+	gum style --border double --padding "0 2" --border-foreground 212 "🟧📦 You're in the box."
+else
+	echo "🟧📦 You're in the box."
+fi
