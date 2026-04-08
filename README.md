@@ -159,8 +159,6 @@ preserved.
     sqrbx-update lazygit      # update a single tool
     sqrbx-update --list       # list all tools and current versions
 
-Set `GITHUB_TOKEN` to avoid API rate limits.
-
 ### Full rebuild (from the host)
 
     sqrbx-rebuild

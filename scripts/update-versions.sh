@@ -4,8 +4,6 @@ set -euo pipefail
 # Fetch latest versions of all pinned tools, download artifacts for both
 # architectures, compute SHA256 checksums, and update checksums.txt,
 # setup-checksums.txt, Dockerfile, and setup.sh.
-#
-# Set GITHUB_TOKEN to avoid the 60 req/hr unauthenticated rate limit.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK=$(mktemp -d)
@@ -15,33 +13,24 @@ trap 'rm -rf "$WORK"' EXIT
 export SB_TOOLS_YAML="${REPO_ROOT}/scripts/lib/tools.yaml"
 source "${REPO_ROOT}/scripts/lib/tool-lib.sh"
 
-AUTH_HEADER=()
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-	AUTH_HEADER=(-H "Authorization: token ${GITHUB_TOKEN}")
-fi
-
 # Pre-flight: check remaining GitHub API rate limit
-_rate_info=$(curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/rate_limit" 2>/dev/null) || true
+_rate_info=$(curl -fsSL "https://api.github.com/rate_limit" 2>/dev/null) || true
 _rate_remaining=$(echo "$_rate_info" | jq -r '.rate.remaining' 2>/dev/null) || true
 _rate_limit=$(echo "$_rate_info" | jq -r '.rate.limit' 2>/dev/null) || true
 if [[ "${_rate_remaining:-0}" =~ ^[0-9]+$ ]] && [ "$_rate_remaining" -lt 20 ]; then
 	echo "Error: Only ${_rate_remaining}/${_rate_limit} GitHub API requests remaining." >&2
-	if [ -z "${GITHUB_TOKEN:-}" ]; then
-		echo "Set GITHUB_TOKEN to authenticate (5000 req/hr instead of 60)." >&2
-	fi
 	exit 1
 fi
 
 gh_latest_tag() {
 	local repo="$1"
 	local response http_code body
-	response=$(curl -fsSL -w '\n%{http_code}' "${AUTH_HEADER[@]}" \
+	response=$(curl -fsSL -w '\n%{http_code}' \
 		"https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) || true
 	http_code=$(echo "$response" | tail -1)
 	body=$(echo "$response" | sed '$d')
 	if [ "$http_code" = "403" ]; then
 		echo "Error: GitHub API rate limit exceeded (${repo})." >&2
-		echo "Set GITHUB_TOKEN to authenticate (5000 req/hr instead of 60)." >&2
 		exit 1
 	elif [ "$http_code" != "200" ]; then
 		echo "Error: GitHub API returned HTTP ${http_code} for ${repo}." >&2
@@ -87,12 +76,11 @@ NVM_TAG=$(gh_latest_tag nvm-sh/nvm)
 NVM_VERSION=$(strip_v "$NVM_TAG")
 
 # Edit special handling: asset version may differ from tag
-_edit_response=$(curl -fsSL -w '\n%{http_code}' "${AUTH_HEADER[@]}" \
+_edit_response=$(curl -fsSL -w '\n%{http_code}' \
 	"https://api.github.com/repos/microsoft/edit/releases/latest" 2>/dev/null) || true
 _edit_http=$(echo "$_edit_response" | tail -1)
 if [ "$_edit_http" = "403" ]; then
 	echo "Error: GitHub API rate limit exceeded (microsoft/edit assets)." >&2
-	echo "Set GITHUB_TOKEN to authenticate (5000 req/hr instead of 60)." >&2
 	exit 1
 elif [ "$_edit_http" != "200" ]; then
 	echo "Error: GitHub API returned HTTP ${_edit_http} for microsoft/edit assets." >&2

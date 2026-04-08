@@ -9,8 +9,6 @@ testing, and submitting changes.
 - [Git](https://git-scm.com/)
 - Bash shell
 
-Set `GITHUB_TOKEN` to avoid GitHub API rate limits when running version scripts.
-
 ## Build
 
 ```bash

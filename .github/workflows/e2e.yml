@@ -250,11 +250,8 @@ jobs:
         run: gunzip -c /tmp/squarebox-test.tar.gz | docker load
 
       - name: "Section 7: sqrbx-update"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           docker run --rm \
-            -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
             -v "$PWD/scripts:/workspace/scripts:ro" \
             squarebox:test bash -c 'scripts/e2e-test.sh update'
 

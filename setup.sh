@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cleanup() {
-	rm -f /tmp/opencode.tar.gz /tmp/micro.tar.gz /tmp/micro /tmp/edit.tar.zst \
-		/tmp/edit.tar /tmp/fresh.tar.gz /tmp/nvim.tar.gz \
-		/tmp/nvm-install.sh /tmp/go.tar.gz /tmp/yazi.zip
-	rm -rf /tmp/micro-* /tmp/fresh* /tmp/nvim-linux-* /tmp/yazi-* /tmp/zellij*
-}
-trap cleanup EXIT
+SB_TMPDIR=$(mktemp -d)
+export SB_TMPDIR
+trap 'rm -rf "$SB_TMPDIR"' EXIT
 
 SETUP_CHECKSUMS="${HOME}/setup-checksums.txt"
 
@@ -165,10 +161,6 @@ mkdir -p /workspace/.squarebox ~/.local/bin
 ai_prev=""
 if [ -f "$AI_CONFIG" ]; then
 	ai_prev=$(cat "$AI_CONFIG")
-	# Migrate legacy single-choice values
-	case "$ai_prev" in
-		both) ai_prev="claude,opencode" ;;
-	esac
 fi
 
 if $INTERACTIVE; then
@@ -265,10 +257,9 @@ touch ~/.squarebox-sdk-paths
 
 _install_node_inner() {
 	rm -rf "$HOME/.nvm"
-	curl -fsSo /tmp/nvm-install.sh "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
-	verify_checksum /tmp/nvm-install.sh "nvm-install-v${NVM_VERSION}.sh"
-	bash /tmp/nvm-install.sh >/dev/null 2>&1
-	rm /tmp/nvm-install.sh
+	curl -fsSo "${SB_TMPDIR}/nvm-install.sh" "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
+	verify_checksum "${SB_TMPDIR}/nvm-install.sh" "nvm-install-v${NVM_VERSION}.sh"
+	bash "${SB_TMPDIR}/nvm-install.sh" >/dev/null 2>&1
 	export NVM_DIR="$HOME/.nvm"
 	# shellcheck source=/dev/null
 	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -721,10 +712,9 @@ install_python() {
 
 _install_go_inner() {
 	rm -rf "$HOME/.local/go"
-	curl -fsSLo /tmp/go.tar.gz "https://go.dev/dl/${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
-	verify_checksum /tmp/go.tar.gz "${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
-	tar xzf /tmp/go.tar.gz -C ~/.local
-	rm /tmp/go.tar.gz
+	curl -fsSLo "${SB_TMPDIR}/go.tar.gz" "https://go.dev/dl/${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
+	verify_checksum "${SB_TMPDIR}/go.tar.gz" "${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
+	tar xzf "${SB_TMPDIR}/go.tar.gz" -C ~/.local
 	if ! grep -q 'GOROOT' ~/.squarebox-sdk-paths 2>/dev/null; then
 		cat <<'PATHS' >> ~/.squarebox-sdk-paths
 export GOROOT="$HOME/.local/go"

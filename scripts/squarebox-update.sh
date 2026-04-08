@@ -26,11 +26,6 @@ source /usr/local/lib/squarebox/tool-lib.sh
 
 mkdir -p "$HOME/.local/bin"
 
-AUTH_HEADER=()
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-	AUTH_HEADER=(-H "Authorization: token ${GITHUB_TOKEN}")
-fi
-
 # ── Checksum verification ──────────────────────────────────────────────
 # Fetches checksums.txt and setup-checksums.txt from the repo's main branch.
 # Only versions that have been vetted (committed to the repo) can be installed.
@@ -88,14 +83,11 @@ trap cleanup_temp EXIT
 
 check_rate_limit() {
 	local info remaining limit
-	info=$(curl -fsSL "${AUTH_HEADER[@]}" "https://api.github.com/rate_limit" 2>/dev/null) || return 0
+	info=$(curl -fsSL "https://api.github.com/rate_limit" 2>/dev/null) || return 0
 	remaining=$(echo "$info" | jq -r '.rate.remaining' 2>/dev/null) || return 0
 	limit=$(echo "$info" | jq -r '.rate.limit' 2>/dev/null) || return 0
 	if [[ "${remaining:-0}" =~ ^[0-9]+$ ]] && [ "$remaining" -lt 20 ]; then
 		echo -e "${RED}Warning: Only ${remaining}/${limit} GitHub API requests remaining.${RESET}" >&2
-		if [ -z "${GITHUB_TOKEN:-}" ]; then
-			echo -e "${YELLOW}Set GITHUB_TOKEN to authenticate (5000 req/hr instead of 60).${RESET}" >&2
-		fi
 		echo >&2
 	fi
 }
@@ -103,12 +95,12 @@ check_rate_limit() {
 gh_latest_tag() {
 	local repo="$1"
 	local response http_code body
-	response=$(curl -fsSL -w '\n%{http_code}' "${AUTH_HEADER[@]}" \
+	response=$(curl -fsSL -w '\n%{http_code}' \
 		"https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) || true
 	http_code=$(echo "$response" | tail -1)
 	body=$(echo "$response" | sed '$d')
 	if [ "$http_code" = "403" ]; then
-		echo "Error: GitHub API rate limit exceeded (${repo}). Set GITHUB_TOKEN to authenticate." >&2
+		echo "Error: GitHub API rate limit exceeded (${repo})." >&2
 		return 1
 	elif [ "$http_code" != "200" ]; then
 		echo "Error: GitHub API returned HTTP ${http_code} for ${repo}." >&2
@@ -161,11 +153,11 @@ tool_latest() {
 
 edit_prepare_asset_version() {
 	local api_response api_code asset_name
-	api_response=$(curl -fsSL -w '\n%{http_code}' "${AUTH_HEADER[@]}" \
+	api_response=$(curl -fsSL -w '\n%{http_code}' \
 		"https://api.github.com/repos/microsoft/edit/releases/latest" 2>/dev/null) || true
 	api_code=$(echo "$api_response" | tail -1)
 	if [ "$api_code" = "403" ]; then
-		echo "  GitHub API rate limit exceeded. Set GITHUB_TOKEN to authenticate." >&2
+		echo "  GitHub API rate limit exceeded." >&2
 		return 1
 	elif [ "$api_code" != "200" ]; then
 		echo "  GitHub API returned HTTP ${api_code} for microsoft/edit." >&2
@@ -210,7 +202,6 @@ usage() {
 	${BOLD}Tools:${RESET}
 	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, gum, micro, fresh, edit, helix, nvim, opencode, zellij
 
-	${DIM}Set GITHUB_TOKEN to avoid API rate limits.${RESET}
 	EOF
 }
 
