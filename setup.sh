@@ -109,7 +109,7 @@ if [ -z "$(git config --global user.name 2>/dev/null)" ]; then
 			[ -n "$name" ] && break
 			echo "Name cannot be empty."
 		done
-		git config --global user.name "$name"
+		git config --file ~/.config/git/config user.name "$name"
 	else
 		echo "Skipping git identity setup (non-interactive)"
 	fi
@@ -126,7 +126,7 @@ if [ -z "$(git config --global user.email 2>/dev/null)" ]; then
 			[ -n "$email" ] && break
 			echo "Email cannot be empty."
 		done
-		git config --global user.email "$email"
+		git config --file ~/.config/git/config user.email "$email"
 	fi
 fi
 

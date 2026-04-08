@@ -11,7 +11,8 @@ install script performs these actions on your **host** system:
 3. Builds a Docker image tagged `squarebox` from the Dockerfile
 4. Creates a Docker container named `squarebox` with volume mounts for your
    workspace (`~/squarebox/workspace`), SSH keys (`~/.ssh`, read-only),
-   git config (`~/.config/git`, read-write), and starship/lazygit config
+   git config (`~/.config/git`, read-write; `~/.gitconfig`, read-only if present),
+   and starship/lazygit config
    (`~/squarebox/.config`)
 5. Appends shell aliases (`sqrbx`, `squarebox`, `sqrbx-rebuild`,
    `squarebox-rebuild`) to your `~/.bashrc` or `~/.zshrc`

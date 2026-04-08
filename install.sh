@@ -86,16 +86,30 @@ if [ ! -f "${INSTALL_DIR}/.config/lazygit/config.yml" ]; then
 fi
 
 echo "Creating container..."
+DOCKER_VOLUMES=(
+	-v "${INSTALL_DIR}/workspace:/workspace"
+	-v ~/.ssh:/home/dev/.ssh:ro
+	-v ~/.config/git:/home/dev/.config/git
+	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml"
+	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit"
+	-v /etc/localtime:/etc/localtime:ro
+)
+
+# On Windows, git config lives at ~/.gitconfig rather than ~/.config/git/config.
+# Mount it read-only so the container can see the host's git identity.
+if [ -f ~/.gitconfig ]; then
+	DOCKER_VOLUMES+=(-v ~/.gitconfig:/home/dev/.gitconfig:ro)
+fi
+
 docker create -it --name "$CONTAINER_NAME" \
-	-v "${INSTALL_DIR}/workspace:/workspace" \
-	-v ~/.ssh:/home/dev/.ssh:ro \
-	-v ~/.config/git:/home/dev/.config/git \
-	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml" \
-	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit" \
-	-v /etc/localtime:/etc/localtime:ro \
+	"${DOCKER_VOLUMES[@]}" \
 	"$IMAGE_NAME" > /dev/null
 
-if [ -t 0 ] || [ -t 1 ]; then
+if [ -t 0 ]; then
+	# stdin is already a terminal — use it directly (avoids /dev/tty issues on Windows/mintty)
+	docker start -ai "$CONTAINER_NAME"
+elif [ -t 1 ] && [ -e /dev/tty ]; then
+	# stdout is a terminal but stdin is piped (e.g. curl | bash) — redirect from /dev/tty
 	docker start -ai "$CONTAINER_NAME" </dev/tty
 else
 	echo "Install complete. Run 'squarebox' (or 'sqrbx') to start (you may need to restart your shell first)."
