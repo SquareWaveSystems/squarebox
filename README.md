@@ -7,9 +7,11 @@ and getting everything just right — then doing it all again on the next machin
 squarebox packages a complete terminal-based development environment into a
 single Docker container: modern file-listing and search tools, git UIs, AI
 coding assistants, language SDKs, and a curated set of shell aliases. Run the
-same box anywhere — on your desktop, a cloud VM, or a Codespace — and SSH in
-from your laptop, iPad, or phone. Run the install command below and you're
-ready to code.
+same box anywhere — on your desktop, a VPS, or a Codespace — and SSH in
+from your laptop (any OS), tablet, or phone. Run the install command below
+and you're ready to code.
+
+Inspired by [Omarchy](https://omarchy.org).
 
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
 *For demonstration purposes only — actual setup may involve more staring at the screen.*
@@ -101,8 +103,6 @@ Installed during first-run setup. Nano is always available as the default editor
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
 
 ### Aliases
-
-Inspired by [Omarchy](https://omarchy.org).
 
 | Alias | Command | Description |
 |-------|---------|-------------|
