@@ -13,14 +13,10 @@ if [ -d /workspace ] && ! [ -w /workspace ]; then
 		echo "ERROR: /workspace is not writable and sudo is not available to fix ownership." >&2
 		echo "Please make /workspace writable for user 'dev' or rerun with appropriate privileges." >&2
 		exit 1
-	elif ! sudo -n true >/dev/null 2>&1; then
-		echo "ERROR: /workspace is not writable and passwordless sudo is required to fix ownership automatically." >&2
-		echo "Please run 'sudo chown dev:dev /workspace' manually or rerun with appropriate privileges." >&2
-		exit 1
-	elif ! sudo -n chown dev:dev /workspace; then
+	elif ! sudo -n chown dev:dev /workspace 2>/dev/null; then
 		echo "ERROR: Failed to change ownership of /workspace to dev:dev." >&2
-		echo "This can happen on volume types that do not allow chown." >&2
-		echo "Please make /workspace writable for user 'dev' or adjust the mount configuration and try again." >&2
+		echo "This can happen if passwordless sudo is not available for chown, or the volume type does not allow chown." >&2
+		echo "Please run 'sudo chown dev:dev /workspace' manually or adjust the mount configuration and try again." >&2
 		exit 1
 	fi
 fi
