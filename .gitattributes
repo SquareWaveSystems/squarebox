@@ -1,0 +1,3 @@
+# Force LF line endings for all files — this repo runs inside Linux containers
+# and shell scripts break with CRLF. Overrides core.autocrlf on Windows.
+* text=auto eol=lf
