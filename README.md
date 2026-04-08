@@ -3,7 +3,7 @@
 **A curated set of modern CLI/TUI tools and AI coding assistants in a single container. Batteries included.**
 
 For developers who love to live in the terminal but need to work across
-multiple platforms and devices. squarebox packages a complete terminal-based
+multiple platforms and devices. **squarebox** packages a complete terminal-based
 development environment into a single Docker container: modern file-listing
 and search tools, git UIs, AI coding assistants, language SDKs, and a curated
 set of shell aliases. Run the same box anywhere - on your desktop, a VPS, or
