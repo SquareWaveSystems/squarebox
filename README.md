@@ -27,8 +27,8 @@ Install
 
     curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash
 
-By default this installs the latest tagged release. To use the latest commit on
-main instead:
+By default this installs the latest stable release (pre-release tags like
+`-rc` are skipped). To use the latest commit on main instead:
 
     SQUAREBOX_EDGE=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh)"
 

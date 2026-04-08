@@ -50,7 +50,7 @@ if [ "$EDGE" = "1" ]; then
 	git -C "$INSTALL_DIR" checkout main --quiet
 	git -C "$INSTALL_DIR" pull --ff-only --quiet
 else
-	LATEST_TAG=$(git -C "$INSTALL_DIR" tag --sort=-v:refname | head -1)
+	LATEST_TAG=$(git -C "$INSTALL_DIR" tag --sort=-v:refname | grep -v -- '-rc' | head -1)
 	if [ -n "$LATEST_TAG" ]; then
 		echo "Using release ${LATEST_TAG}..."
 		git -C "$INSTALL_DIR" checkout "$LATEST_TAG" --quiet
