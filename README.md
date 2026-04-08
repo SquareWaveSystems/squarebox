@@ -113,6 +113,31 @@ Nano is always available as the default editor.
 | [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
 
+### Terminal Multiplexers (optional)
+
+Installed during first-run setup. Choose either, both, or neither:
+
+| Name | Description |
+|------|-------------|
+| [tmux](https://github.com/tmux/tmux) | Classic terminal multiplexer |
+| [zellij](https://github.com/zellij-org/zellij) | Friendly terminal workspace |
+
+Both ship with [Omarchy](https://omarchy.com)-inspired defaults and matching keybindings:
+
+| Feature | Tmux | Zellij |
+|---------|------|--------|
+| Config path | `~/.config/tmux/tmux.conf` | `~/.config/zellij/config.kdl` |
+| Prefix | `Ctrl+Space` | `Ctrl+Space` (Tmux mode) |
+| Pane navigation | `Ctrl+Alt+Arrow` | `Ctrl+Alt+Arrow` |
+| Pane resizing | `Ctrl+Alt+Shift+Arrow` | `Ctrl+Alt+Shift+Arrow` |
+| Tab/window select | `Alt+1-9` | `Alt+1-9` |
+| Tab/window cycle | `Alt+Left/Right` | `Alt+Left/Right` |
+| Split horizontal | `prefix h` | `prefix h` |
+| Split vertical | `prefix v` | `prefix v` |
+| Scrollback | 50,000 lines | 50,000 lines |
+| Copy mode | Vi keys | Vi-style scroll |
+| Theme | Blue accent, top bar | Blue accent, compact layout |
+
 ### SDKs
 
 | SDK | Installed via |
