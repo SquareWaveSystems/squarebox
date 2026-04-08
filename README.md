@@ -7,12 +7,10 @@ multiple platforms and devices.
 
 **squarebox** packages a complete terminal-based
 development environment into a single Docker container: modern file-listing
-and search tools, git UIs, AI coding assistants, language SDKs, and a curated
-set of shell aliases. Run the same box anywhere - on your desktop, a VPS, or
+and search tools, git UIs, AI coding assistants, language SDKs, and an
+opinionated set of shell aliases. Run the same box anywhere - on your desktop, a VPS, or
 a Codespace - and SSH in from your laptop (any OS), tablet, or phone. Run the
 install command below and you're ready to code.
-
-*Influenced by [Omarchy](https://omarchy.org).*
 
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
 *(Actual setup may involve more staring at the screen.)*
@@ -34,9 +32,10 @@ main instead:
 
     SQUAREBOX_EDGE=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh)"
 
-This clones the repo, builds the Docker image, and drops you into the container.
-On first login, a setup script runs automatically to configure git, GitHub CLI,
-your choice of AI coding assistant, and language SDKs.
+This clones the repo, builds the Docker image, and drops you into the container (if possible).
+On first login, a setup script runs automatically to configure git (pulling your
+name and email from the host's global git config if available), GitHub CLI, your
+choice of AI coding assistant, and language SDKs.
 
 Start
 -----
@@ -251,3 +250,7 @@ Uninstall
 Then remove the `sqrbx` and `sqrbx-rebuild` aliases from your shell config
 (`~/.bashrc`, `~/.zshrc`, or `~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1`).
 Back up `~/squarebox/workspace` first if you need your code.
+
+## Acknowledgements
+
+Influenced by [Omarchy](https://omarchy.org).
