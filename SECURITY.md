@@ -9,13 +9,16 @@ install script performs these actions on your **host** system:
 2. Creates `~/squarebox/workspace`, `~/squarebox/.config/lazygit`, and `~/.config/git`
    directories, and seeds a default `starship.toml` into `~/squarebox/.config/`
 3. Builds a Docker image tagged `squarebox` from the Dockerfile
-4. Creates a Docker container named `squarebox` with volume mounts for your
+4. Copies your git identity (`user.name` and `user.email`) into
+   `~/.config/git/config` so the container can see it — no other git settings
+   (credential helpers, tokens, signing keys) are propagated
+5. Creates a Docker container named `squarebox` with volume mounts for your
    workspace (`~/squarebox/workspace`), SSH keys (`~/.ssh`, read-only),
    git config (`~/.config/git`, read-write), and starship/lazygit config
    (`~/squarebox/.config`)
-5. Appends shell aliases (`sqrbx`, `squarebox`, `sqrbx-rebuild`,
+6. Appends shell aliases (`sqrbx`, `squarebox`, `sqrbx-rebuild`,
    `squarebox-rebuild`) to your `~/.bashrc` or `~/.zshrc`
-6. Starts the container interactively (or prints a start command if no TTY is
+7. Starts the container interactively (or prints a start command if no TTY is
    attached, e.g. when run via `curl | bash`)
 
 It does **not** use `sudo`, install system packages, or modify anything outside

@@ -1,32 +1,49 @@
 # 🟧📦 squarebox
 
-**Containerised dev environment packed with modern CLI/TUI tools and AI coding assistants. Batteries included.**
+**A curated set of modern CLI/TUI tools and AI coding assistants in a Docker container. Batteries included.**
 
-Curated Rust/Go replacements for everyday Unix tools, multiple AI-powered
-editors, and sensible defaults, all in a reproducible Docker container you can
-spin up on any machine.
+For developers who live in the terminal but need to work across
+multiple platforms and devices.
+
+**squarebox** packages a complete terminal-based
+development environment into a single Docker container: modern file-listing
+and search tools, git UIs, AI coding assistants, language SDKs, and an
+opinionated set of shell aliases. Run the same box anywhere - on your desktop, a VPS, or
+a Codespace - and SSH in from your laptop (any OS), tablet, or phone. Run the
+install command below and you're ready to code.
 
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
+*(Actual setup may involve more staring at the screen.)*
 
 Prerequisites
 -------------
 
 - [Docker](https://docs.docker.com/get-docker/)
-- [Git](https://git-scm.com/)
+- [Git](https://git-scm.com/) - on Windows, install [Git for Windows](https://gitforwindows.org/)
+  (provides `bash` and `winpty` needed by the install script)
 
 Install
 -------
 
     curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash
 
-This clones the repo, builds the Docker image, and drops you into the container.
-On first login, a setup script runs automatically to configure git, GitHub CLI,
-your choice of AI coding assistant, and language SDKs.
+By default this installs the latest tagged release. To use the latest commit on
+main instead:
+
+    SQUAREBOX_EDGE=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh)"
+
+This clones the repo, builds the Docker image, and drops you into the container (if possible).
+On first login, a setup script runs automatically to configure git (pulling your
+name and email from the host's global git config if available), GitHub CLI, your
+choice of AI coding assistant, and language SDKs.
 
 Start
 -----
 
     squarebox        # or: sqrbx
+
+These are shell aliases for `docker start -ai squarebox`, added automatically
+for Bash, Zsh, and PowerShell 7+.
 
 The container is persistent: it suspends on exit and resumes on start, keeping
 installed packages, config, and shell history intact between sessions. Your code
@@ -48,6 +65,7 @@ What's included
 | [fzf](https://github.com/junegunn/fzf) | Go | Fuzzy finder |
 | [gh](https://github.com/cli/cli) | Go | GitHub CLI |
 | [glow](https://github.com/charmbracelet/glow) | Go | Terminal markdown renderer |
+| [gum](https://github.com/charmbracelet/gum) | Go | Tool for shell scripts and dotfiles |
 | [jq](https://github.com/jqlang/jq) | C | JSON processor |
 | [nano](https://nano-editor.org) | C | Default text editor |
 | [ripgrep](https://github.com/BurntSushi/ripgrep) | Rust | Fast recursive grep |
@@ -64,9 +82,14 @@ What's included
 | [lazygit](https://github.com/jesseduffield/lazygit) | Go | Git terminal UI |
 | [yazi](https://github.com/sxyazi/yazi) | Rust | Terminal file manager |
 
-### AI Coding Assistants (optional)
+What's optional
+----------------
 
-Installed during first-run setup. Choose any combination:
+Selected during first-run setup. Choose any combination, all, or none.
+Selections are saved to the workspace volume and reused automatically on
+container rebuilds.
+
+### AI Coding Assistants
 
 | Name | Language | Description |
 |------|----------|-------------|
@@ -78,16 +101,16 @@ Installed during first-run setup. Choose any combination:
 
 \* Requires Node.js (auto-installed if needed).
 
-### Text Editors (optional)
+### Text Editors
 
-Installed during first-run setup. Nano is always available as the default editor.
+Nano is always available as the default editor.
 
 | Name | Language | Description |
 |------|----------|-------------|
 | [micro](https://github.com/micro-editor/micro) | Go | Modern, intuitive terminal editor |
 | [edit](https://github.com/microsoft/edit) | Rust | Terminal text editor (Microsoft) |
 | [fresh](https://github.com/sinelaw/fresh) | Rust | Modern terminal text editor |
-| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) |
+| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
 
 ### Terminal Multiplexers (optional)
@@ -115,9 +138,17 @@ Both ship with [Omarchy](https://omarchy.com)-inspired defaults and matching key
 | Copy mode | Vi keys | Vi-style scroll |
 | Theme | Blue accent, top bar | Blue accent, compact layout |
 
-### Aliases
+### SDKs
 
-Inspired by [Omarchy](https://omarchy.com).
+| SDK | Installed via |
+|-----|---------------|
+| Node.js | [nvm](https://github.com/nvm-sh/nvm) |
+| Python | [uv](https://github.com/astral-sh/uv) |
+| Go | [go.dev](https://go.dev) |
+| .NET | [dotnet-install](https://dot.net) |
+
+Aliases
+-------
 
 | Alias | Command | Description |
 |-------|---------|-------------|
@@ -141,20 +172,6 @@ Inspired by [Omarchy](https://omarchy.com).
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
 
-### SDKs (optional)
-
-Selected during first-run setup. Choose any combination, all, or none:
-
-| SDK | Installed via |
-|-----|---------------|
-| Node.js | [nvm](https://github.com/nvm-sh/nvm) |
-| Python | [uv](https://github.com/astral-sh/uv) |
-| Go | [go.dev](https://go.dev) |
-| .NET | [dotnet-install](https://dot.net) |
-
-Selections are saved to the workspace volume and reused automatically on
-container rebuilds.
-
 Update
 ------
 
@@ -170,8 +187,6 @@ preserved.
     sqrbx-update --apply      # download and install all updates
     sqrbx-update lazygit      # update a single tool
     sqrbx-update --list       # list all tools and current versions
-
-Set `GITHUB_TOKEN` to avoid API rate limits.
 
 ### Full rebuild (from the host)
 
@@ -214,7 +229,7 @@ First-run selections add to that:
 | OpenAI Codex CLI | ~50 MB |
 | OpenCode | ~30 MB |
 | micro / edit | ~12 / ~7 MB |
-| fresh / helix / nvim | ~10 / ~80 / ~45 MB |
+| fresh / nvim | ~10 / ~45 MB |
 | Node.js | ~90 MB |
 | Python (uv) | ~35 MB |
 | Go | ~500 MB |
@@ -247,6 +262,9 @@ automatically.
 The interactive first-run setup is skipped in devcontainer mode. To configure
 AI tools or SDKs, run `~/setup.sh` from the integrated terminal.
 
+You can also attach to a running codespace directly from your local terminal
+using `gh codespace ssh`.
+
 Uninstall
 ---------
 
@@ -255,5 +273,9 @@ Uninstall
     rm -rf ~/squarebox
 
 Then remove the `sqrbx` and `sqrbx-rebuild` aliases from your shell config
-(`~/.bashrc` or `~/.zshrc`). Back up `~/squarebox/workspace` first if you need
-your code.
+(`~/.bashrc`, `~/.zshrc`, or `~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1`).
+Back up `~/squarebox/workspace` first if you need your code.
+
+## Acknowledgements
+
+Influenced by [Omarchy](https://omarchy.org).
