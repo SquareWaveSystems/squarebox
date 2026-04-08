@@ -30,7 +30,7 @@ Install
 By default this installs the latest stable release (pre-release tags like
 `-rc` are skipped). To use the latest commit on main instead:
 
-    SQUAREBOX_EDGE=1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh)"
+    curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash -s -- --edge
 
 This clones the repo, builds the Docker image, and drops you into the container (if possible).
 On first login, a setup script runs automatically to configure git (pulling your
