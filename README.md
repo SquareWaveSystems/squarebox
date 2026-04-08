@@ -1,16 +1,21 @@
 # 🟧📦 squarebox
 
-**Containerised dev environment packed with modern CLI/TUI tools and AI coding assistants. Batteries included.**
+**A curated set of modern CLI/TUI tools and AI coding assistants in a Docker container. Batteries included.**
 
-Setting up a new dev machine means hours of installing tools, tweaking configs,
-and getting everything just right — then doing it all again on the next machine.
-squarebox packages a complete terminal-based development environment into a
-single Docker container: modern file-listing and search tools, git UIs, AI
-coding assistants, language SDKs, and a curated set of shell aliases. Run the
+For developers who live in the terminal but need to work across
+multiple platforms and devices.
+
+**squarebox** packages a complete terminal-based
+development environment into a single Docker container: modern file-listing
+and search tools, git UIs, AI coding assistants, language SDKs, and a curated
+set of shell aliases. Run the same box anywhere - on your desktop, a VPS, or
+a Codespace - and SSH in from your laptop (any OS), tablet, or phone. Run the
 install command below and you're ready to code.
 
+*Influenced by [Omarchy](https://omarchy.org).*
+
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
-*Actual setup may involve more staring at the screen.*
+*(Actual setup may involve more staring at the screen.)*
 
 Prerequisites
 -------------
@@ -33,7 +38,8 @@ Start
 
     squarebox        # or: sqrbx
 
-Shell aliases are added automatically for Bash, Zsh, and PowerShell 7+.
+These are shell aliases for `docker start -ai squarebox`, added automatically
+for Bash, Zsh, and PowerShell 7+.
 
 The container is persistent: it suspends on exit and resumes on start, keeping
 installed packages, config, and shell history intact between sessions. Your code
@@ -72,9 +78,14 @@ What's included
 | [lazygit](https://github.com/jesseduffield/lazygit) | Go | Git terminal UI |
 | [yazi](https://github.com/sxyazi/yazi) | Rust | Terminal file manager |
 
-### AI Coding Assistants (optional)
+What's optional
+----------------
 
-Installed during first-run setup. Choose any combination:
+Selected during first-run setup. Choose any combination, all, or none.
+Selections are saved to the workspace volume and reused automatically on
+container rebuilds.
+
+### AI Coding Assistants
 
 | Name | Language | Description |
 |------|----------|-------------|
@@ -86,21 +97,29 @@ Installed during first-run setup. Choose any combination:
 
 \* Requires Node.js (auto-installed if needed).
 
-### Text Editors (optional)
+### Text Editors
 
-Installed during first-run setup. Nano is always available as the default editor.
+Nano is always available as the default editor.
 
 | Name | Language | Description |
 |------|----------|-------------|
 | [micro](https://github.com/micro-editor/micro) | Go | Modern, intuitive terminal editor |
 | [edit](https://github.com/microsoft/edit) | Rust | Terminal text editor (Microsoft) |
 | [fresh](https://github.com/sinelaw/fresh) | Rust | Modern terminal text editor |
-| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) — *coming soon* |
+| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
 
-### Aliases
+### SDKs
 
-Inspired by [Omarchy](https://omarchy.org).
+| SDK | Installed via |
+|-----|---------------|
+| Node.js | [nvm](https://github.com/nvm-sh/nvm) |
+| Python | [uv](https://github.com/astral-sh/uv) |
+| Go | [go.dev](https://go.dev) |
+| .NET | [dotnet-install](https://dot.net) |
+
+Aliases
+-------
 
 | Alias | Command | Description |
 |-------|---------|-------------|
@@ -123,20 +142,6 @@ Inspired by [Omarchy](https://omarchy.org).
 | `lg` | `lazygit` | Launch lazygit |
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
-
-### SDKs (optional)
-
-Selected during first-run setup. Choose any combination, all, or none:
-
-| SDK | Installed via |
-|-----|---------------|
-| Node.js | [nvm](https://github.com/nvm-sh/nvm) |
-| Python | [uv](https://github.com/astral-sh/uv) |
-| Go | [go.dev](https://go.dev) |
-| .NET | [dotnet-install](https://dot.net) |
-
-Selections are saved to the workspace volume and reused automatically on
-container rebuilds.
 
 Update
 ------
