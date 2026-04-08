@@ -78,32 +78,6 @@ What's included
 | [lazygit](https://github.com/jesseduffield/lazygit) | Go | Git terminal UI |
 | [yazi](https://github.com/sxyazi/yazi) | Rust | Terminal file manager |
 
-### AI Coding Assistants (optional)
-
-Installed during first-run setup. Choose any combination:
-
-| Name | Language | Description |
-|------|----------|-------------|
-| [Claude Code](https://github.com/anthropics/claude-code) | TypeScript | AI coding assistant |
-| [GitHub Copilot CLI](https://github.com/githubnext/github-copilot-cli) | TypeScript | GitHub Copilot in the terminal * |
-| [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) | TypeScript | Google Gemini in the terminal * |
-| [OpenAI Codex CLI](https://github.com/openai/codex) | TypeScript | OpenAI Codex in the terminal * |
-| [opencode](https://github.com/anomalyco/opencode) | Go | AI coding TUI |
-
-\* Requires Node.js (auto-installed if needed).
-
-### Text Editors (optional)
-
-Installed during first-run setup. Nano is always available as the default editor.
-
-| Name | Language | Description |
-|------|----------|-------------|
-| [micro](https://github.com/micro-editor/micro) | Go | Modern, intuitive terminal editor |
-| [edit](https://github.com/microsoft/edit) | Rust | Terminal text editor (Microsoft) |
-| [fresh](https://github.com/sinelaw/fresh) | Rust | Modern terminal text editor |
-| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
-| [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
-
 ### Aliases
 
 | Alias | Command | Description |
@@ -128,9 +102,38 @@ Installed during first-run setup. Nano is always available as the default editor
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
 
-### SDKs (optional)
+What's optional
+----------------
 
-Selected during first-run setup. Choose any combination, all, or none:
+Selected during first-run setup. Choose any combination, all, or none.
+Selections are saved to the workspace volume and reused automatically on
+container rebuilds.
+
+### AI Coding Assistants
+
+| Name | Language | Description |
+|------|----------|-------------|
+| [Claude Code](https://github.com/anthropics/claude-code) | TypeScript | AI coding assistant |
+| [GitHub Copilot CLI](https://github.com/githubnext/github-copilot-cli) | TypeScript | GitHub Copilot in the terminal * |
+| [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) | TypeScript | Google Gemini in the terminal * |
+| [OpenAI Codex CLI](https://github.com/openai/codex) | TypeScript | OpenAI Codex in the terminal * |
+| [opencode](https://github.com/anomalyco/opencode) | Go | AI coding TUI |
+
+\* Requires Node.js (auto-installed if needed).
+
+### Text Editors
+
+Nano is always available as the default editor.
+
+| Name | Language | Description |
+|------|----------|-------------|
+| [micro](https://github.com/micro-editor/micro) | Go | Modern, intuitive terminal editor |
+| [edit](https://github.com/microsoft/edit) | Rust | Terminal text editor (Microsoft) |
+| [fresh](https://github.com/sinelaw/fresh) | Rust | Modern terminal text editor |
+| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
+| [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
+
+### SDKs
 
 | SDK | Installed via |
 |-----|---------------|
@@ -138,9 +141,6 @@ Selected during first-run setup. Choose any combination, all, or none:
 | Python | [uv](https://github.com/astral-sh/uv) |
 | Go | [go.dev](https://go.dev) |
 | .NET | [dotnet-install](https://dot.net) |
-
-Selections are saved to the workspace volume and reused automatically on
-container rebuilds.
 
 Update
 ------
