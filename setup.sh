@@ -569,15 +569,104 @@ fi
 
 _install_tmux_inner() {
 	sudo apt-get update -qq && sudo apt-get install -y -qq tmux >/dev/null 2>&1
-	# Install default config
-	if [ ! -f ~/.tmux.conf ]; then
-		cat > ~/.tmux.conf <<-'TMUXCONF'
-		set -g mouse on
+	# Install default config (Omarchy-inspired defaults)
+	mkdir -p ~/.config/tmux
+	if [ ! -f ~/.config/tmux/tmux.conf ]; then
+		cat > ~/.config/tmux/tmux.conf <<-'TMUXCONF'
+		# Prefix
+		set -g prefix C-Space
+		set -g prefix2 C-b
+		bind C-Space send-prefix
+
+		# Reload config
+		bind q source-file ~/.config/tmux/tmux.conf \; display "Configuration reloaded"
+
+		# Vi mode for copy
+		setw -g mode-keys vi
+		bind -T copy-mode-vi v send -X begin-selection
+		bind -T copy-mode-vi y send -X copy-selection-and-cancel
+
+		# Pane Controls
+		bind h split-window -v -c "#{pane_current_path}"
+		bind v split-window -h -c "#{pane_current_path}"
+		bind x kill-pane
+
+		bind -n C-M-Left select-pane -L
+		bind -n C-M-Right select-pane -R
+		bind -n C-M-Up select-pane -U
+		bind -n C-M-Down select-pane -D
+
+		bind -n C-M-S-Left resize-pane -L 5
+		bind -n C-M-S-Down resize-pane -D 5
+		bind -n C-M-S-Up resize-pane -U 5
+		bind -n C-M-S-Right resize-pane -R 5
+
+		# Window navigation
+		bind r command-prompt -I "#W" "rename-window -- '%%'"
+		bind c new-window -c "#{pane_current_path}"
+		bind k kill-window
+
+		bind -n M-1 select-window -t 1
+		bind -n M-2 select-window -t 2
+		bind -n M-3 select-window -t 3
+		bind -n M-4 select-window -t 4
+		bind -n M-5 select-window -t 5
+		bind -n M-6 select-window -t 6
+		bind -n M-7 select-window -t 7
+		bind -n M-8 select-window -t 8
+		bind -n M-9 select-window -t 9
+
+		bind -n M-Left select-window -t -1
+		bind -n M-Right select-window -t +1
+		bind -n M-S-Left swap-window -t -1 \; select-window -t -1
+		bind -n M-S-Right swap-window -t +1 \; select-window -t +1
+
+		# Session controls
+		bind R command-prompt -I "#S" "rename-session -- '%%'"
+		bind C new-session -c "#{pane_current_path}"
+		bind K kill-session
+		bind P switch-client -p
+		bind N switch-client -n
+
+		bind -n M-Up switch-client -p
+		bind -n M-Down switch-client -n
+
+		# General
 		set -g default-terminal "tmux-256color"
-		set -g history-limit 10000
-		set -g prefix C-a
-		unbind C-b
-		bind C-a send-prefix
+		set -ag terminal-overrides ",*:RGB"
+		set -g mouse on
+		set -g base-index 1
+		setw -g pane-base-index 1
+		set -g renumber-windows on
+		set -g history-limit 50000
+		set -g escape-time 0
+		set -g focus-events on
+		set -g set-clipboard on
+		set -g allow-passthrough on
+		setw -g aggressive-resize on
+		set -g detach-on-destroy off
+
+		# Status bar
+		set -g status-position top
+		set -g status-interval 5
+		set -g status-left-length 30
+		set -g status-right-length 50
+		set -g window-status-separator ""
+		set -gw automatic-rename on
+		set -gw automatic-rename-format '#{b:pane_current_path}'
+
+		# Theme
+		set -g status-style "bg=default,fg=default"
+		set -g status-left "#[fg=black,bg=blue,bold] #S #[bg=default] "
+		set -g status-right "#[fg=blue]#{?pane_in_mode,COPY ,}#{?client_prefix,PREFIX ,}#{?window_zoomed_flag,ZOOM ,}#[fg=brightblack]#h "
+		set -g window-status-format "#[fg=brightblack] #I:#W "
+		set -g window-status-current-format "#[fg=blue,bold] #I:#W "
+		set -g pane-border-style "fg=brightblack"
+		set -g pane-active-border-style "fg=blue"
+		set -g message-style "bg=default,fg=blue"
+		set -g message-command-style "bg=default,fg=blue"
+		set -g mode-style "bg=blue,fg=black"
+		setw -g clock-mode-colour blue
 		TMUXCONF
 	fi
 }
@@ -587,9 +676,236 @@ install_tmux() {
 	run_with_spinner "Installing tmux..." _install_tmux_inner
 }
 
+_install_zellij_inner() {
+	sb_install zellij "$ZELLIJ_VERSION"
+	# Install default config (Omarchy-inspired defaults to match tmux)
+	mkdir -p ~/.config/zellij
+	if [ ! -f ~/.config/zellij/config.kdl ]; then
+		cat > ~/.config/zellij/config.kdl <<-'ZELLIJCONF'
+		// squarebox — Omarchy-inspired defaults (mirroring tmux keybindings)
+
+		// ── General options ─────────────────────────────────────────────
+		mouse_mode true
+		copy_on_select true
+		scroll_buffer_size 50000
+		pane_frames false
+		auto_layout true
+		on_force_close "quit"
+		simplified_ui true
+		session_serialization true
+		support_kitty_keyboard_protocol true
+
+		// ── Theme — blue accent, minimal styling, transparent bg ────────
+		themes {
+		    squarebox {
+		        fg "#c0caf5"
+		        bg "#1a1b26"
+		        black "#15161e"
+		        red "#f7768e"
+		        green "#9ece6a"
+		        yellow "#e0af68"
+		        blue "#7aa2f7"
+		        magenta "#bb9af7"
+		        cyan "#7dcfff"
+		        white "#a9b1d6"
+		        orange "#ff9e64"
+		    }
+		}
+		theme "squarebox"
+
+		// ── Plugins ─────────────────────────────────────────────────────
+		plugins {
+		    tab-bar location="zellij:tab-bar"
+		    status-bar location="zellij:status-bar"
+		    compact-bar location="zellij:compact-bar"
+		    session-manager location="zellij:session-manager"
+		    configuration location="zellij:configuration"
+		}
+
+		// ── Keybindings ─────────────────────────────────────────────────
+		keybinds clear-defaults=true {
+		    normal {
+		        // Pane navigation — Ctrl+Alt+Arrow
+		        bind "Ctrl Alt Left" { MoveFocus "Left"; }
+		        bind "Ctrl Alt Right" { MoveFocus "Right"; }
+		        bind "Ctrl Alt Up" { MoveFocus "Up"; }
+		        bind "Ctrl Alt Down" { MoveFocus "Down"; }
+
+		        // Pane resizing — Ctrl+Alt+Shift+Arrow
+		        bind "Ctrl Alt Shift Left" { Resize "Left"; }
+		        bind "Ctrl Alt Shift Right" { Resize "Right"; }
+		        bind "Ctrl Alt Shift Up" { Resize "Up"; }
+		        bind "Ctrl Alt Shift Down" { Resize "Down"; }
+
+		        // Tab navigation — Alt+1-9 (base index 1)
+		        bind "Alt 1" { GoToTab 1; }
+		        bind "Alt 2" { GoToTab 2; }
+		        bind "Alt 3" { GoToTab 3; }
+		        bind "Alt 4" { GoToTab 4; }
+		        bind "Alt 5" { GoToTab 5; }
+		        bind "Alt 6" { GoToTab 6; }
+		        bind "Alt 7" { GoToTab 7; }
+		        bind "Alt 8" { GoToTab 8; }
+		        bind "Alt 9" { GoToTab 9; }
+
+		        // Tab cycling — Alt+Left/Right
+		        bind "Alt Left" { GoToPreviousTab; }
+		        bind "Alt Right" { GoToNextTab; }
+
+		        // Tab reordering — Alt+Shift+Left/Right
+		        bind "Alt Shift Left" { MoveTab "Left"; }
+		        bind "Alt Shift Right" { MoveTab "Right"; }
+
+		        // Session switching — Alt+Up/Down (launches session manager)
+		        bind "Alt Up" {
+		            LaunchOrFocusPlugin "session-manager" {
+		                floating true
+		                move_to_focused_tab true
+		            };
+		        }
+		        bind "Alt Down" {
+		            LaunchOrFocusPlugin "session-manager" {
+		                floating true
+		                move_to_focused_tab true
+		            };
+		        }
+
+		        // Prefix-style bindings via Ctrl+Space (tmux-like leader)
+		        bind "Ctrl Space" { SwitchToMode "Tmux"; }
+		    }
+
+		    locked {
+		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		    }
+
+		    tmux {
+		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		        bind "Esc" { SwitchToMode "Normal"; }
+
+		        // Pane splitting (h=horizontal, v=vertical — matching tmux)
+		        bind "h" { NewPane "Down"; SwitchToMode "Normal"; }
+		        bind "v" { NewPane "Right"; SwitchToMode "Normal"; }
+		        bind "x" { CloseFocus; SwitchToMode "Normal"; }
+
+		        // Tab/window management
+		        bind "c" { NewTab; SwitchToMode "Normal"; }
+		        bind "k" { CloseTab; SwitchToMode "Normal"; }
+		        bind "r" { SwitchToMode "RenameTab"; TabNameInput 0; }
+
+		        // Session management
+		        bind "d" { Detach; }
+		        bind "w" {
+		            LaunchOrFocusPlugin "session-manager" {
+		                floating true
+		                move_to_focused_tab true
+		            };
+		            SwitchToMode "Normal";
+		        }
+
+		        // Rename pane
+		        bind "R" { SwitchToMode "RenamePane"; PaneNameInput 0; }
+
+		        // Tab navigation (1-9 in prefix mode)
+		        bind "1" { GoToTab 1; SwitchToMode "Normal"; }
+		        bind "2" { GoToTab 2; SwitchToMode "Normal"; }
+		        bind "3" { GoToTab 3; SwitchToMode "Normal"; }
+		        bind "4" { GoToTab 4; SwitchToMode "Normal"; }
+		        bind "5" { GoToTab 5; SwitchToMode "Normal"; }
+		        bind "6" { GoToTab 6; SwitchToMode "Normal"; }
+		        bind "7" { GoToTab 7; SwitchToMode "Normal"; }
+		        bind "8" { GoToTab 8; SwitchToMode "Normal"; }
+		        bind "9" { GoToTab 9; SwitchToMode "Normal"; }
+
+		        // Pane navigation (arrow keys in prefix mode)
+		        bind "Left" { MoveFocus "Left"; SwitchToMode "Normal"; }
+		        bind "Right" { MoveFocus "Right"; SwitchToMode "Normal"; }
+		        bind "Up" { MoveFocus "Up"; SwitchToMode "Normal"; }
+		        bind "Down" { MoveFocus "Down"; SwitchToMode "Normal"; }
+
+		        // Toggle fullscreen/floating
+		        bind "z" { ToggleFocusFullscreen; SwitchToMode "Normal"; }
+		        bind "f" { ToggleFloatingPanes; SwitchToMode "Normal"; }
+
+		        // Enter scroll/copy mode (vi-style — like tmux [ )
+		        bind "[" { SwitchToMode "Scroll"; }
+		    }
+
+		    // ── Scroll mode (vi-style copy mode) ────────────────────────
+		    scroll {
+		        bind "Esc" { SwitchToMode "Normal"; }
+		        bind "q" { ScrollToBottom; SwitchToMode "Normal"; }
+		        bind "j" "Down" { ScrollDown; }
+		        bind "k" "Up" { ScrollUp; }
+		        bind "Ctrl f" "PageDown" { PageScrollDown; }
+		        bind "Ctrl b" "PageUp" { PageScrollUp; }
+		        bind "d" { HalfPageScrollDown; }
+		        bind "u" { HalfPageScrollUp; }
+		        bind "G" { ScrollToBottom; }
+		        bind "g" { ScrollToTop; }
+		        bind "/" { SwitchToMode "EnterSearch"; SearchInput 0; }
+		    }
+
+		    search {
+		        bind "Esc" { SwitchToMode "Normal"; }
+		        bind "q" { ScrollToBottom; SwitchToMode "Normal"; }
+		        bind "j" "Down" { ScrollDown; }
+		        bind "k" "Up" { ScrollUp; }
+		        bind "Ctrl f" "PageDown" { PageScrollDown; }
+		        bind "Ctrl b" "PageUp" { PageScrollUp; }
+		        bind "d" { HalfPageScrollDown; }
+		        bind "u" { HalfPageScrollUp; }
+		        bind "n" { Search "down"; }
+		        bind "N" { Search "up"; }
+		        bind "c" { SearchToggleOption "CaseSensitivity"; }
+		        bind "w" { SearchToggleOption "Wrap"; }
+		        bind "o" { SearchToggleOption "WholeWord"; }
+		        bind "G" { ScrollToBottom; }
+		        bind "g" { ScrollToTop; }
+		    }
+
+		    entersearch {
+		        bind "Esc" { SwitchToMode "Scroll"; }
+		        bind "Ctrl c" { SwitchToMode "Scroll"; }
+		        bind "Enter" { SwitchToMode "Search"; }
+		    }
+
+		    renametab {
+		        bind "Esc" { UndoRenameTab; SwitchToMode "Normal"; }
+		        bind "Ctrl c" { UndoRenameTab; SwitchToMode "Normal"; }
+		        bind "Enter" { SwitchToMode "Normal"; }
+		    }
+
+		    renamepane {
+		        bind "Esc" { UndoRenamePane; SwitchToMode "Normal"; }
+		        bind "Ctrl c" { UndoRenamePane; SwitchToMode "Normal"; }
+		        bind "Enter" { SwitchToMode "Normal"; }
+		    }
+
+		    // Allow Ctrl+Space to return to normal from any non-normal mode
+		    shared_except "normal" "locked" "tmux" {
+		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		    }
+		}
+		ZELLIJCONF
+
+		# Create a default layout with the compact bar at the top
+		mkdir -p ~/.config/zellij/layouts
+		if [ ! -f ~/.config/zellij/layouts/default.kdl ]; then
+			cat > ~/.config/zellij/layouts/default.kdl <<-'ZELLIJLAYOUT'
+			layout {
+			    pane size=1 borderless=true {
+			        plugin location="compact-bar"
+			    }
+			    pane
+			}
+			ZELLIJLAYOUT
+		fi
+	fi
+}
+
 install_zellij() {
 	if command -v zellij &>/dev/null; then echo "Zellij already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Zellij v${ZELLIJ_VERSION}..." sb_install zellij "$ZELLIJ_VERSION"
+	run_with_spinner "Installing Zellij v${ZELLIJ_VERSION}..." _install_zellij_inner
 }
 
 for mux in $(echo "$mux_list" | tr ',' ' '); do
