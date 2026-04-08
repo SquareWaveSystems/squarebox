@@ -9,10 +9,20 @@ CONTAINER_NAME="squarebox"
 # Clone or update
 if [ -d "$INSTALL_DIR" ]; then
 	echo "Updating existing install..."
-	git -C "$INSTALL_DIR" pull --ff-only
+	git -C "$INSTALL_DIR" fetch --tags --force
 else
 	echo "Cloning squarebox..."
 	git clone "$REPO" "$INSTALL_DIR"
+fi
+
+# Check out the latest tagged release (fall back to main if no tags exist)
+LATEST_TAG=$(git -C "$INSTALL_DIR" tag --sort=-v:refname | head -1)
+if [ -n "$LATEST_TAG" ]; then
+	echo "Using release ${LATEST_TAG}..."
+	git -C "$INSTALL_DIR" checkout "$LATEST_TAG" --quiet
+else
+	echo "No releases found, using main branch..."
+	git -C "$INSTALL_DIR" checkout main --quiet
 fi
 
 # Verify Docker is available
