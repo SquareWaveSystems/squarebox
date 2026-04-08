@@ -1,13 +1,15 @@
 # 🟧📦 squarebox
 
-**Containerised dev environment packed with modern CLI/TUI tools and AI coding assistants. Batteries included.**
+**A curated set of modern CLI/TUI tools and AI coding assistants in a single container. Batteries included.**
 
 Setting up a new dev machine means hours of installing tools, tweaking configs,
 and getting everything just right — then doing it all again on the next machine.
 squarebox packages a complete terminal-based development environment into a
 single Docker container: modern file-listing and search tools, git UIs, AI
 coding assistants, language SDKs, and a curated set of shell aliases. Run the
-install command below and you're ready to code.
+same box anywhere — on your desktop, a cloud VM, or a Codespace — and SSH in
+from your laptop, iPad, or phone. Run the install command below and you're
+ready to code.
 
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
 *For demonstration purposes only — actual setup may involve more staring at the screen.*
