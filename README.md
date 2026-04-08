@@ -25,12 +25,15 @@ Prerequisites
 Install
 -------
 
+**Stable**
+
     curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash
 
-By default this installs the latest stable release (pre-release tags like
-`-rc` are skipped). To use the latest commit on main instead:
+**Edge**
 
     curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash -s -- --edge
+
+Stable installs the latest tagged release (pre-release tags like `-rc` are skipped). Edge uses the latest commit on main.
 
 This clones the repo, builds the Docker image, and drops you into the container (if possible).
 On first login, a setup script runs automatically to configure git (pulling your
@@ -113,7 +116,7 @@ Nano is always available as the default editor.
 | [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
 
-### Terminal Multiplexers (optional)
+### Terminal Multiplexers
 
 Installed during first-run setup. Choose either, both, or neither:
 
@@ -121,22 +124,6 @@ Installed during first-run setup. Choose either, both, or neither:
 |------|-------------|
 | [tmux](https://github.com/tmux/tmux) | Classic terminal multiplexer |
 | [zellij](https://github.com/zellij-org/zellij) | Friendly terminal workspace |
-
-Both ship with [Omarchy](https://omarchy.com)-inspired defaults and matching keybindings:
-
-| Feature | Tmux | Zellij |
-|---------|------|--------|
-| Config path | `~/.config/tmux/tmux.conf` | `~/.config/zellij/config.kdl` |
-| Prefix | `Ctrl+Space` | `Ctrl+Space` (Tmux mode) |
-| Pane navigation | `Ctrl+Alt+Arrow` | `Ctrl+Alt+Arrow` |
-| Pane resizing | `Ctrl+Alt+Shift+Arrow` | `Ctrl+Alt+Shift+Arrow` |
-| Tab/window select | `Alt+1-9` | `Alt+1-9` |
-| Tab/window cycle | `Alt+Left/Right` | `Alt+Left/Right` |
-| Split horizontal | `prefix h` | `prefix h` |
-| Split vertical | `prefix v` | `prefix v` |
-| Scrollback | 50,000 lines | 50,000 lines |
-| Copy mode | Vi keys | Vi-style scroll |
-| Theme | Blue accent, top bar | Blue accent, compact layout |
 
 ### SDKs
 
@@ -171,6 +158,24 @@ Aliases
 | `lg` | `lazygit` | Launch lazygit |
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
+
+### Multiplexer Keybindings (Experimental)
+
+Both tmux and zellij ship with [Omarchy](https://omarchy.com)-inspired defaults and matching keybindings:
+
+| Feature | Tmux | Zellij |
+|---------|------|--------|
+| Config path | `~/.config/tmux/tmux.conf` | `~/.config/zellij/config.kdl` |
+| Prefix | `Ctrl+Space` | `Ctrl+Space` (Tmux mode) |
+| Pane navigation | `Ctrl+Alt+Arrow` | `Ctrl+Alt+Arrow` |
+| Pane resizing | `Ctrl+Alt+Shift+Arrow` | `Ctrl+Alt+Shift+Arrow` |
+| Tab/window select | `Alt+1-9` | `Alt+1-9` |
+| Tab/window cycle | `Alt+Left/Right` | `Alt+Left/Right` |
+| Split horizontal | `prefix h` | `prefix h` |
+| Split vertical | `prefix v` | `prefix v` |
+| Scrollback | 50,000 lines | 50,000 lines |
+| Copy mode | Vi keys | Vi-style scroll |
+| Theme | Blue accent, top bar | Blue accent, compact layout |
 
 Update
 ------
@@ -280,7 +285,7 @@ Make it your own
 -----------------
 
 squarebox is meant to be a starting point, not a finished product. Fork it,
-swap out tools, add your own dotfiles, change the theme — build the dev
+swap out tools, add your own dotfiles, change the theme - build the dev
 environment that fits the way you work. The Dockerfile is intentionally
 straightforward and the tool registry (`scripts/lib/tools.yaml`) makes it easy
 to add or remove tools. Use it as a base, take what's useful, and make it yours.
