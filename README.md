@@ -15,7 +15,7 @@ install command below and you're ready to code.
 *Influenced by [Omarchy](https://omarchy.org).*
 
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
-*Actual setup may involve more staring at the screen.*
+*(Actual setup may involve more staring at the screen.)*
 
 Prerequisites
 -------------
@@ -78,31 +78,6 @@ What's included
 | [lazygit](https://github.com/jesseduffield/lazygit) | Go | Git terminal UI |
 | [yazi](https://github.com/sxyazi/yazi) | Rust | Terminal file manager |
 
-Aliases
--------
-
-| Alias | Command | Description |
-|-------|---------|-------------|
-| `ls` | `eza --icons` | Modern ls with icons |
-| `ll` | `eza -la --icons` | Long listing with icons |
-| `lsa` | `ls -a` (resolves to `eza --icons -a`) | List all including hidden files |
-| `lt` | `eza --tree --level=2 --long --icons --git` | Tree view with git status |
-| `lta` | `lt -a` | Tree view including hidden files |
-| `cat` | `bat --paging=never` | Syntax-highlighted cat |
-| `ff` | `fzf --preview 'bat ...'` | Fuzzy find with preview |
-| `eff` | `$EDITOR "$(ff)"` | Fuzzy find and edit |
-| `..` | `cd ..` | Go up one directory |
-| `...` | `cd ../..` | Go up two directories |
-| `....` | `cd ../../..` | Go up three directories |
-| `c` | first selected AI tool | Launch selected AI assistant |
-| `g` | `git` | Git shorthand |
-| `gcm` | `git commit -m` | Commit with message |
-| `gcam` | `git commit -a -m` | Stage all and commit |
-| `gcad` | `git commit -a --amend` | Stage all and amend |
-| `lg` | `lazygit` | Launch lazygit |
-| `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
-| `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
-
 What's optional
 ----------------
 
@@ -142,6 +117,31 @@ Nano is always available as the default editor.
 | Python | [uv](https://github.com/astral-sh/uv) |
 | Go | [go.dev](https://go.dev) |
 | .NET | [dotnet-install](https://dot.net) |
+
+Aliases
+-------
+
+| Alias | Command | Description |
+|-------|---------|-------------|
+| `ls` | `eza --icons` | Modern ls with icons |
+| `ll` | `eza -la --icons` | Long listing with icons |
+| `lsa` | `ls -a` (resolves to `eza --icons -a`) | List all including hidden files |
+| `lt` | `eza --tree --level=2 --long --icons --git` | Tree view with git status |
+| `lta` | `lt -a` | Tree view including hidden files |
+| `cat` | `bat --paging=never` | Syntax-highlighted cat |
+| `ff` | `fzf --preview 'bat ...'` | Fuzzy find with preview |
+| `eff` | `$EDITOR "$(ff)"` | Fuzzy find and edit |
+| `..` | `cd ..` | Go up one directory |
+| `...` | `cd ../..` | Go up two directories |
+| `....` | `cd ../../..` | Go up three directories |
+| `c` | first selected AI tool | Launch selected AI assistant |
+| `g` | `git` | Git shorthand |
+| `gcm` | `git commit -m` | Commit with message |
+| `gcam` | `git commit -a -m` | Stage all and commit |
+| `gcad` | `git commit -a --amend` | Stage all and amend |
+| `lg` | `lazygit` | Launch lazygit |
+| `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
+| `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
 
 Update
 ------
