@@ -38,7 +38,7 @@ done
 # Clone or update
 if [ -d "$INSTALL_DIR" ]; then
 	echo "Updating existing install..."
-	git -C "$INSTALL_DIR" fetch --tags --force
+	git -C "$INSTALL_DIR" fetch --tags --force origin
 else
 	echo "Cloning squarebox..."
 	git clone "$REPO" "$INSTALL_DIR"
@@ -57,6 +57,7 @@ else
 	else
 		echo "No releases found, using main branch..."
 		git -C "$INSTALL_DIR" checkout main --quiet
+		git -C "$INSTALL_DIR" pull --ff-only --quiet
 	fi
 fi
 
