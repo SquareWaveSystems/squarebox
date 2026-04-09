@@ -3,6 +3,17 @@ set -euo pipefail
 
 REPO="https://github.com/SquareWaveSystems/squarebox.git"
 
+# On MSYS2/Git Bash, automatic path conversion mangles the ":" separator in
+# Docker volume mounts (-v host:container), causing mounts to point to wrong
+# locations. MSYS_NO_PATHCONV disables this for docker commands.
+docker_cmd() {
+    if [[ -n "${MSYSTEM:-}" ]]; then
+        MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker "$@"
+    else
+        docker "$@"
+    fi
+}
+
 # On Windows/mintty (Git Bash), docker needs winpty for interactive TTY
 # passthrough. mintty uses named pipes instead of the Windows Console API,
 # which breaks interactive docker commands. winpty bridges the gap.
@@ -10,7 +21,7 @@ REPO="https://github.com/SquareWaveSystems/squarebox.git"
 docker_interactive() {
     if [[ -n "${MSYSTEM:-}" || "${TERM_PROGRAM:-}" == "mintty" ]] \
         && command -v winpty &>/dev/null; then
-        winpty docker "$@"
+        MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' winpty docker "$@"
     else
         docker "$@"
     fi
@@ -66,56 +77,70 @@ if ! command -v docker &>/dev/null; then
 	echo "Error: Docker is not installed. See https://docs.docker.com/get-docker/" >&2
 	exit 1
 fi
-if ! docker info &>/dev/null; then
+if ! docker_cmd info &>/dev/null; then
 	echo "Error: Docker daemon is not running or current user lacks permissions." >&2
 	exit 1
 fi
 
 # Build
 echo "Building image..."
-docker build -t "$IMAGE_NAME" "$INSTALL_DIR"
+docker_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR"
 
 # Remove old container if it exists
-if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+if docker_cmd ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
 	echo "Removing old container..."
-	docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
-	docker rm "$CONTAINER_NAME" >/dev/null
+	docker_cmd stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+	docker_cmd rm "$CONTAINER_NAME" >/dev/null
 fi
 
-# Add shell aliases
+# Shell config must go where bash/zsh actually reads from ($HOME), which may
+# differ from USER_HOME on standalone MSYS2. The install directory uses
+# USER_HOME so it lands somewhere visible, but shell config is separate.
 case "${SHELL:-}" in
 	*/zsh) SHELL_RC="${HOME}/.zshrc" ;;
 	*)     SHELL_RC="${HOME}/.bashrc" ;;
 esac
 
-# Determine docker start command (winpty needed on mintty/MSYS2)
-if [[ -n "${MSYSTEM:-}" || "${TERM_PROGRAM:-}" == "mintty" ]] \
-    && command -v winpty &>/dev/null; then
-	DOCKER_START="winpty docker start -ai squarebox"
-else
-	DOCKER_START="docker start -ai squarebox"
-fi
-
+# Use shell functions (not aliases) so winpty detection happens at runtime
+# rather than being baked in at install time. This way the same config works
+# regardless of which terminal the user opens (Git Bash, PowerShell, etc.).
 ALIASES_ADDED=false
 
-for entry in \
-	"sqrbx=${DOCKER_START}" \
-	"squarebox=${DOCKER_START}" \
-	"sqrbx-rebuild=~/squarebox/install.sh" \
-	"squarebox-rebuild=~/squarebox/install.sh"; do
-	name="${entry%%=*}"
-	value="${entry#*=}"
-	if ! grep -q "alias ${name}=" "$SHELL_RC" 2>/dev/null; then
-		echo "alias ${name}='${value}'" >> "$SHELL_RC"
+_add_shell_func() {
+	local name="$1" body="$2"
+	if ! grep -q "^${name}()" "$SHELL_RC" 2>/dev/null; then
+		printf '%s() { %s; }\n' "$name" "$body" >> "$SHELL_RC"
 		ALIASES_ADDED=true
 	fi
-done
+}
+
+_docker_start='if command -v winpty &>/dev/null && [[ -n "${MSYSTEM:-}" ]]; then winpty docker start -ai squarebox; else docker start -ai squarebox; fi'
+_add_shell_func "sqrbx" "$_docker_start"
+_add_shell_func "squarebox" "$_docker_start"
+_add_shell_func "sqrbx-rebuild" "${INSTALL_DIR}/install.sh"
+_add_shell_func "squarebox-rebuild" "${INSTALL_DIR}/install.sh"
 
 if [ "$ALIASES_ADDED" = true ]; then
-	echo "Added squarebox aliases to $SHELL_RC — restart your shell or run: source $SHELL_RC"
+	echo "Added squarebox functions to $SHELL_RC — restart your shell or run: source $SHELL_RC"
 fi
 
-# PowerShell profile (Windows) — uses functions since PS aliases can't take arguments.
+# Git Bash on Windows opens a login shell which reads .bash_profile (not
+# .bashrc). Ensure .bash_profile sources .bashrc so aliases are available.
+# Both files must live under $HOME (where bash reads from).
+if [[ -n "${MSYSTEM:-}" ]] && [[ "${SHELL_RC}" == *".bashrc" ]]; then
+	_bash_profile="${HOME}/.bash_profile"
+	if ! grep -q '\.bashrc' "$_bash_profile" 2>/dev/null; then
+		cat >> "$_bash_profile" <<-'BPEOF'
+
+		# Source .bashrc for aliases and functions
+		[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+		BPEOF
+		echo "Updated .bash_profile to source .bashrc."
+	fi
+fi
+
+# PowerShell 7+ profile (Windows) — uses functions since PS aliases can't take arguments.
+# Only pwsh (7+) is supported; Windows PowerShell 5.1 is not.
 # Query pwsh for the actual $PROFILE path since Documents may be redirected (e.g. OneDrive).
 if command -v pwsh &>/dev/null; then
 	_ps_profile="$(pwsh -NoProfile -Command '$PROFILE' 2>/dev/null || true)"
@@ -128,8 +153,8 @@ if command -v pwsh &>/dev/null; then
 			# squarebox aliases
 			function sqrbx { docker start -ai squarebox }
 			function squarebox { docker start -ai squarebox }
-			function sqrbx-rebuild { & "$HOME/squarebox/install.sh" }
-			function squarebox-rebuild { & "$HOME/squarebox/install.sh" }
+			function sqrbx-rebuild { bash "$HOME/squarebox/install.sh" }
+			function squarebox-rebuild { bash "$HOME/squarebox/install.sh" }
 			PSEOF
 			echo "Added squarebox functions to PowerShell profile — restart PowerShell to use them."
 		fi
@@ -177,8 +202,9 @@ DOCKER_VOLUMES=(
 	-v "${USER_HOME}/.config/git:/home/dev/.config/git"
 	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml"
 	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit"
-	-v /etc/localtime:/etc/localtime:ro
 )
+# /etc/localtime doesn't exist on Windows — only mount it on Linux/macOS
+[ -f /etc/localtime ] && DOCKER_VOLUMES+=(-v /etc/localtime:/etc/localtime:ro)
 
 # SSH: prefer agent forwarding (private keys never enter the container).
 # Falls back to mounting ~/.ssh read-only if no agent is detected.
@@ -195,7 +221,7 @@ fi
 # Drop all Linux capabilities except those needed for scoped sudo
 DOCKER_OPTS+=(--cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --cap-add=KILL)
 
-docker create -it --name "$CONTAINER_NAME" \
+docker_cmd create -it --name "$CONTAINER_NAME" \
 	"${DOCKER_OPTS[@]}" \
 	"${DOCKER_VOLUMES[@]}" \
 	"$IMAGE_NAME" > /dev/null
