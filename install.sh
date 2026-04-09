@@ -246,8 +246,10 @@ fi
 # host ownership, so when the host user's uid differs (e.g. installing as root
 # on DietPi), `dev` can't write to the mounted dirs and setup.sh fails with
 # "Permission denied". Chown the host paths we manage to 1000:1000 in that case.
-# Skipped on Windows (MSYS2) where Docker Desktop remaps ownership transparently.
-if [ -z "${MSYSTEM:-}" ] && [ "$(id -u)" -ne 1000 ]; then
+# Linux-only: macOS and Windows Docker Desktop remap bind-mount ownership
+# transparently via their VMs, so chowning host dirs there is both unnecessary
+# and harmful (uid 1000 typically doesn't exist on the host).
+if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 1000 ]; then
 	_chown_paths=(
 		"${USER_HOME}/.config/git"
 		"${INSTALL_DIR}/workspace"
