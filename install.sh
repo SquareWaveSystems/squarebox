@@ -61,11 +61,13 @@ else
 	git clone "${GIT_QUIET[@]}" "$REPO" "$INSTALL_DIR"
 fi
 
-# Select version: --edge uses latest main, default uses latest tagged release
+# Select version: --edge uses latest main, default uses latest tagged release.
+# The install dir is managed by this script — treat origin as source of truth and
+# hard-reset rather than merging, so a diverged local main doesn't block updates.
 if [ "$EDGE" = "1" ]; then
 	echo "Using latest main (edge)..."
 	git -C "$INSTALL_DIR" checkout main "${GIT_QUIET[@]}"
-	git -C "$INSTALL_DIR" pull --ff-only "${GIT_QUIET[@]}"
+	git -C "$INSTALL_DIR" reset --hard "${GIT_QUIET[@]}" origin/main
 else
 	LATEST_TAG=$(git -C "$INSTALL_DIR" tag --sort=-v:refname | grep -v -- '-rc' | head -1)
 	if [ -n "$LATEST_TAG" ]; then
@@ -74,7 +76,7 @@ else
 	else
 		echo "No releases found, using main branch..."
 		git -C "$INSTALL_DIR" checkout main "${GIT_QUIET[@]}"
-		git -C "$INSTALL_DIR" pull --ff-only "${GIT_QUIET[@]}"
+		git -C "$INSTALL_DIR" reset --hard "${GIT_QUIET[@]}" origin/main
 	fi
 fi
 
