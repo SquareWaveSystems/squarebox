@@ -33,6 +33,8 @@ docker start -ai squarebox
 
 The `install.sh` script automates initial setup (clone, build, create container, add `sqrbx` shell alias). A `.devcontainer/devcontainer.json` is also provided for VS Code Dev Containers / Codespaces.
 
+**Windows PowerShell**: Only PowerShell 7+ (`pwsh`) is supported. Windows PowerShell 5.1 is not supported.
+
 ## First-Run Setup
 
 `setup.sh` runs automatically on first container launch and prompts for:

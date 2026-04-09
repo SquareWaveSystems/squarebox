@@ -31,47 +31,21 @@ Show
 Sleep 3s
 
 # --- AI assistant (gum choose --no-limit) ---
-# Select all 5: Claude Code, GitHub Copilot CLI, Google Gemini CLI, OpenAI Codex CLI, OpenCode
+# Select only Claude Code (1st item)
 Sleep 500ms
-Space
-Sleep 300ms
-Down
-Sleep 300ms
-Space
-Sleep 300ms
-Down
-Sleep 300ms
-Space
-Sleep 300ms
-Down
-Sleep 300ms
-Space
-Sleep 300ms
-Down
-Sleep 300ms
 Space
 Sleep 500ms
 Enter
 
-# Wait for AI tool "installs" (6 spinners: Claude + Node + Copilot + Gemini + Codex + OpenCode)
-Sleep 8s
+# Wait for AI tool "installs" (1 spinner: Claude Code)
+Sleep 2s
 
 # --- Editors (gum choose --no-limit) ---
-# Select all 5: micro, edit, fresh, helix, nvim
+# Select micro (1st) and fresh (3rd)
 Sleep 500ms
 Space
 Sleep 300ms
 Down
-Sleep 300ms
-Space
-Sleep 300ms
-Down
-Sleep 300ms
-Space
-Sleep 300ms
-Down
-Sleep 300ms
-Space
 Sleep 300ms
 Down
 Sleep 300ms
@@ -79,34 +53,22 @@ Space
 Sleep 500ms
 Enter
 
-# Wait for editor "installs" (5 spinners)
-Sleep 5s
-
-# --- Terminal multiplexer (gum choose --no-limit) ---
-# Select all 2: tmux, zellij
-Sleep 500ms
-Space
-Sleep 300ms
-Down
-Sleep 300ms
-Space
-Sleep 500ms
-Enter
-
-# Wait for multiplexer "installs" (2 spinners)
+# Wait for editor "installs" (2 spinners)
 Sleep 3s
 
-# --- SDKs (gum choose --no-limit) ---
-# Select all 4: Node.js, Python, Go, .NET
+# --- Terminal multiplexer (gum choose --no-limit) ---
+# Select tmux (1st item)
 Sleep 500ms
 Space
-Sleep 300ms
-Down
-Sleep 300ms
-Space
-Sleep 300ms
-Down
-Sleep 300ms
+Sleep 500ms
+Enter
+
+# Wait for multiplexer "install" (1 spinner)
+Sleep 2s
+
+# --- SDKs (gum choose --no-limit) ---
+# Select Node.js (1st) and Python (2nd)
+Sleep 500ms
 Space
 Sleep 300ms
 Down
@@ -115,8 +77,8 @@ Space
 Sleep 500ms
 Enter
 
-# Wait for SDK "installs" (Node skip + 3 spinners) + Done + MOTD
-Sleep 5s
+# Wait for SDK "installs" (2 spinners) + Done + MOTD
+Sleep 4s
 
 # Linger on MOTD
 Sleep 5s

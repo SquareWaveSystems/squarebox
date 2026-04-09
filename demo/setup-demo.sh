@@ -63,7 +63,7 @@ section_header "Text Editors"
 echo "Nano is always available as the default editor."
 selected=$(gum choose --no-limit \
     --header "Select text editors to install:" \
-    "micro" "edit" "fresh" "helix" "nvim") || true
+    "micro" "edit" "fresh" "nvim") || true
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue
@@ -71,14 +71,13 @@ while IFS= read -r line; do
         micro) run_with_spinner "Installing Micro v2.0.15..." 0.6 ;;
         edit)  run_with_spinner "Installing Edit v1.2.1..." 0.6 ;;
         fresh) run_with_spinner "Installing Fresh v0.2.21..." 0.6 ;;
-        helix) run_with_spinner "Installing Helix v25.07.1..." 0.6 ;;
         nvim)  run_with_spinner "Installing Neovim v0.12.0..." 0.6 ;;
     esac
 done <<< "$selected"
 
 # Terminal multiplexer — real gum choose (same as setup.sh)
 echo
-section_header "Terminal Multiplexer"
+section_header "Terminal Multiplexers"
 selected=$(gum choose --no-limit \
     --header "Select terminal multiplexer:" \
     "tmux" "zellij") || true
@@ -125,7 +124,6 @@ toilet -f smblock --metal "squarebox"
 printf '\e[0m'
 printf '\e[38;5;172m  %s\e[0m\n' "$(date '+%A, %B %d %Y  %H:%M')"
 printf '\e[38;5;172m  Node 24.14.1 ◆ Python uv 0.11.3\e[0m\n'
-printf '\e[38;5;172m  Go 1.26.1 ◆ .NET 10.0.201\e[0m\n'
 
 # Fake starship prompt
 echo
