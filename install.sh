@@ -142,10 +142,25 @@ fi
 # PowerShell 7+ profile (Windows) — uses functions since PS aliases can't take arguments.
 # Only pwsh (7+) is supported; Windows PowerShell 5.1 is not.
 # Query pwsh for the actual $PROFILE path since Documents may be redirected (e.g. OneDrive).
-echo "PowerShell profile setup:"
+_pwsh=""
 if command -v pwsh &>/dev/null; then
-	echo "  pwsh found: $(command -v pwsh)"
-	_ps_profile_raw="$(pwsh -NoProfile -Command '$PROFILE' 2>/dev/null | tr -d '\r' || true)"
+	_pwsh="$(command -v pwsh)"
+elif [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; then
+	# pwsh is often not on Git Bash's PATH — search common Windows install locations
+	for _candidate in \
+		"$(cygpath -u "${PROGRAMFILES:-/c/Program Files}" 2>/dev/null)/PowerShell/7/pwsh.exe" \
+		"$(cygpath -u "${LOCALAPPDATA:-}" 2>/dev/null)/Microsoft/PowerShell/pwsh.exe"; do
+		if [ -x "$_candidate" ] 2>/dev/null; then
+			_pwsh="$_candidate"
+			break
+		fi
+	done
+fi
+
+echo "PowerShell profile setup:"
+if [ -n "$_pwsh" ]; then
+	echo "  pwsh: $_pwsh"
+	_ps_profile_raw="$("$_pwsh" -NoProfile -Command '$PROFILE' 2>/dev/null | tr -d '\r' || true)"
 	echo "  \$PROFILE (raw): ${_ps_profile_raw:-<empty>}"
 	if [ -n "$_ps_profile_raw" ]; then
 		_ps_profile="$(cygpath -u "$_ps_profile_raw" 2>/dev/null || echo "$_ps_profile_raw")"
@@ -179,18 +194,10 @@ if command -v pwsh &>/dev/null; then
 		echo "  => WARNING: pwsh returned empty \$PROFILE path."
 	fi
 else
-	echo "  pwsh not found on PATH."
 	if [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; then
-		echo "  Hint: ensure pwsh.exe is in your system PATH (not just available inside PowerShell)."
-		# Try to find pwsh in common Windows locations
-		for _pwsh_candidate in \
-			"$(cygpath -u "${PROGRAMFILES:-/c/Program Files}" 2>/dev/null)/PowerShell/7/pwsh.exe" \
-			"$(cygpath -u "${LOCALAPPDATA:-}" 2>/dev/null)/Microsoft/PowerShell/pwsh.exe"; do
-			if [ -x "$_pwsh_candidate" ] 2>/dev/null; then
-				echo "  Found pwsh at: $_pwsh_candidate (not on PATH)"
-				break
-			fi
-		done
+		echo "  pwsh not found on PATH or in standard locations — skipping."
+	else
+		echo "  pwsh not found (not a Windows environment) — skipping."
 	fi
 fi
 
