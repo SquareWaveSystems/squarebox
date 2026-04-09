@@ -93,11 +93,12 @@ if docker_cmd ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
 	docker_cmd rm "$CONTAINER_NAME" >/dev/null
 fi
 
-# Add shell aliases — use USER_HOME so paths resolve correctly on MSYS2/Git
-# Bash where $HOME may point to the MSYS home instead of the Windows profile.
+# Shell config must go where bash/zsh actually reads from ($HOME), which may
+# differ from USER_HOME on standalone MSYS2. The install directory uses
+# USER_HOME so it lands somewhere visible, but shell config is separate.
 case "${SHELL:-}" in
-	*/zsh) SHELL_RC="${USER_HOME}/.zshrc" ;;
-	*)     SHELL_RC="${USER_HOME}/.bashrc" ;;
+	*/zsh) SHELL_RC="${HOME}/.zshrc" ;;
+	*)     SHELL_RC="${HOME}/.bashrc" ;;
 esac
 
 # Use shell functions (not aliases) so winpty detection happens at runtime
@@ -125,15 +126,14 @@ fi
 
 # Git Bash on Windows opens a login shell which reads .bash_profile (not
 # .bashrc). Ensure .bash_profile sources .bashrc so aliases are available.
+# Both files must live under $HOME (where bash reads from).
 if [[ -n "${MSYSTEM:-}" ]] && [[ "${SHELL_RC}" == *".bashrc" ]]; then
-	_bash_profile="${USER_HOME}/.bash_profile"
+	_bash_profile="${HOME}/.bash_profile"
 	if ! grep -q '\.bashrc' "$_bash_profile" 2>/dev/null; then
-		# Use the same USER_HOME path that SHELL_RC points to, since $HOME
-		# may differ from USER_HOME on MSYS2.
-		cat >> "$_bash_profile" <<-BPEOF
+		cat >> "$_bash_profile" <<-'BPEOF'
 
 		# Source .bashrc for aliases and functions
-		[ -f "${SHELL_RC}" ] && . "${SHELL_RC}"
+		[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
 		BPEOF
 		echo "Updated .bash_profile to source .bashrc."
 	fi
