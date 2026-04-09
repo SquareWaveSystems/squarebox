@@ -43,8 +43,9 @@ The `install.sh` script automates initial setup (clone, build, create container,
 2. **GitHub CLI auth** — persisted to `/workspace/.squarebox/gh` across rebuilds
 3. **AI coding assistant** — Claude Code, GitHub Copilot CLI, Google Gemini CLI, OpenAI Codex CLI, OpenCode (any combination)
 4. **Text editors** — micro, edit (Microsoft), fresh, nvim (nano is always available)
-5. **Terminal multiplexers** — tmux, zellij
-6. **SDKs** — Node.js (via nvm), Python (via uv), Go, .NET
+5. **TUI tools** — lazygit, gh-dash, yazi (any combination)
+6. **Terminal multiplexers** — tmux, zellij
+7. **SDKs** — Node.js (via nvm), Python (via uv), Go, .NET
 
 Selections are saved to `/workspace/.squarebox/` and reused on subsequent rebuilds.
 
@@ -72,7 +73,7 @@ The Dockerfile (Ubuntu 24.04 base) is organized into sequential stages:
 2. **External APT repos** — GitHub CLI, Eza via apt (requires gnupg, stays combined)
 3. **Per-tool binary installs** — one `RUN` layer per tool via `sb_install` from the shared library
 4. **User setup** — creates non-root `dev` user with workspace directory
-5. **Config files** — git and lazygit configs with delta as default pager
+5. **Config files** — git config with delta as default pager (lazygit config is set up by setup.sh when lazygit is installed)
 6. **Setup script & configs** — copies `setup.sh`, `sqrbx-update`, starship.toml
 7. **Shell config** — bashrc with starship prompt, zoxide, aliases
 

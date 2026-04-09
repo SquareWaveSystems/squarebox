@@ -64,18 +64,6 @@ suite_tools() {
 	# gitconfig lives at /etc/gitconfig (system-level), not --global (user-level)
 	run_test_grep "5.11 git pager uses delta" "delta" git config core.pager
 
-	# 5.12 lazygit uses delta pager
-	run_test_grep "5.12 lazygit config uses delta" "delta" cat /home/dev/.config/lazygit/config.yml
-
-	# 5.3 lazygit version (TUI launch is manual)
-	run_test "5.3 lazygit --version" lazygit --version
-
-	# 5.4 yazi version
-	run_test "5.4 yazi --version" yazi --version
-
-	# 5.5 gh-dash version
-	run_test "5.5 gh-dash --version" gh-dash --version
-
 	# 5.6 glow renders markdown
 	run_test "5.6 glow renders file" glow /home/dev/motd.sh
 
@@ -124,7 +112,8 @@ suite_shell() {
 	# Alias/config sourcing in bashrc
 	run_test_grep "4.6a ai-aliases sourced" "squarebox-ai-aliases" cat ~/.bashrc
 	run_test_grep "4.6b editor-aliases sourced" "squarebox-editor-aliases" cat ~/.bashrc
-	run_test_grep "4.6c sdk-paths sourced" "squarebox-sdk-paths" cat ~/.bashrc
+	run_test_grep "4.6c tui-aliases sourced" "squarebox-tui-aliases" cat ~/.bashrc
+	run_test_grep "4.6d sdk-paths sourced" "squarebox-sdk-paths" cat ~/.bashrc
 
 	# Shell config loads without errors (also in build.yml)
 	run_test "4.0 shell config loads" bash -lc 'echo ok'
@@ -174,6 +163,7 @@ suite_setup_editors() {
 	mkdir -p /workspace/.squarebox
 	echo "opencode" > /workspace/.squarebox/ai-tool
 	echo "micro,edit,fresh,nvim" > /workspace/.squarebox/editors
+	echo "lazygit,gh-dash,yazi" > /workspace/.squarebox/tuis
 	echo "tmux,zellij" > /workspace/.squarebox/multiplexer
 	echo "node,go" > /workspace/.squarebox/sdks
 
@@ -196,6 +186,14 @@ suite_setup_editors() {
 	run_test "3.7d fresh installed" command -v fresh
 	run_test "3.7e nvim installed" command -v nvim
 
+	# 3.7f-h TUI tools installed
+	run_test "3.7f lazygit installed" command -v lazygit
+	run_test "3.7g gh-dash installed" command -v gh-dash
+	run_test "3.7h yazi installed" command -v yazi
+
+	# 5.12 lazygit config uses delta pager (set up by install_lazygit)
+	run_test_grep "5.12 lazygit config uses delta" "delta" cat /home/dev/.config/lazygit/config.yml
+
 	# 3.8 multiplexers installed
 	run_test "3.8a tmux installed" command -v tmux
 	run_test "3.8b zellij installed" command -v zellij
@@ -207,8 +205,9 @@ suite_setup_editors() {
 	# 3.11 selections saved
 	run_test "3.11a ai-tool config saved" test -f /workspace/.squarebox/ai-tool
 	run_test "3.11b editors config saved" test -f /workspace/.squarebox/editors
-	run_test "3.11c multiplexer config saved" test -f /workspace/.squarebox/multiplexer
-	run_test "3.11d sdks config saved" test -f /workspace/.squarebox/sdks
+	run_test "3.11c tuis config saved" test -f /workspace/.squarebox/tuis
+	run_test "3.11d multiplexer config saved" test -f /workspace/.squarebox/multiplexer
+	run_test "3.11e sdks config saved" test -f /workspace/.squarebox/sdks
 
 	# 4.4 EDITOR set to first selected editor (micro)
 	run_test_grep "4.4 EDITOR set to micro" "micro" cat ~/.squarebox-editor-aliases

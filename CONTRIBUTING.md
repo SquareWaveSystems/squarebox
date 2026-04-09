@@ -35,7 +35,7 @@ To run a quick local smoke test:
 ```bash
 docker build -t squarebox:test .
 docker run --rm squarebox:test bash -c '
-  for cmd in bat curl delta eza fd fzf gh gh-dash glow gum jq lazygit nano rg starship xh yazi yq zoxide; do
+  for cmd in bat curl delta eza fd fzf gh glow gum jq nano rg starship xh yq zoxide; do
     which "$cmd" || { echo "MISSING: $cmd"; exit 1; }
   done
   echo "All tools present"

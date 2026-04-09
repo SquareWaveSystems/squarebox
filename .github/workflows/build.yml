@@ -49,7 +49,7 @@ jobs:
       - name: All tools exist
         run: |
           docker run --rm squarebox:test bash -c '
-            for cmd in bat curl delta eza fd fzf gh gh-dash glow gum jq lazygit nano rg starship xh yazi yq zoxide; do
+            for cmd in bat curl delta eza fd fzf gh glow gum jq nano rg starship xh yq zoxide; do
               which "$cmd" || { echo "MISSING: $cmd"; exit 1; }
             done
           '
@@ -65,7 +65,6 @@ jobs:
             [[ $(alias cat) == *bat* ]] || { echo "FAIL: cat not aliased to bat"; exit 1; }
             [[ $(alias ll) == *eza* ]] || { echo "FAIL: ll not aliased to eza"; exit 1; }
             [[ $(alias g) == *git* ]] || { echo "FAIL: g not aliased to git"; exit 1; }
-            [[ $(alias lg) == *lazygit* ]] || { echo "FAIL: lg not aliased to lazygit"; exit 1; }
             # Functional: aliases actually run the right binary
             ls --version 2>&1 | grep -qi eza || { echo "FAIL: ls does not run eza"; exit 1; }
             cat --version 2>&1 | grep -qi bat || { echo "FAIL: cat does not run bat"; exit 1; }
