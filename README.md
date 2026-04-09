@@ -9,7 +9,7 @@ multiple platforms and devices.*
 development environment into a single Docker container: modern file-listing
 and search tools, git UIs, AI coding assistants, language SDKs, and an
 opinionated set of shell aliases. Run the same box anywhere - on your desktop, a VPS, or
-a Codespace - and SSH in from your laptop (any OS), tablet, or phone. Run the
+a Codespace - and SSH in from your laptop (any OS), tablet, or phone (please don't). Run the
 install command below and you're ready to code.
 
 The goal is to make modern terminal tooling easy and accessible: one line
@@ -268,7 +268,7 @@ Devcontainer / Codespaces
 Open this repo in VS Code with the
 [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers),
 or launch it in [GitHub Codespaces](https://github.com/features/codespaces).
-The included `.devcontainer/devcontainer.json` builds the full squarebox image
+The included `.devcontainer/devcontainer.json` builds the full **squarebox** image
 automatically.
 
 The interactive first-run setup is skipped in devcontainer mode. To configure
@@ -291,7 +291,7 @@ Back up `~/squarebox/workspace` first if you need your code.
 Make it your own
 -----------------
 
-squarebox is meant to be a starting point, not a finished product. Fork it,
+**squarebox** is meant to be a starting point, not a finished product. Fork it,
 swap out tools, add your own dotfiles, change the theme - build the dev
 environment that fits the way you work. The Dockerfile is intentionally
 straightforward and the tool registry (`scripts/lib/tools.yaml`) makes it easy
