@@ -15,8 +15,6 @@ install command below and you're ready to code.
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
 *(Actual setup may involve more staring at the screen.)*
 
-*Dramatisation. Actual install times may vary. No containers were harmed in the making of this GIF.*
-
 Prerequisites
 -------------
 
