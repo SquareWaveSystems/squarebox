@@ -76,6 +76,12 @@ The Dockerfile (Ubuntu 24.04 base) is organized into sequential stages:
 
 The Dockerfile uses `SHELL ["/bin/bash", "-c"]` because `tool-lib.sh` relies on bash parameter substitution. All tool versions are pinned via `ARG` directives and verified against SHA256 checksums.
 
+## Windows Support
+
+- **PowerShell**: only PowerShell 7+ (`pwsh`) is supported. Windows PowerShell 5.1 (`powershell.exe`) is not supported.
+- **Git Bash**: install.sh uses `MSYS_NO_PATHCONV=1` to prevent MSYS2 path mangling in Docker volume mounts.
+- **Install directory**: uses `USERPROFILE` (not MSYS2 `HOME`) so the clone lands at `C:\Users\<user>\squarebox`.
+
 ## Tool Registry
 
 `scripts/lib/tools.yaml` is the single source of truth for tool metadata (repos, artifact patterns, arch mappings, extract methods). `scripts/lib/tool-lib.sh` is a shared shell library that consumes it.

@@ -139,18 +139,11 @@ if [[ -n "${MSYSTEM:-}" ]] && [[ "${SHELL_RC}" == *".bashrc" ]]; then
 	fi
 fi
 
-# PowerShell profile (Windows) — uses functions since PS aliases can't take arguments.
-# Query the actual $PROFILE path since Documents may be redirected (e.g. OneDrive).
-# Check both pwsh (PowerShell 7+/Core) and powershell (Windows PowerShell 5.1).
-_ps_cmd=""
+# PowerShell 7+ profile (Windows) — uses functions since PS aliases can't take arguments.
+# Only pwsh (7+) is supported; Windows PowerShell 5.1 is not.
+# Query pwsh for the actual $PROFILE path since Documents may be redirected (e.g. OneDrive).
 if command -v pwsh &>/dev/null; then
-	_ps_cmd="pwsh"
-elif command -v powershell &>/dev/null; then
-	_ps_cmd="powershell"
-fi
-
-if [ -n "$_ps_cmd" ]; then
-	_ps_profile="$("$_ps_cmd" -NoProfile -Command '$PROFILE' 2>/dev/null || true)"
+	_ps_profile="$(pwsh -NoProfile -Command '$PROFILE' 2>/dev/null || true)"
 	if [ -n "$_ps_profile" ]; then
 		_ps_profile="$(cygpath -u "$_ps_profile" 2>/dev/null || echo "$_ps_profile")"
 		mkdir -p "$(dirname "$_ps_profile")"
@@ -164,23 +157,6 @@ if [ -n "$_ps_cmd" ]; then
 			function squarebox-rebuild { bash "$HOME/squarebox/install.sh" }
 			PSEOF
 			echo "Added squarebox functions to PowerShell profile — restart PowerShell to use them."
-		fi
-
-		# Windows PowerShell 5.1 defaults ExecutionPolicy to Restricted,
-		# which silently blocks profile scripts from loading. Set it to
-		# RemoteSigned (allows local scripts like profiles) if needed.
-		# pwsh (7+) defaults to RemoteSigned and doesn't need this.
-		_ps_policy="$("$_ps_cmd" -NoProfile -Command 'Get-ExecutionPolicy' 2>/dev/null || true)"
-		if [ "$_ps_policy" = "Restricted" ] || [ "$_ps_policy" = "Undefined" ]; then
-			echo "PowerShell execution policy is '$_ps_policy' — profiles won't load."
-			if "$_ps_cmd" -NoProfile -Command \
-				'Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force' 2>/dev/null; then
-				echo "Set execution policy to RemoteSigned for current user."
-			else
-				echo "Could not set execution policy automatically."
-				echo "Run this in PowerShell to enable the profile:"
-				echo "  Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned"
-			fi
 		fi
 	fi
 fi
