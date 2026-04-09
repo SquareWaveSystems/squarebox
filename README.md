@@ -48,7 +48,7 @@ Start
     squarebox        # or: sqrbx
 
 These are shell aliases for `docker start -ai squarebox`, added automatically
-for Bash, Zsh, and PowerShell 7+.
+for Bash, Zsh, and PowerShell (7+ and Windows PowerShell 5.1).
 
 The container is persistent: it suspends on exit and resumes on start, keeping
 installed packages, config, and shell history intact between sessions. Your code
@@ -280,7 +280,9 @@ Uninstall
     rm -rf ~/squarebox
 
 Then remove the `sqrbx` and `sqrbx-rebuild` aliases from your shell config
-(`~/.bashrc`, `~/.zshrc`, or `~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1`).
+(`~/.bashrc`, `~/.zshrc`, or your PowerShell `$PROFILE` — typically
+`~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1` for PS 7+ or
+`~/Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1` for PS 5.1).
 Back up `~/squarebox/workspace` first if you need your code.
 
 Make it your own
