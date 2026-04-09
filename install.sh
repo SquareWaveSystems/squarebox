@@ -142,11 +142,20 @@ fi
 # PowerShell 7+ profile (Windows) — uses functions since PS aliases can't take arguments.
 # Only pwsh (7+) is supported; Windows PowerShell 5.1 is not.
 # Query pwsh for the actual $PROFILE path since Documents may be redirected (e.g. OneDrive).
+echo "PowerShell profile setup:"
 if command -v pwsh &>/dev/null; then
-	_ps_profile="$(pwsh -NoProfile -Command '$PROFILE' 2>/dev/null || true)"
-	if [ -n "$_ps_profile" ]; then
-		_ps_profile="$(cygpath -u "$_ps_profile" 2>/dev/null || echo "$_ps_profile")"
+	echo "  pwsh found: $(command -v pwsh)"
+	_ps_profile_raw="$(pwsh -NoProfile -Command '$PROFILE' 2>/dev/null || true)"
+	echo "  \$PROFILE (raw): ${_ps_profile_raw:-<empty>}"
+	if [ -n "$_ps_profile_raw" ]; then
+		_ps_profile="$(cygpath -u "$_ps_profile_raw" 2>/dev/null || echo "$_ps_profile_raw")"
+		echo "  \$PROFILE (unix): $_ps_profile"
 		mkdir -p "$(dirname "$_ps_profile")"
+		if [ -f "$_ps_profile" ]; then
+			echo "  Profile exists: yes ($(wc -l < "$_ps_profile") lines)"
+		else
+			echo "  Profile exists: no (will create)"
+		fi
 		if ! grep -q 'function sqrbx ' "$_ps_profile" 2>/dev/null; then
 			cat >> "$_ps_profile" <<-'PSEOF'
 
@@ -156,16 +165,32 @@ if command -v pwsh &>/dev/null; then
 			function sqrbx-rebuild { bash "$HOME/squarebox/install.sh" }
 			function squarebox-rebuild { bash "$HOME/squarebox/install.sh" }
 			PSEOF
-			echo "Added squarebox functions to PowerShell profile — restart PowerShell to use them."
-			echo "Note: if your profile does not load, run: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned"
+			if grep -q 'function sqrbx ' "$_ps_profile" 2>/dev/null; then
+				echo "  => Added and verified squarebox functions in: $_ps_profile"
+			else
+				echo "  => ERROR: wrote to $_ps_profile but functions not found after write!"
+			fi
+			echo "  Restart PowerShell to use them."
+			echo "  Note: if profile doesn't load, run: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned"
+		else
+			echo "  => Functions already present, skipping."
 		fi
 	else
-		echo "Warning: Could not determine PowerShell profile path."
+		echo "  => WARNING: pwsh returned empty \$PROFILE path."
 	fi
 else
-	# Only warn on Windows-like environments where PowerShell is expected
+	echo "  pwsh not found on PATH."
 	if [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; then
-		echo "Note: pwsh (PowerShell 7+) not found on PATH — skipping PowerShell profile setup."
+		echo "  Hint: ensure pwsh.exe is in your system PATH (not just available inside PowerShell)."
+		# Try to find pwsh in common Windows locations
+		for _pwsh_candidate in \
+			"$(cygpath -u "${PROGRAMFILES:-/c/Program Files}" 2>/dev/null)/PowerShell/7/pwsh.exe" \
+			"$(cygpath -u "${LOCALAPPDATA:-}" 2>/dev/null)/Microsoft/PowerShell/pwsh.exe"; do
+			if [ -x "$_pwsh_candidate" ] 2>/dev/null; then
+				echo "  Found pwsh at: $_pwsh_candidate (not on PATH)"
+				break
+			fi
+		done
 	fi
 fi
 
