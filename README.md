@@ -21,9 +21,29 @@ install, sleek setup, sensible defaults (thanks [omarchy](https://omarchy.org)).
 Prerequisites
 -------------
 
-- [Docker](https://docs.docker.com/get-docker/)
+- [Docker](https://docs.docker.com/get-docker/) (see one-line install below if you don't have it)
 - [Git](https://git-scm.com/) - on Windows, install [Git for Windows](https://gitforwindows.org/)
   (provides `bash` and `winpty` needed by the install script)
+
+### Don't have Docker? One-line install
+
+**macOS** (via [Homebrew](https://brew.sh)):
+
+    brew install --cask docker-desktop
+
+**Linux** (official convenience script - inspect it first at [get.docker.com](https://get.docker.com)):
+
+    curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER
+
+Log out and back in (or run `newgrp docker`) so your shell picks up the new group.
+
+**Windows** (via [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/), in PowerShell 7+):
+
+    winget install --id Docker.DockerDesktop -e
+
+On macOS and Windows, start Docker Desktop once after install so the daemon is
+running before you continue. For other options (rootless, Colima, OrbStack,
+Podman, etc.) see the [Docker install docs](https://docs.docker.com/get-docker/).
 
 Install
 -------
