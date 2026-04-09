@@ -46,8 +46,8 @@ at each layer:
 |-------|---------------|-----------|-----------------|-----------------|
 | **install.sh** | Git repo from GitHub | HTTPS | Git transport verification | Tracks `main` branch |
 | **Dockerfile — APT packages** | Ubuntu 24.04 packages, GitHub CLI, Eza | HTTPS | APT GPG signatures | Distro versions (not pinned) |
-| **Dockerfile — binary tools** | 9 tools from GitHub Releases (delta, yq, lazygit, gh-dash, xh, yazi, glow, gum, starship) | HTTPS | SHA256 checksum — build fails on mismatch | Yes, all pinned |
-| **setup.sh — tools with checksums** | OpenCode, nvm, Go, editors (micro, edit, fresh, helix, nvim), zellij | HTTPS | SHA256 checksum | Yes, all pinned |
+| **Dockerfile — binary tools** | 6 tools from GitHub Releases (delta, yq, xh, glow, gum, starship) | HTTPS | SHA256 checksum — build fails on mismatch | Yes, all pinned |
+| **setup.sh — tools with checksums** | OpenCode, nvm, Go, editors (micro, edit, fresh, helix, nvim), TUIs (lazygit, gh-dash, yazi), zellij | HTTPS | SHA256 checksum | Yes, all pinned |
 | **sqrbx-update** | All tools from both layers above | HTTPS | SHA256 checksum — fetched from repo, update refused on mismatch or missing checksum | Only vetted versions |
 | **setup.sh — third-party installers** | Claude Code, uv, .NET | HTTPS | Delegates to vendor installer | No (latest/LTS) |
 

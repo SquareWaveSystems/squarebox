@@ -237,8 +237,11 @@ EDIT_ASSET_VERSION="1.2.0"
 FRESH_VERSION="0.2.21"
 NVIM_VERSION="0.12.0"
 ZELLIJ_VERSION="0.44.0"
+LAZYGIT_VERSION="0.60.0"
+GH_DASH_VERSION="4.23.2"
+YAZI_VERSION="26.1.22"
 
-for _var in OPENCODE_VERSION MICRO_VERSION EDIT_VERSION EDIT_ASSET_VERSION FRESH_VERSION NVIM_VERSION ZELLIJ_VERSION; do
+for _var in OPENCODE_VERSION MICRO_VERSION EDIT_VERSION EDIT_ASSET_VERSION FRESH_VERSION NVIM_VERSION ZELLIJ_VERSION LAZYGIT_VERSION GH_DASH_VERSION YAZI_VERSION; do
 	if [ -z "${!_var:-}" ]; then
 		echo "Error: ${_var} is empty or unset" >&2
 		exit 1
@@ -501,6 +504,112 @@ fi
 		echo "export EDITOR='$editor_cmd'"
 	fi
 } > ~/.squarebox-editor-aliases
+
+# TUI tools
+TUI_CONFIG="/workspace/.squarebox/tuis"
+
+tui_prev=""
+if [ -f "$TUI_CONFIG" ]; then
+	tui_prev=$(cat "$TUI_CONFIG")
+fi
+
+if $INTERACTIVE; then
+	echo
+	section_header "TUI Tools"
+	if $HAS_GUM; then
+		# Build --selected from previously saved TUI tools
+		gum_selected=""
+		for tui in $(echo "$tui_prev" | tr ',' ' '); do
+			case "$tui" in
+				lazygit) gum_selected="${gum_selected:+$gum_selected,}lazygit" ;;
+				gh-dash) gum_selected="${gum_selected:+$gum_selected,}gh-dash" ;;
+				yazi)    gum_selected="${gum_selected:+$gum_selected,}yazi" ;;
+			esac
+		done
+		gum_args=(--no-limit --header "Select TUI tools to install:")
+		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
+		selected=$(gum choose "${gum_args[@]}" \
+			"lazygit" "gh-dash" "yazi") || true
+		tui_list=""
+		while IFS= read -r line; do
+			[ -z "$line" ] && continue
+			tui_list="${tui_list:+$tui_list,}${line}"
+		done <<< "$selected"
+	else
+		echo "Select TUI tools to install (comma-separated, or 'all', or press Enter to skip):"
+		for tui_item in "1:lazygit:git terminal UI" "2:gh-dash:GitHub dashboard for the terminal" "3:yazi:terminal file manager"; do
+			num="${tui_item%%:*}"; rest="${tui_item#*:}"; key="${rest%%:*}"; desc="${rest#*:}"
+			if [[ ",$tui_prev," == *",${key},"* ]]; then
+				echo "  ${num}) ${key} — ${desc} [installed]"
+			else
+				echo "  ${num}) ${key} — ${desc}"
+			fi
+		done
+		read -rp "Selection [1,2,3/all/skip]: " tui_selection
+		if [ -z "$tui_selection" ] && [ -n "$tui_prev" ]; then
+			tui_list="$tui_prev"
+		else
+			tui_list=""
+			if [ "$tui_selection" = "all" ]; then
+				tui_list="lazygit,gh-dash,yazi"
+			elif [ -n "$tui_selection" ]; then
+				for item in $(echo "$tui_selection" | tr ',' ' '); do
+					case "$item" in
+						1) tui_list="${tui_list:+$tui_list,}lazygit" ;;
+						2) tui_list="${tui_list:+$tui_list,}gh-dash" ;;
+						3) tui_list="${tui_list:+$tui_list,}yazi" ;;
+					esac
+				done
+			fi
+		fi
+	fi
+	echo "$tui_list" > "$TUI_CONFIG"
+elif [ -n "$tui_prev" ]; then
+	tui_list="$tui_prev"
+	[ -n "$tui_list" ] && echo "Installing TUI tools: $tui_list (from previous selection)"
+else
+	echo "Skipping TUI tool selection (non-interactive)"
+	tui_list=""
+	echo "$tui_list" > "$TUI_CONFIG"
+fi
+
+install_lazygit() {
+	if command -v lazygit &>/dev/null; then echo "Lazygit already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Lazygit v${LAZYGIT_VERSION}..." sb_install lazygit "$LAZYGIT_VERSION"
+	# Install default lazygit config if missing
+	if [ ! -f ~/.config/lazygit/config.yml ]; then
+		mkdir -p ~/.config/lazygit
+		printf 'git:\n  paging:\n    colorArg: always\n    pager: delta --dark --paging=never\n' > ~/.config/lazygit/config.yml
+	fi
+}
+
+install_gh_dash() {
+	if command -v gh-dash &>/dev/null; then echo "gh-dash already installed, skipping."; return 0; fi
+	run_with_spinner "Installing gh-dash v${GH_DASH_VERSION}..." sb_install gh-dash "$GH_DASH_VERSION"
+}
+
+install_yazi() {
+	if command -v yazi &>/dev/null; then echo "Yazi already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Yazi v${YAZI_VERSION}..." sb_install yazi "$YAZI_VERSION"
+}
+
+installed_tuis=()
+for tui in $(echo "$tui_list" | tr ',' ' '); do
+	case "$tui" in
+		lazygit) install_lazygit && installed_tuis+=("lazygit") || echo "Warning: Lazygit installation failed." ;;
+		gh-dash) install_gh_dash && installed_tuis+=("gh-dash") || echo "Warning: gh-dash installation failed." ;;
+		yazi)    install_yazi    && installed_tuis+=("yazi")    || echo "Warning: Yazi installation failed." ;;
+	esac
+done
+
+# Set TUI aliases (lg for lazygit) only when installed
+{
+	for tui in "${installed_tuis[@]}"; do
+		case "$tui" in
+			lazygit) echo "alias lg='lazygit'" ;;
+		esac
+	done
+} > ~/.squarebox-tui-aliases
 
 # Terminal multiplexer
 MUX_CONFIG="/workspace/.squarebox/multiplexer"

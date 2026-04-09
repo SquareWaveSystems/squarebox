@@ -193,11 +193,8 @@ update_arg() {
 
 update_arg DELTA_VERSION "${VERSIONS[delta]}"
 update_arg YQ_VERSION "${VERSIONS[yq]}"
-update_arg LAZYGIT_VERSION "${VERSIONS[lazygit]}"
 update_arg XH_VERSION "${VERSIONS[xh]}"
-update_arg YAZI_VERSION "${VERSIONS[yazi]}"
 update_arg STARSHIP_VERSION "${VERSIONS[starship]}"
-update_arg GH_DASH_VERSION "${VERSIONS[gh-dash]}"
 update_arg GLOW_VERSION "${VERSIONS[glow]}"
 update_arg GUM_VERSION "${VERSIONS[gum]}"
 
@@ -215,6 +212,9 @@ sed -i "s|^FRESH_VERSION=.*|FRESH_VERSION=\"${VERSIONS[fresh]}\"|" "${REPO_ROOT}
 sed -i "s|^HELIX_VERSION=.*|HELIX_VERSION=\"${VERSIONS[helix]}\"|" "${REPO_ROOT}/setup.sh"
 sed -i "s|^NVIM_VERSION=.*|NVIM_VERSION=\"${VERSIONS[nvim]}\"|" "${REPO_ROOT}/setup.sh"
 sed -i "s|^ZELLIJ_VERSION=.*|ZELLIJ_VERSION=\"${VERSIONS[zellij]}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^LAZYGIT_VERSION=.*|LAZYGIT_VERSION=\"${VERSIONS[lazygit]}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^GH_DASH_VERSION=.*|GH_DASH_VERSION=\"${VERSIONS[gh-dash]}\"|" "${REPO_ROOT}/setup.sh"
+sed -i "s|^YAZI_VERSION=.*|YAZI_VERSION=\"${VERSIONS[yazi]}\"|" "${REPO_ROOT}/setup.sh"
 
 echo
 echo "Done. Review changes with: git diff"

@@ -28,3 +28,12 @@ ce23fa8d395e633e3e54c052012f11965d91d8d5c2bfa659685f50430b4f8175  helix-25.07.1-
 # Zellij 0.44.0
 7e981d50c98ec13ad6cc882e8ca4da32544dd6b69fd0d1b2b753eb597847adb3  zellij-x86_64-unknown-linux-musl.tar.gz
 dd60edef434b413529060ba46135c7ed2e4d41c92d640ce51558df031875bb2c  zellij-aarch64-unknown-linux-musl.tar.gz
+# Lazygit 0.60.0
+6252ca6cf98bc4fd3e0d927b54225910cfa57b065d0ad88263f14592f7f9ab15  lazygit_0.60.0_Linux_x86_64.tar.gz
+2c699579165416eede4d2cfaf7d76ccd8f3b20f20f2e8b4abff6b5a6350fcdd7  lazygit_0.60.0_Linux_arm64.tar.gz
+# gh-dash 4.23.2
+fed6b0ae90ce2c32ac029c2ce891cd2ad1a1cdd9a12d21fb14ed25d18dae658b  gh-dash_v4.23.2_linux-amd64
+19037ce8ef2997f29ccba96c8309b47554a4f13bed2492c3997aeef2fdbaa136  gh-dash_v4.23.2_linux-arm64
+# Yazi 26.1.22
+b977351968206c0b78d2ef5bf21351685cc191b58a4c7e1c98c37db5d0a381f8  yazi-x86_64-unknown-linux-musl.zip
+91a37cdb3aa49f903aab6af57bca708935acb6def1d9f218716ab414f0a3a8b1  yazi-aarch64-unknown-linux-musl.zip

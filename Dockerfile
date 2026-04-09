@@ -35,22 +35,16 @@ ENV LC_ALL=en_US.UTF-8
 # Pinned tool versions — update via: scripts/update-versions.sh
 ARG DELTA_VERSION=0.19.2
 ARG YQ_VERSION=4.52.5
-ARG LAZYGIT_VERSION=0.60.0
 ARG XH_VERSION=0.25.3
-ARG YAZI_VERSION=26.1.22
 ARG STARSHIP_VERSION=1.24.2
-ARG GH_DASH_VERSION=4.23.2
 ARG GLOW_VERSION=2.1.1
 ARG GUM_VERSION=0.17.0
 
 # Validate version ARGs are non-empty
 RUN test -n "$DELTA_VERSION"    || { echo "Error: DELTA_VERSION is empty" >&2; exit 1; } \
  && test -n "$YQ_VERSION"       || { echo "Error: YQ_VERSION is empty" >&2; exit 1; } \
- && test -n "$LAZYGIT_VERSION"  || { echo "Error: LAZYGIT_VERSION is empty" >&2; exit 1; } \
  && test -n "$XH_VERSION"       || { echo "Error: XH_VERSION is empty" >&2; exit 1; } \
- && test -n "$YAZI_VERSION"     || { echo "Error: YAZI_VERSION is empty" >&2; exit 1; } \
  && test -n "$STARSHIP_VERSION" || { echo "Error: STARSHIP_VERSION is empty" >&2; exit 1; } \
- && test -n "$GH_DASH_VERSION"  || { echo "Error: GH_DASH_VERSION is empty" >&2; exit 1; } \
  && test -n "$GLOW_VERSION"     || { echo "Error: GLOW_VERSION is empty" >&2; exit 1; } \
  && test -n "$GUM_VERSION"      || { echo "Error: GUM_VERSION is empty" >&2; exit 1; }
 
@@ -89,10 +83,7 @@ RUN echo '. /tmp/tool-lib.sh; sb_verify() { verify-checksum "$1" "$2"; }' > /tmp
 # 3. Binary tool installs (one per layer for cache granularity)
 RUN . /tmp/sb-init.sh && sb_install delta "$DELTA_VERSION"
 RUN . /tmp/sb-init.sh && sb_install yq "$YQ_VERSION"
-RUN . /tmp/sb-init.sh && sb_install lazygit "$LAZYGIT_VERSION"
-RUN . /tmp/sb-init.sh && sb_install gh-dash "$GH_DASH_VERSION"
 RUN . /tmp/sb-init.sh && sb_install xh "$XH_VERSION"
-RUN . /tmp/sb-init.sh && sb_install yazi "$YAZI_VERSION"
 RUN . /tmp/sb-init.sh && sb_install glow "$GLOW_VERSION"
 RUN . /tmp/sb-init.sh && sb_install gum "$GUM_VERSION"
 RUN . /tmp/sb-init.sh && sb_install starship "$STARSHIP_VERSION"
@@ -105,13 +96,12 @@ RUN rm -f /tmp/checksums.txt /tmp/tools.yaml /tmp/tool-lib.sh /tmp/sb-init.sh
 RUN userdel -r ubuntu 2>/dev/null || true \
 	&& useradd -m -s /bin/bash -u 1000 dev \
 	&& echo 'dev ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/dpkg, /usr/bin/chown, /usr/bin/install' > /etc/sudoers.d/dev \
-	&& mkdir -p /home/dev/.claude /home/dev/.config/lazygit /home/dev/.ssh \
+	&& mkdir -p /home/dev/.claude /home/dev/.config /home/dev/.ssh \
 	&& chown -R dev:dev /home/dev
 
 # 5. Config Files
 
-RUN printf '[core]\n\tpager = delta\n[interactive]\n\tdiffFilter = delta --color-only\n[delta]\n\tnavigate = true\n\tdark = true\n[merge]\n\tconflictstyle = zdiff3\n' > /etc/gitconfig \
-	&& printf 'git:\n  paging:\n    colorArg: always\n    pager: delta --dark --paging=never\n' > /home/dev/.config/lazygit/config.yml
+RUN printf '[core]\n\tpager = delta\n[interactive]\n\tdiffFilter = delta --color-only\n[delta]\n\tnavigate = true\n\tdark = true\n[merge]\n\tconflictstyle = zdiff3\n' > /etc/gitconfig
 
 # 6. Setup script
 
@@ -154,12 +144,12 @@ alias ....='cd ../../..'
 export EDITOR='nano'
 [ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
 [ -f ~/.squarebox-editor-aliases ] && source ~/.squarebox-editor-aliases
+[ -f ~/.squarebox-tui-aliases ] && source ~/.squarebox-tui-aliases
 [ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
 alias g='git'
 alias gcm='git commit -m'
 alias gcam='git commit -a -m'
 alias gcad='git commit -a --amend'
-alias lg='lazygit'
 export PATH="$HOME/.local/bin:$PATH"
 # First-run setup
 if [ ! -f ~/.squarebox-setup-done ]; then

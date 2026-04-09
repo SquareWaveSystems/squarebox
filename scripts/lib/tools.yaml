@@ -33,25 +33,6 @@ tools:
     dest: system
     group: dockerfile
 
-  lazygit:
-    repo: jesseduffield/lazygit
-    version_prefix: v
-    artifact: lazygit_{version}_Linux_{larch}.tar.gz
-    method: tar.gz
-    binaries: lazygit
-    tar_extract: lazygit
-    dest: system
-    group: dockerfile
-
-  gh-dash:
-    repo: dlvhdr/gh-dash
-    version_prefix: v
-    artifact: gh-dash_v{version}_linux-{goarch}
-    method: binary
-    binaries: gh-dash
-    dest: system
-    group: dockerfile
-
   xh:
     repo: ducaale/xh
     version_prefix: v
@@ -59,16 +40,6 @@ tools:
     method: tar.gz
     binaries: xh
     tar_strip: 1
-    dest: system
-    group: dockerfile
-
-  yazi:
-    repo: sxyazi/yazi
-    version_prefix: v
-    artifact: yazi-{zarch}-unknown-linux-musl.zip
-    method: zip
-    binaries: yazi,ya
-    zip_subdir: yazi-{zarch}-unknown-linux-musl
     dest: system
     group: dockerfile
 
@@ -103,6 +74,35 @@ tools:
     group: dockerfile
 
   # ── setup.sh tools (installed as user to ~/.local/bin) ──────────────
+
+  lazygit:
+    repo: jesseduffield/lazygit
+    version_prefix: v
+    artifact: lazygit_{version}_Linux_{larch}.tar.gz
+    method: tar.gz
+    binaries: lazygit
+    tar_extract: lazygit
+    dest: user
+    group: setup
+
+  gh-dash:
+    repo: dlvhdr/gh-dash
+    version_prefix: v
+    artifact: gh-dash_v{version}_linux-{goarch}
+    method: binary
+    binaries: gh-dash
+    dest: user
+    group: setup
+
+  yazi:
+    repo: sxyazi/yazi
+    version_prefix: v
+    artifact: yazi-{zarch}-unknown-linux-musl.zip
+    method: zip
+    binaries: yazi,ya
+    zip_subdir: yazi-{zarch}-unknown-linux-musl
+    dest: user
+    group: setup
 
   opencode:
     repo: anomalyco/opencode

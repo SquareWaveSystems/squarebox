@@ -104,14 +104,6 @@ What's included
 | [yq](https://github.com/mikefarah/yq) | Go | YAML/JSON/XML processor |
 | [zoxide](https://github.com/ajeetdsouza/zoxide) | Rust | Smarter cd command |
 
-### TUI Tools
-
-| Name | Language | Description |
-|------|----------|-------------|
-| [gh-dash](https://github.com/dlvhdr/gh-dash) | Go | GitHub dashboard for the terminal |
-| [lazygit](https://github.com/jesseduffield/lazygit) | Go | Git terminal UI |
-| [yazi](https://github.com/sxyazi/yazi) | Rust | Terminal file manager |
-
 What's optional
 ----------------
 
@@ -142,6 +134,16 @@ Nano is always available as the default editor.
 | [fresh](https://github.com/sinelaw/fresh) | Rust | Modern terminal text editor |
 | [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
+
+### TUI Tools
+
+Installed during first-run setup. Choose any combination:
+
+| Name | Language | Description |
+|------|----------|-------------|
+| [lazygit](https://github.com/jesseduffield/lazygit) | Go | Git terminal UI |
+| [gh-dash](https://github.com/dlvhdr/gh-dash) | Go | GitHub dashboard for the terminal |
+| [yazi](https://github.com/sxyazi/yazi) | Rust | Terminal file manager |
 
 ### Terminal Multiplexers
 
@@ -182,7 +184,7 @@ Aliases
 | `gcm` | `git commit -m` | Commit with message |
 | `gcam` | `git commit -a -m` | Stage all and commit |
 | `gcad` | `git commit -a --amend` | Stage all and amend |
-| `lg` | `lazygit` | Launch lazygit |
+| `lg` | `lazygit` | Launch lazygit (if installed) |
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
 
@@ -249,7 +251,7 @@ To preserve extra files across rebuilds, store them in `/workspace/.squarebox/`.
 Disk usage
 ----------
 
-The base image (all CLI/TUI tools, no optional components) is **~400 MB** on disk.
+The base image (CLI tools only, no optional components) is **~370 MB** on disk.
 
 First-run selections add to that:
 
@@ -260,6 +262,7 @@ First-run selections add to that:
 | Google Gemini CLI | ~50 MB |
 | OpenAI Codex CLI | ~50 MB |
 | OpenCode | ~30 MB |
+| lazygit / gh-dash / yazi | ~10 / ~10 / ~10 MB |
 | micro / edit | ~12 / ~7 MB |
 | fresh / nvim | ~10 / ~45 MB |
 | Node.js | ~90 MB |
