@@ -5,6 +5,7 @@
 printf '\e[1;38;5;208m'
 toilet -f smblock --metal "squarebox"
 printf '\e[0m'
+printf '\e[38;5;208m  🟧📦 You'\''re in the box.\e[0m\n'
 
 # Detect installed SDKs from config
 sdks=()

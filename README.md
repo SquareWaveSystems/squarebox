@@ -12,6 +12,9 @@ opinionated set of shell aliases. Run the same box anywhere - on your desktop, a
 a Codespace - and SSH in from your laptop (any OS), tablet, or phone. Run the
 install command below and you're ready to code.
 
+The goal is to make modern terminal tooling easy and accessible: one line
+install, sleek setup, sensible defaults (thanks omarchy).
+
 ![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
 *(Actual setup may involve more staring at the screen.)*
 
