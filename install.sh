@@ -93,7 +93,8 @@ fi
 # Build
 _build_log="$(mktemp)"
 _rc_tmp=""
-trap 'rm -f "$_build_log" "$_rc_tmp" 2>/dev/null || true' EXIT
+_create_log=""
+trap 'rm -f "$_build_log" "$_rc_tmp" "$_create_log" 2>/dev/null || true' EXIT
 if [ "$VERBOSE" = 1 ]; then
 	echo "Building image..."
 	docker_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR"
@@ -312,6 +313,28 @@ fi
 # Prepare host directories
 mkdir -p "${USER_HOME}/.config/git" "${INSTALL_DIR}/workspace" "${INSTALL_DIR}/.config/lazygit"
 
+# On Linux where host uid != 1000, a previous install may have chowned
+# ${USER_HOME}/.config/git to 1000:1000 (for the container's `dev` user), so
+# `git config --file` below would fail with "could not lock config file". If
+# that's the case, reclaim ownership back to the current user before writing.
+# Only this one path needs reclaiming — INSTALL_DIR/workspace is never written
+# to from install.sh, and INSTALL_DIR/.config writes further down are all
+# guarded by `[ ! -f ]` so only fire on first install where we just mkdir'd
+# the dir as the current user. The final chown-to-1000 still runs further down.
+if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 1000 ] && [ ! -w "${USER_HOME}/.config/git" ]; then
+	if [ "$(id -u)" -eq 0 ]; then
+		chown -R "$(id -u):$(id -g)" "${USER_HOME}/.config/git"
+	elif command -v sudo &>/dev/null; then
+		sudo chown -R "$(id -u):$(id -g)" "${USER_HOME}/.config/git"
+	fi
+	if [ ! -w "${USER_HOME}/.config/git" ]; then
+		echo "Error: ${USER_HOME}/.config/git is not writable by uid $(id -u)." >&2
+		echo "       A previous install chowned it to uid 1000 for the container." >&2
+		echo "       Fix: sudo chown -R $(id -u):$(id -g) ${USER_HOME}/.config/git" >&2
+		exit 1
+	fi
+fi
+
 # Propagate host git identity into the container's config directory.
 # This avoids fragile file mounts on Windows/MSYS2 and prevents leaking
 # credential helpers or tokens from the host's full git config.
@@ -398,10 +421,15 @@ fi
 # Drop all Linux capabilities except those needed for scoped sudo
 DOCKER_OPTS+=(--cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --cap-add=KILL)
 
-docker_cmd create -it --name "$CONTAINER_NAME" \
+_create_log="$(mktemp)"
+if ! docker_cmd create -it --name "$CONTAINER_NAME" \
 	"${DOCKER_OPTS[@]}" \
 	"${DOCKER_VOLUMES[@]}" \
-	"$IMAGE_NAME" > /dev/null
+	"$IMAGE_NAME" > "$_create_log" 2>&1; then
+	echo "Error: failed to create container '$CONTAINER_NAME'." >&2
+	cat "$_create_log" >&2
+	exit 1
+fi
 
 if [ -t 0 ]; then
 	docker_interactive start -ai "$CONTAINER_NAME"
