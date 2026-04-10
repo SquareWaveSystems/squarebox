@@ -40,11 +40,13 @@ IMAGE_NAME="squarebox"
 CONTAINER_NAME="squarebox"
 EDGE="${SQUAREBOX_EDGE:-0}"
 VERBOSE=0
+NO_PWSH=0
 
 for arg in "$@"; do
 	case "$arg" in
 		--edge) EDGE=1 ;;
 		--verbose) VERBOSE=1 ;;
+		--no-pwsh) NO_PWSH=1 ;;
 	esac
 done
 
@@ -214,100 +216,15 @@ if [[ -n "${MSYSTEM:-}" ]] && [[ "${SHELL_RC}" == *".bashrc" ]]; then
 	fi
 fi
 
-# PowerShell 7+ profile (Windows) — uses functions since PS aliases can't take arguments.
-# Only pwsh (7+) is supported; Windows PowerShell 5.1 is not.
-# Query pwsh for the actual $PROFILE path since Documents may be redirected (e.g. OneDrive).
-_pwsh=""
-if command -v pwsh &>/dev/null; then
-	_pwsh="$(command -v pwsh)"
-elif [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; then
-	# pwsh is typically not on Git Bash's PATH. Try where.exe first (queries the
-	# Windows PATH that Git Bash doesn't fully inherit), then fall back to
-	# probing common install locations directly.
-	if command -v where.exe &>/dev/null; then
-		_where_pwsh="$(where.exe pwsh 2>/dev/null | tr -d '\r' | head -1 || true)"
-		if [ -n "$_where_pwsh" ]; then
-			_pwsh="$(cygpath -u "$_where_pwsh" 2>/dev/null || echo "$_where_pwsh")"
-		fi
-	fi
-	if [ -z "$_pwsh" ]; then
-		for _candidate in \
-			"$(cygpath -u "${PROGRAMFILES:-/c/Program Files}" 2>/dev/null)/PowerShell/7/pwsh.exe" \
-			"$(cygpath -u "${LOCALAPPDATA:-}" 2>/dev/null)/Microsoft/PowerShell/7/pwsh.exe" \
-			"$(cygpath -u "${LOCALAPPDATA:-}" 2>/dev/null)/Microsoft/WindowsApps/pwsh.exe"; do
-			if [ -x "$_candidate" ] 2>/dev/null; then
-				_pwsh="$_candidate"
-				break
-			fi
-		done
-	fi
-fi
-
-if [ -n "$_pwsh" ]; then
-	[ "$VERBOSE" = 1 ] && echo "PowerShell: using $_pwsh"
-	# -OutputFormat Text and [Console]::Out.Write avoid a trailing newline; strip
-	# any leftover CR plus a possible UTF-8 BOM that PowerShell sometimes emits.
-	_ps_profile_raw="$("$_pwsh" -NoProfile -NonInteractive \
-		-Command '[Console]::Out.Write($PROFILE)' 2>/dev/null \
-		| tr -d '\r' \
-		| sed $'1s/^\xEF\xBB\xBF//' || true)"
-	[ "$VERBOSE" = 1 ] && echo "PowerShell \$PROFILE: ${_ps_profile_raw:-<empty>}"
-	if [ -n "$_ps_profile_raw" ]; then
-		_ps_profile="$(cygpath -u "$_ps_profile_raw" 2>/dev/null || echo "$_ps_profile_raw")"
-		[ "$VERBOSE" = 1 ] && echo "PowerShell profile (unix): $_ps_profile"
-		# Sanity check: a real profile path lives under Documents/PowerShell or
-		# Documents/WindowsPowerShell. Guards against stray bytes producing bogus paths.
-		case "$_ps_profile" in
-			*/Documents/PowerShell/*|*/Documents/WindowsPowerShell/*) ;;
-			*)
-				echo "Warning: pwsh returned unexpected profile path ($_ps_profile) — skipping PowerShell profile setup." >&2
-				_ps_profile=""
-				;;
-		esac
-	fi
-	if [ -n "${_ps_profile:-}" ]; then
-		mkdir -p "$(dirname "$_ps_profile")"
-		touch "$_ps_profile"
-		# Managed block: strip any existing squarebox block (or legacy one-line
-		# function defs) and append a fresh one. Same sentinel as the bash rc.
-		_ps_tmp="$(mktemp "${_ps_profile}.sqrbx.XXXXXX")"
-		awk '
-			/^# >>> squarebox >>>/ { skip=1; next }
-			/^# <<< squarebox <<</ { skip=0; next }
-			skip { next }
-			/^[[:space:]]*function[[:space:]]+(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild)[[:space:]]*(\{|$)/ { next }
-			{ print }
-		' "$_ps_profile" > "$_ps_tmp" && mv "$_ps_tmp" "$_ps_profile"
-
-		cat >> "$_ps_profile" <<'PSEOF'
-# >>> squarebox >>>
-# squarebox shell integration — managed by install.sh.
-Remove-Item Alias:sqrbx, Alias:squarebox, Alias:sqrbx-rebuild, Alias:squarebox-rebuild -ErrorAction SilentlyContinue
-function sqrbx { docker start -ai squarebox }
-function squarebox { docker start -ai squarebox }
-function sqrbx-rebuild {
-    $bash = @(
-        "$env:PROGRAMFILES\Git\bin\bash.exe",
-        "${env:PROGRAMFILES(x86)}\Git\bin\bash.exe",
-        (Get-Command bash.exe -ErrorAction SilentlyContinue).Source
-    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-    if (-not $bash) {
-        Write-Error "squarebox: Git Bash not found — install Git for Windows."
-        return
-    }
-    & $bash "$env:USERPROFILE/squarebox/install.sh" @args
-}
-function squarebox-rebuild { sqrbx-rebuild @args }
-# <<< squarebox <<<
-PSEOF
-		echo "Installed squarebox shell integration → $_ps_profile"
-	elif [ -z "$_ps_profile_raw" ]; then
-		echo "Warning: pwsh found but \$PROFILE returned empty — skipping PowerShell profile setup." >&2
-	fi
-elif [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; then
-	# Always notify on Windows — a silent skip was the main reason the last
-	# round of "aliases not being added" bugs was hard to diagnose.
-	echo "Note: pwsh not found on PATH or in standard install locations — skipping PowerShell profile setup."
+# PowerShell 7+ profile (Windows). install.ps1 handles this natively — it
+# writes the profile using $PROFILE directly (no cross-shell detection needed).
+# When invoked with --no-pwsh (by install.ps1), skip this entirely.
+if [ "$NO_PWSH" != 1 ] && { [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; }; then
+	_ps1_path="$(cygpath -w "${INSTALL_DIR}/install.ps1" 2>/dev/null || echo "${INSTALL_DIR}\\install.ps1")"
+	echo ""
+	echo "PowerShell: to add squarebox aliases to your PowerShell profile, run:"
+	echo "  pwsh -File \"${_ps1_path}\""
+	echo ""
 fi
 
 # Prepare host directories
