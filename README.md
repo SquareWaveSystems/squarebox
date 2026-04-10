@@ -49,8 +49,8 @@ Install
 These commands clone the repo, build the Docker image, and drop you into the
 container (if possible). On first login, a setup script runs automatically to
 configure git (pulling your name and email from the host's global git config
-if available), GitHub CLI, your choice of AI coding assistant, and language
-SDKs.
+if available), optionally sign in to GitHub CLI, your choice of AI coding
+assistant, and language SDKs.
 
 **Stable**
 

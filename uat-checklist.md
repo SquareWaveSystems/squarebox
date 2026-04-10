@@ -10,6 +10,7 @@
 
 ## First-Run Setup (Interactive)
 - [ ] Git identity prompt appears (name + email UX)
+- [ ] GitHub sign-in prompt appears and can be declined (opt-out persists in `/workspace/.squarebox/gh-skip`)
 - [ ] GitHub CLI auth flow works (prints URL, completes browser/device auth)
 - [ ] GH auth persists to `/workspace/.squarebox/gh` across rebuilds
 - [ ] Claude Code installs and runs (requires API key)

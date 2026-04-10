@@ -104,30 +104,48 @@ fi
 
 # Restore GitHub CLI config from persistent storage if available
 GH_PERSIST="/workspace/.squarebox/gh"
+GH_SKIP_MARKER="/workspace/.squarebox/gh-skip"
 if [ -d "$GH_PERSIST" ] && [ ! -d ~/.config/gh ]; then
 	mkdir -p ~/.config
 	cp -r "$GH_PERSIST" ~/.config/gh
 fi
 
-# GitHub CLI
-if ! gh auth status &>/dev/null; then
-	if $INTERACTIVE; then
-		echo
+# GitHub CLI (optional — users who don't use GitHub can skip this)
+if gh auth status &>/dev/null; then
+	rm -f "$GH_SKIP_MARKER"
+	echo "GitHub CLI: already authenticated"
+elif [ -f "$GH_SKIP_MARKER" ]; then
+	echo "GitHub CLI: sign-in skipped (run 'gh auth login' to change)"
+elif $INTERACTIVE; then
+	echo
+	if $HAS_GUM; then
+		gum confirm "Sign in to GitHub?" --default=true && do_gh_login=true || do_gh_login=false
+	else
+		read -rp "Sign in to GitHub? [Y/n]: " gh_reply
+		case "${gh_reply:-Y}" in
+			[Nn]*) do_gh_login=false ;;
+			*)     do_gh_login=true ;;
+		esac
+	fi
+	mkdir -p /workspace/.squarebox
+	if $do_gh_login; then
 		echo "Logging into GitHub..."
 		# BROWSER=echo makes gh print the auth URL instead of trying to open a browser
 		BROWSER=echo gh auth login
 		# Persist gh config for future rebuilds (only if auth succeeded)
 		if gh auth status &>/dev/null; then
 			mkdir -p "$GH_PERSIST"
-			cp -r ~/.config/gh/* "$GH_PERSIST"/
+			cp -r ~/.config/gh/. "$GH_PERSIST"/
+			rm -f "$GH_SKIP_MARKER"
 		else
 			echo "GitHub CLI auth was not completed — skipping config persistence"
 		fi
 	else
-		echo "Skipping GitHub CLI auth (non-interactive)"
+		touch "$GH_SKIP_MARKER"
+		echo "Skipping GitHub CLI sign-in (run 'gh auth login' later if you change your mind)"
 	fi
 else
-	echo "GitHub CLI: already authenticated"
+	echo "Skipping GitHub CLI auth (non-interactive)"
 fi
 
 # AI coding assistant
