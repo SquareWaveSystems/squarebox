@@ -26,34 +26,43 @@ source /usr/local/lib/squarebox/tool-lib.sh
 
 mkdir -p "$HOME/.local/bin"
 
-# ── Checksum verification ──────────────────────────────────────────────
-# Fetches checksums.txt and setup-checksums.txt from the repo's main branch.
-# Only versions that have been vetted (committed to the repo) can be installed.
+# ── Checksum verification (Dockerfile tier only) ───────────────────────
+# Fetches checksums.txt from the repo's main branch. Only the Dockerfile
+# tier has vetted checksums; setup-tier tools install latest upstream
+# releases over HTTPS with no secondary checksum.
 
 REPO_RAW="https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main"
 CHECKSUM_DIR=$(mktemp -d)
 CHECKSUMS_FETCHED=false
 
+# Set by update_tool before each sb_install call so sb_verify knows whether
+# to require a checksum match (dockerfile group) or skip (setup group).
+SB_CURRENT_TOOL=""
+
 fetch_checksums() {
 	if [ "$CHECKSUMS_FETCHED" = true ]; then return 0; fi
-	if curl -fsSLo "$CHECKSUM_DIR/checksums.txt" "$REPO_RAW/checksums.txt" 2>/dev/null \
-		&& curl -fsSLo "$CHECKSUM_DIR/setup-checksums.txt" "$REPO_RAW/setup-checksums.txt" 2>/dev/null; then
-		# Merge both files
-		cat "$CHECKSUM_DIR/checksums.txt" "$CHECKSUM_DIR/setup-checksums.txt" > "$CHECKSUM_DIR/all-checksums.txt"
+	if curl -fsSLo "$CHECKSUM_DIR/checksums.txt" "$REPO_RAW/checksums.txt" 2>/dev/null; then
 		CHECKSUMS_FETCHED=true
 	else
-		echo -e "${RED}Warning: Could not fetch checksums from repo. Updates will be skipped.${RESET}" >&2
+		echo -e "${RED}Warning: Could not fetch checksums from repo. Dockerfile tool updates will be skipped.${RESET}" >&2
 		return 1
 	fi
 }
 
-# Override the library's no-op sb_verify with checksum verification.
-# Returns 0 on match, 1 on mismatch, 2 if no checksum found (version not vetted).
+# Override the library's no-op sb_verify. For dockerfile-group tools,
+# require a matching entry in checksums.txt. For setup-group tools, we
+# skip verification entirely, since they track upstream latest.
+# Returns 0 on success, 1 on mismatch, 2 if a dockerfile-tier checksum is missing.
 sb_verify() {
 	local file="$1" name="$2"
+	local group=""
+	[ -n "$SB_CURRENT_TOOL" ] && group=$(sb_get "$SB_CURRENT_TOOL" group)
+	if [ "$group" != "dockerfile" ]; then
+		return 0
+	fi
 	if [ "$CHECKSUMS_FETCHED" != true ]; then return 2; fi
 	local expected
-	expected=$(grep -E "^[0-9a-f]{64}  ${name}$" "$CHECKSUM_DIR/all-checksums.txt" | awk '{print $1}') || true
+	expected=$(grep -E "^[0-9a-f]{64}  ${name}$" "$CHECKSUM_DIR/checksums.txt" | awk '{print $1}') || true
 	if [ -z "$expected" ]; then
 		echo -e "    ${YELLOW}No checksum found for ${name} — version not yet vetted in repo${RESET}" >&2
 		return 2
@@ -145,32 +154,6 @@ tool_latest() {
 	else
 		echo "$tag"
 	fi
-}
-
-# ── Edit special handling ──────────────────────────────────────────────
-# Edit's asset version may differ from its tag version. Query the API to
-# determine the actual asset name and set SB_ASSET_VERSION before installing.
-
-edit_prepare_asset_version() {
-	local api_response api_code asset_name
-	api_response=$(curl -fsSL -w '\n%{http_code}' \
-		"https://api.github.com/repos/microsoft/edit/releases/latest" 2>/dev/null) || true
-	api_code=$(echo "$api_response" | tail -1)
-	if [ "$api_code" = "403" ]; then
-		echo "  GitHub API rate limit exceeded." >&2
-		return 1
-	elif [ "$api_code" != "200" ]; then
-		echo "  GitHub API returned HTTP ${api_code} for microsoft/edit." >&2
-		return 1
-	fi
-	asset_name=$(echo "$api_response" | sed '$d' | jq -r '.assets[].name' | grep "${SB_ZARCH}-linux-gnu" | head -1)
-	if [ -z "$asset_name" ]; then
-		echo "  Could not find edit asset for ${SB_ZARCH}" >&2
-		return 1
-	fi
-	# Extract asset version from filename: edit-1.2.0-x86_64-linux-gnu.tar.zst → 1.2.0
-	SB_ASSET_VERSION=$(echo "$asset_name" | sed -E 's/^edit-([0-9]+\.[0-9]+\.[0-9]+)-.*/\1/')
-	export SB_ASSET_VERSION
 }
 
 # ── Tool registry ──────────────────────────────────────────────────────
@@ -272,11 +255,6 @@ update_tool() {
 
 	printf "  ${CYAN}Updating %s to %s...${RESET}" "$display" "$latest_clean"
 
-	# Special handling for edit's asset version
-	if [ "$tool" = "edit" ]; then
-		edit_prepare_asset_version || { printf " ${RED}failed${RESET}\n"; return; }
-	fi
-
 	# Ensure xz-utils is available for helix
 	if [ "$tool" = "helix" ] && ! command -v xz &>/dev/null; then
 		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
@@ -289,12 +267,16 @@ update_tool() {
 		cleanup_zstd=1
 	fi
 
+	# sb_verify (overridden above) reads this to decide whether to require
+	# a checksum match (dockerfile group) or skip (setup group).
+	SB_CURRENT_TOOL="$yname"
 	if (set -e; sb_install "$yname" "$latest_clean") &>"$UPDATE_LOG"; then
 		printf " ${GREEN}done${RESET}\n"
 	else
 		printf " ${RED}failed${RESET}\n"
 		echo "    See ${UPDATE_LOG} for details" >&2
 	fi
+	SB_CURRENT_TOOL=""
 
 	if [ "$cleanup_zstd" = "1" ]; then
 		sudo apt-get purge -y -qq --auto-remove zstd 2>/dev/null || true

@@ -276,10 +276,19 @@ Sizes are approximate and will vary as tools are updated.
 Security
 --------
 
-All binary tools are pinned to specific versions and verified against SHA256
-checksums at build time. Third-party install scripts (Claude Code, uv, .NET)
-manage their own binary verification. npm-based AI tools (Copilot CLI, Gemini
-CLI, Codex CLI) use npm's built-in integrity verification.
+Base image tools are pinned to specific versions and verified against SHA256
+checksums when the Docker image is built, so `docker build` is reproducible.
+
+Optional tools selected during first-run setup (editors, TUIs, OpenCode, nvm,
+Go, zellij) install the latest upstream release at the time you run setup. The
+trust model is the same as running each tool's installer yourself: HTTPS
+downloads from the project's official GitHub release (or upstream server). You
+get new features without waiting for a squarebox release, at the cost of
+build-time pinning for that tier.
+
+Third-party install scripts (Claude Code, uv, .NET) delegate to the vendor
+installer. npm-based AI tools (Copilot CLI, Gemini CLI, Codex CLI) use npm's
+built-in integrity verification.
 
 For the full trust model (what `install.sh` does on your machine, how each
 layer is verified, and how to inspect the script before running it) see

@@ -45,23 +45,26 @@ at each layer:
 | Layer | What's fetched | Transport | Integrity check | Version pinned? |
 |-------|---------------|-----------|-----------------|-----------------|
 | **install.sh** | Git repo from GitHub | HTTPS | Git transport verification | Tracks `main` branch |
-| **Dockerfile — APT packages** | Ubuntu 24.04 packages, GitHub CLI, Eza | HTTPS | APT GPG signatures | Distro versions (not pinned) |
-| **Dockerfile — binary tools** | 6 tools from GitHub Releases (delta, yq, xh, glow, gum, starship) | HTTPS | SHA256 checksum — build fails on mismatch | Yes, all pinned |
-| **setup.sh — tools with checksums** | OpenCode, nvm, Go, editors (micro, edit, fresh, nvim), TUIs (lazygit, gh-dash, yazi), zellij | HTTPS | SHA256 checksum | Yes, all pinned |
-| **sqrbx-update** | All tools from both layers above | HTTPS | SHA256 checksum — fetched from repo, update refused on mismatch or missing checksum | Only vetted versions |
-| **setup.sh — third-party installers** | Claude Code, uv, .NET | HTTPS | Delegates to vendor installer | No (latest/LTS) |
+| **Dockerfile APT packages** | Ubuntu 24.04 packages, GitHub CLI, Eza | HTTPS | APT GPG signatures | Distro versions (not pinned) |
+| **Dockerfile binary tools** | 6 tools from GitHub Releases (delta, yq, xh, glow, gum, starship) | HTTPS | SHA256 checksum, build fails on mismatch | Yes, all pinned |
+| **setup.sh optional tools** | OpenCode, nvm, Go, editors (micro, edit, fresh, nvim), TUIs (lazygit, gh-dash, yazi), zellij | HTTPS | None beyond transport | No, latest upstream at install time |
+| **sqrbx-update (Dockerfile tier)** | delta, yq, xh, glow, gum, starship | HTTPS | SHA256 checksum fetched from repo, update refused on mismatch or missing checksum | Only vetted versions |
+| **sqrbx-update (optional tier)** | Optional tools listed above | HTTPS | None beyond transport | Latest upstream |
+| **setup.sh third-party installers** | Claude Code, uv, .NET | HTTPS | Delegates to vendor installer | No (latest/LTS) |
 
 **What this means in practice:**
 
-- The Dockerfile binary tools have the strongest guarantees — pinned versions
+- The Dockerfile binary tools have the strongest guarantees: pinned versions
   with SHA256 checksums covering both x86_64 and aarch64. A compromised release
-  or man-in-the-middle attack causes the build to fail immediately.
-- The setup.sh checksum-verified tools (editors, OpenCode, nvm, Go, zellij) have
-  the same SHA256 guarantees as Dockerfile tools — pinned versions with checksums
-  for both architectures.
+  or man-in-the-middle attack causes the build to fail immediately. This tier
+  makes `docker build` reproducible.
+- Optional tools selected at first-run setup install the latest upstream
+  release from GitHub over HTTPS. Trust model is the same as running each
+  tool's installer yourself. You get new features without waiting for a
+  squarebox release, at the cost of the build-time pinning guarantee.
 - Third-party install scripts (Claude Code from Anthropic, uv from Astral, .NET
-  from Microsoft) manage their own binary verification. We trust these vendors'
-  HTTPS endpoints and their installers' built-in integrity checks.
+  from Microsoft) delegate to the vendor installer and inherit whatever
+  verification that installer performs.
 - APT packages are verified by Ubuntu's and each repo's GPG signatures.
 
 ## Container isolation
@@ -87,29 +90,32 @@ The read-write host mounts are limited to `~/squarebox/workspace` and
 
 ## Binary integrity
 
-Checksums are maintained in `checksums.txt` (Dockerfile tools) and
-`setup-checksums.txt` (setup.sh tools), covering both x86_64 and aarch64
-architectures.
+Checksums are maintained in `checksums.txt` for the Dockerfile tier, covering
+both x86_64 and aarch64 architectures.
 
-All three install paths — Dockerfile builds, `setup.sh`, and `sqrbx-update` —
-verify downloads against these checksums. `sqrbx-update` fetches the latest
-checksum files from the repo's `main` branch before installing, so it will
-only install versions that have been vetted and committed to the repo. If a
-tool has a newer upstream release but no matching checksum in the repo, the
-update is refused.
+Dockerfile builds verify downloads against these checksums at image build
+time. `sqrbx-update` fetches `checksums.txt` from the repo's `main` branch
+before updating any Dockerfile-tier tool, so it will only install versions
+that have been vetted and committed to the repo. If a tool has a newer
+upstream release but no matching checksum in the repo, the update is refused.
 
-### Updating tool versions
+Optional tools installed by `setup.sh` or updated by `sqrbx-update` skip the
+repo-checksum check and install the latest upstream release directly. See the
+Trust model table above for the full picture.
 
-To vet and publish new tool versions:
+### Updating Dockerfile-tier tool versions
 
-1. Run `./scripts/update-versions.sh` — this fetches the latest releases,
-   downloads artifacts for both architectures, computes SHA256 checksums,
-   and updates `checksums.txt`, `setup-checksums.txt`, the Dockerfile, and
-   `setup.sh`.
-2. Review the diff — verify the version bumps and checksums look correct.
+To vet and publish new Dockerfile-tier tool versions:
+
+1. Run `./scripts/update-versions.sh`. This fetches the latest releases for
+   the Dockerfile tier, downloads artifacts for both architectures, computes
+   SHA256 checksums, and updates `checksums.txt` and the Dockerfile ARGs.
+2. Review the diff. Verify the version bumps and checksums look correct.
 3. Commit and push to `main`.
 
-Users running `sqrbx-update --apply` will then pick up these vetted versions.
+Users running `sqrbx-update --apply` will then pick up these vetted versions
+for the Dockerfile tier. Optional tools do not need a version bump in the
+repo, since they already track upstream latest.
 
 ```bash
 ./scripts/update-versions.sh

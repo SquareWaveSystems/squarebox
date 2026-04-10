@@ -109,7 +109,6 @@ COPY --chown=dev:dev motd.sh /home/dev/motd.sh
 RUN chmod +x /home/dev/motd.sh
 
 COPY --chown=dev:dev setup.sh /home/dev/setup.sh
-COPY --chown=dev:dev setup-checksums.txt /home/dev/setup-checksums.txt
 COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
 
 COPY scripts/squarebox-update.sh /usr/local/bin/sqrbx-update

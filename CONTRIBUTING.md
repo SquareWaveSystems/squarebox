@@ -46,13 +46,12 @@ docker run --rm squarebox:test bash -c '
 
 | File | Purpose |
 |------|---------|
-| `Dockerfile` | Image definition with pinned tool versions |
+| `Dockerfile` | Image definition with pinned base-image tool versions |
 | `setup.sh` | First-run interactive setup (AI tools, editors, SDKs) |
 | `install.sh` | Host-side install script (clone, build, create container) |
 | `scripts/squarebox-update.sh` | In-container tool updater (`sqrbx-update`) |
-| `scripts/update-versions.sh` | Fetches latest releases and updates checksums |
+| `scripts/update-versions.sh` | Fetches latest Dockerfile-tier releases and updates checksums |
 | `checksums.txt` | SHA256 checksums for Dockerfile binary tools |
-| `setup-checksums.txt` | SHA256 checksums for setup.sh tools |
 
 ## Making changes
 
@@ -65,14 +64,20 @@ docker run --rm squarebox:test bash -c '
 
 ### Adding or updating a tool
 
-If you're adding a new binary tool or bumping a version:
+Dockerfile-tier tools (delta, yq, xh, glow, gum, starship) are pinned via
+`ARG` directives and verified against `checksums.txt`. To bump them:
 
-1. Run `./scripts/update-versions.sh` to fetch latest versions and checksums.
-2. Review the diff — verify version bumps and checksums look correct.
+1. Run `./scripts/update-versions.sh` to fetch latest versions and checksums
+   for the Dockerfile tier.
+2. Review the diff. Verify version bumps and checksums look correct.
 3. Rebuild and test.
 
-Tool versions are pinned via `ARG` directives in the Dockerfile and verified
-against `checksums.txt`. Never skip checksum verification.
+Optional tools (editors, TUIs, opencode, zellij, Go, nvm) track upstream
+latest at install time. To add a new optional tool, add an entry to
+`scripts/lib/tools.yaml` and call `sb_install <tool> latest` from `setup.sh`.
+No checksum file update is required.
+
+Never skip checksum verification for the Dockerfile tier.
 
 ### Style
 

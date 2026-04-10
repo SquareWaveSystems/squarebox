@@ -5,8 +5,6 @@ SB_TMPDIR=$(mktemp -d)
 export SB_TMPDIR
 trap 'rm -rf "$SB_TMPDIR"' EXIT
 
-SETUP_CHECKSUMS="${HOME}/setup-checksums.txt"
-
 # Fix /workspace ownership if volume mount left it owned by a different UID
 if [ -d /workspace ] && ! [ -w /workspace ]; then
 	if ! command -v sudo >/dev/null 2>&1; then
@@ -21,29 +19,11 @@ if [ -d /workspace ] && ! [ -w /workspace ]; then
 	fi
 fi
 
-# Verify SHA256 checksum of a downloaded file against the checksums file.
-# Usage: verify_checksum <file> <artifact-name>
-verify_checksum() {
-	local file="$1" name="$2"
-	local expected actual
-	expected=$(grep -E "^[0-9a-f]{64}  ${name}$" "$SETUP_CHECKSUMS" | awk '{print $1}')
-	if [ -z "$expected" ]; then
-		echo "ERROR: No checksum entry found for '${name}' in ${SETUP_CHECKSUMS}" >&2
-		return 1
-	fi
-	actual=$(sha256sum "$file" | awk '{print $1}')
-	if [ "$actual" != "$expected" ]; then
-		echo "CHECKSUM MISMATCH for ${name}" >&2
-		echo "  expected: ${expected}" >&2
-		echo "  actual:   ${actual}" >&2
-		return 1
-	fi
-}
-
-# Source shared tool library and wire up checksum verification
+# Source shared tool library. Optional tools install from latest upstream
+# releases over HTTPS at setup time, so the library's default no-op
+# sb_verify is fine here since we don't ship checksums for these tools.
 export SB_TOOLS_YAML=/usr/local/lib/squarebox/tools.yaml
 source /usr/local/lib/squarebox/tool-lib.sh
-sb_verify() { verify_checksum "$1" "$2"; }
 
 # Detect interactive terminal
 INTERACTIVE=false
@@ -246,35 +226,17 @@ else
 	echo "$ai_choice" > "$AI_CONFIG"
 fi
 
-# Pinned versions — update via: scripts/update-versions.sh
-OPENCODE_VERSION="1.3.15"
-MICRO_VERSION="2.0.15"
-EDIT_VERSION="1.2.1"
-EDIT_ASSET_VERSION="1.2.0"
-FRESH_VERSION="0.2.21"
-NVIM_VERSION="0.12.0"
-ZELLIJ_VERSION="0.44.0"
-LAZYGIT_VERSION="0.60.0"
-GH_DASH_VERSION="4.23.2"
-YAZI_VERSION="26.1.22"
-
-for _var in OPENCODE_VERSION MICRO_VERSION EDIT_VERSION EDIT_ASSET_VERSION FRESH_VERSION NVIM_VERSION ZELLIJ_VERSION LAZYGIT_VERSION GH_DASH_VERSION YAZI_VERSION; do
-	if [ -z "${!_var:-}" ]; then
-		echo "Error: ${_var} is empty or unset" >&2
-		exit 1
-	fi
-done
-
-# Pinned SDK versions needed early (for npm-based AI tools)
-NVM_VERSION="0.40.3"
+# Optional tools install the latest upstream release at setup time.
+# Pinned versions live only in the Dockerfile tier (checksums.txt).
 
 # SDK path setup file (create if missing, preserve on retry)
 touch ~/.squarebox-sdk-paths
 
 _install_node_inner() {
 	rm -rf "$HOME/.nvm"
-	curl -fsSo "${SB_TMPDIR}/nvm-install.sh" "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh"
-	verify_checksum "${SB_TMPDIR}/nvm-install.sh" "nvm-install-v${NVM_VERSION}.sh"
+	local nvm_tag
+	nvm_tag=$(sb_gh_latest_tag nvm-sh/nvm) || return 1
+	curl -fsSo "${SB_TMPDIR}/nvm-install.sh" "https://raw.githubusercontent.com/nvm-sh/nvm/${nvm_tag}/install.sh"
 	bash "${SB_TMPDIR}/nvm-install.sh" >/dev/null 2>&1
 	export NVM_DIR="$HOME/.nvm"
 	# shellcheck source=/dev/null
@@ -291,7 +253,7 @@ PATHS
 
 install_node() {
 	if command -v node &>/dev/null; then echo "Node.js already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Node.js (via nvm v${NVM_VERSION})..." _install_node_inner
+	run_with_spinner "Installing Node.js (via nvm)..." _install_node_inner
 	# Source nvm in current shell (spinner runs in subshell)
 	export NVM_DIR="$HOME/.nvm"
 	# shellcheck source=/dev/null
@@ -354,7 +316,7 @@ for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 			if command -v opencode &>/dev/null; then
 				echo "OpenCode already installed, skipping."
 			else
-				run_with_spinner "Installing OpenCode v${OPENCODE_VERSION}..." sb_install opencode "$OPENCODE_VERSION" \
+				run_with_spinner "Installing OpenCode..." sb_install opencode latest \
 					|| echo "Warning: OpenCode installation failed."
 			fi
 			;;
@@ -464,22 +426,22 @@ fi
 
 install_micro() {
 	if command -v micro &>/dev/null; then echo "Micro already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Micro v${MICRO_VERSION}..." sb_install micro "$MICRO_VERSION"
+	run_with_spinner "Installing Micro..." sb_install micro latest
 }
 
 install_edit() {
 	if command -v edit &>/dev/null; then echo "Edit already installed, skipping."; return 0; fi
-	SB_ASSET_VERSION="$EDIT_ASSET_VERSION" run_with_spinner "Installing Edit v${EDIT_VERSION}..." sb_install edit "$EDIT_VERSION"
+	run_with_spinner "Installing Edit..." sb_install edit latest
 }
 
 install_fresh() {
 	if command -v fresh &>/dev/null; then echo "Fresh already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Fresh v${FRESH_VERSION}..." sb_install fresh "$FRESH_VERSION"
+	run_with_spinner "Installing Fresh..." sb_install fresh latest
 }
 
 install_nvim() {
 	if command -v nvim &>/dev/null; then echo "Neovim already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Neovim v${NVIM_VERSION}..." sb_install nvim "$NVIM_VERSION"
+	run_with_spinner "Installing Neovim..." sb_install nvim latest
 }
 
 installed_editors=()
@@ -592,7 +554,7 @@ fi
 
 install_lazygit() {
 	if command -v lazygit &>/dev/null; then echo "Lazygit already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Lazygit v${LAZYGIT_VERSION}..." sb_install lazygit "$LAZYGIT_VERSION"
+	run_with_spinner "Installing Lazygit..." sb_install lazygit latest
 	# Install default lazygit config if missing
 	if [ ! -f ~/.config/lazygit/config.yml ]; then
 		mkdir -p ~/.config/lazygit
@@ -602,12 +564,12 @@ install_lazygit() {
 
 install_gh_dash() {
 	if command -v gh-dash &>/dev/null; then echo "gh-dash already installed, skipping."; return 0; fi
-	run_with_spinner "Installing gh-dash v${GH_DASH_VERSION}..." sb_install gh-dash "$GH_DASH_VERSION"
+	run_with_spinner "Installing gh-dash..." sb_install gh-dash latest
 }
 
 install_yazi() {
 	if command -v yazi &>/dev/null; then echo "Yazi already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Yazi v${YAZI_VERSION}..." sb_install yazi "$YAZI_VERSION"
+	run_with_spinner "Installing Yazi..." sb_install yazi latest
 }
 
 installed_tuis=()
@@ -804,7 +766,7 @@ install_tmux() {
 }
 
 _install_zellij_inner() {
-	sb_install zellij "$ZELLIJ_VERSION"
+	sb_install zellij latest
 	# Install default config (Omarchy-inspired defaults to match tmux)
 	mkdir -p ~/.config/zellij
 	if [ ! -f ~/.config/zellij/config.kdl ]; then
@@ -1032,7 +994,7 @@ _install_zellij_inner() {
 
 install_zellij() {
 	if command -v zellij &>/dev/null; then echo "Zellij already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Zellij v${ZELLIJ_VERSION}..." _install_zellij_inner
+	run_with_spinner "Installing Zellij..." _install_zellij_inner
 }
 
 for mux in $(echo "$mux_list" | tr ',' ' '); do
@@ -1120,16 +1082,6 @@ else
 	echo "$sdk_list" > "$SDK_CONFIG"
 fi
 
-# Pinned versions — update via: scripts/update-versions.sh
-GO_VERSION="go1.26.1"
-
-for _var in GO_VERSION; do
-	if [ -z "${!_var:-}" ]; then
-		echo "Error: ${_var} is empty or unset" >&2
-		exit 1
-	fi
-done
-
 # install_node is defined earlier (needed by npm-based AI tools)
 
 _install_python_inner() {
@@ -1155,8 +1107,13 @@ install_python() {
 
 _install_go_inner() {
 	rm -rf "$HOME/.local/go"
-	curl -fsSLo "${SB_TMPDIR}/go.tar.gz" "https://go.dev/dl/${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
-	verify_checksum "${SB_TMPDIR}/go.tar.gz" "${GO_VERSION}.linux-${SB_GOARCH}.tar.gz"
+	local go_version
+	go_version=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1)
+	if ! echo "$go_version" | grep -qE '^go[0-9]+\.[0-9]+'; then
+		echo "Error: unexpected Go version format: '$go_version'" >&2
+		return 1
+	fi
+	curl -fsSLo "${SB_TMPDIR}/go.tar.gz" "https://go.dev/dl/${go_version}.linux-${SB_GOARCH}.tar.gz"
 	tar xzf "${SB_TMPDIR}/go.tar.gz" -C ~/.local
 	if ! grep -q 'GOROOT' ~/.squarebox-sdk-paths 2>/dev/null; then
 		cat <<'PATHS' >> ~/.squarebox-sdk-paths
@@ -1169,7 +1126,7 @@ PATHS
 
 install_go() {
 	if [ -x "${HOME}/.local/go/bin/go" ]; then echo "Go already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Go ${GO_VERSION}..." _install_go_inner
+	run_with_spinner "Installing Go..." _install_go_inner
 	if [ ! -x "${HOME}/.local/go/bin/go" ]; then
 		echo "Error: Go binary not found after installation" >&2
 		return 1
