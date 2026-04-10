@@ -22,7 +22,7 @@ sleep 0.5
 
 # --- Header ---
 echo
-gum style --border double --padding "0 2" --border-foreground 208 "squarebox setup"
+gum style --border double --padding "0 2" --border-foreground 208 "🟧📦 squarebox setup"
 echo
 
 # GitHub CLI (already authenticated)
