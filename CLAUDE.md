@@ -33,7 +33,7 @@ docker start -ai squarebox
 
 The `install.sh` script automates initial setup (clone, build, create container, add `sqrbx` shell alias). A `.devcontainer/devcontainer.json` is also provided for VS Code Dev Containers / Codespaces.
 
-**Windows PowerShell**: Only PowerShell 7+ (`pwsh`) is supported. Windows PowerShell 5.1 is not supported. `install.ps1` is the recommended Windows entry point — it writes the PowerShell profile natively (using `$PROFILE` directly, no cross-shell detection) and delegates Docker setup to `install.sh` via Git Bash. Running `install.sh` directly from Git Bash still works but only sets up bash aliases; it prints instructions to run `install.ps1` for PowerShell.
+**Windows PowerShell**: Only PowerShell 7+ (`pwsh`) is supported. Windows PowerShell 5.1 is not supported. `install.ps1` is the recommended Windows entry point — it handles clone, build, container creation, and PowerShell profile setup natively without requiring Git Bash. Running `install.sh` directly from Git Bash still works but only sets up bash aliases; it prints instructions to run `install.ps1` for PowerShell.
 
 ## First-Run Setup
 
@@ -84,10 +84,9 @@ The Dockerfile uses `SHELL ["/bin/bash", "-c"]` because `tool-lib.sh` relies on 
 ## Windows Support
 
 - **PowerShell**: only PowerShell 7+ (`pwsh`) is supported. Windows PowerShell 5.1 (`powershell.exe`) is not supported.
-- **Git Bash**: install.sh uses `MSYS_NO_PATHCONV=1` to prevent MSYS2 path mangling in Docker volume mounts.
-- **Install directory**: uses `USERPROFILE` (not MSYS2 `HOME`) so the clone lands at `C:\Users\<user>\squarebox`.
-- **`$HOME` vs `$USER_HOME`** (install.sh): on Git Bash these diverge — `$HOME` is the MSYS home (`/home/user`, where bash actually reads `.bashrc` from), while `$USER_HOME` is derived from `USERPROFILE` (`C:/Users/user`, where the clone lives). Things anchored to the running shell (rc files, the `~/.squarebox-shell-init` file the sentinel sources) must use `$HOME`; things anchored to the filesystem install (`$INSTALL_DIR`, git config path, volume mounts) use `$USER_HOME`. Baking `$INSTALL_DIR` into shell function bodies at install time avoids runtime `$HOME` resolving wrong. On Linux/macOS the two are identical.
-- **Shell integration**: install.sh writes bash/zsh function bodies to `~/.squarebox-shell-init` and adds a single sentinel-marked `. ~/.squarebox-shell-init` line to `~/.bashrc` / `~/.zshrc`. PowerShell profile setup is handled by `install.ps1` (uses `$PROFILE` natively — no cross-shell detection). The sentinel block (`# >>> squarebox >>>` / `# <<< squarebox <<<`) is scrubbed and rewritten on every run, along with any legacy `alias sqrbx=...` or one-liner `sqrbx() {...}` lines from pre-646a589 installs.
+- **install.ps1** (recommended for Windows): handles clone, build, container creation, and PowerShell profile setup natively — no Git Bash dependency. Uses `$env:USERPROFILE` for the install directory (`C:\Users\<user>\squarebox`) and `$PROFILE` for shell integration.
+- **install.sh via Git Bash** (alternative): still works but only sets up bash aliases. Uses `MSYS_NO_PATHCONV=1` to prevent MSYS2 path mangling in Docker volume mounts. On Git Bash, `$HOME` (MSYS home) and `$USER_HOME` (from `USERPROFILE`) diverge — see comments in install.sh for details.
+- **Shell integration**: install.ps1 writes a managed sentinel block (`# >>> squarebox >>>` / `# <<< squarebox <<<`) to the PowerShell `$PROFILE`. install.sh writes bash/zsh function bodies to `~/.squarebox-shell-init` and adds a sentinel-marked source line to `~/.bashrc` / `~/.zshrc`. Both scrub and rewrite their blocks on every run.
 
 ## Tool Registry
 

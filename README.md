@@ -22,7 +22,6 @@ Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) (see one-line install below if you don't have it)
 - [Git](https://git-scm.com/) - on Windows, install [Git for Windows](https://gitforwindows.org/)
-  (provides `bash` and `winpty` needed by the install script)
 
 ### Don't have Docker? One-line install
 
@@ -68,8 +67,9 @@ If the install fails or you want to see the full docker build and git output, re
 
 **Windows (PowerShell 7+)**
 
-Windows users can install directly from PowerShell, which also sets up
-PowerShell aliases (`sqrbx`, `squarebox`, etc.):
+Windows users can install directly from PowerShell — no Git Bash required.
+This handles clone, build, container creation, and PowerShell aliases
+(`sqrbx`, `squarebox`, etc.) natively:
 
     irm https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.ps1 | iex
 
@@ -82,9 +82,6 @@ Once installed, you can re-run or pass flags from the local copy:
 > **Note:** `irm ... | iex` does not support flags — PowerShell interprets them
 > as arguments to `Invoke-Expression`, not the script. Use the local
 > `.\install.ps1` form for `-Edge` or `-Verbose`.
-
-This runs `install.sh` via Git Bash under the hood and then writes the
-PowerShell profile.
 
 Start
 -----

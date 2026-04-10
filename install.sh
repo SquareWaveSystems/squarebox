@@ -54,13 +54,11 @@ IMAGE_NAME="squarebox"
 CONTAINER_NAME="squarebox"
 EDGE="${SQUAREBOX_EDGE:-0}"
 VERBOSE=0
-NO_PWSH=0
 
 for arg in "$@"; do
 	case "$arg" in
 		--edge) EDGE=1 ;;
 		--verbose) VERBOSE=1 ;;
-		--no-pwsh) NO_PWSH=1 ;;
 	esac
 done
 
@@ -230,13 +228,14 @@ if [[ -n "${MSYSTEM:-}" ]] && [[ "${SHELL_RC}" == *".bashrc" ]]; then
 	fi
 fi
 
-# PowerShell 7+ profile (Windows). install.ps1 handles this natively — it
-# writes the profile using $PROFILE directly (no cross-shell detection needed).
-# When invoked with --no-pwsh (by install.ps1), skip this entirely.
-if [ "$NO_PWSH" != 1 ] && { [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; }; then
+# PowerShell 7+ profile (Windows). install.ps1 handles everything natively
+# (clone, build, container, profile) — no Git Bash needed. If the user ran
+# install.sh directly from Git Bash, nudge them toward install.ps1 for
+# PowerShell integration.
+if [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; then
 	_ps1_path="$(cygpath -w "${INSTALL_DIR}/install.ps1" 2>/dev/null || echo "${INSTALL_DIR}\\install.ps1")"
 	echo ""
-	echo "PowerShell: to add squarebox aliases to your PowerShell profile, run:"
+	echo "PowerShell: for native PowerShell support (no Git Bash needed), run:"
 	echo "  pwsh -File \"${_ps1_path}\""
 	echo ""
 fi
