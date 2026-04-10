@@ -5,9 +5,9 @@ testing, and submitting changes.
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/) (with buildx)
+- [Docker](https://docs.docker.com/get-docker/)
 - [Git](https://git-scm.com/)
-- Bash shell
+- Bash shell (or PowerShell 7+ on Windows)
 
 ## Build
 
@@ -48,7 +48,8 @@ docker run --rm squarebox:test bash -c '
 |------|---------|
 | `Dockerfile` | Image definition with pinned base-image tool versions |
 | `setup.sh` | First-run interactive setup (AI tools, editors, SDKs) |
-| `install.sh` | Host-side install script (clone, build, create container) |
+| `install.sh` | Host-side install script for Linux/macOS (clone, build, create container) |
+| `install.ps1` | Host-side install script for Windows/PowerShell 7+ |
 | `scripts/squarebox-update.sh` | In-container tool updater (`sqrbx-update`) |
 | `scripts/update-versions.sh` | Fetches latest Dockerfile-tier releases and updates checksums |
 | `checksums.txt` | SHA256 checksums for Dockerfile binary tools |
