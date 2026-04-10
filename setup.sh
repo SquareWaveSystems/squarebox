@@ -1168,7 +1168,7 @@ done
 echo
 
 if $HAS_GUM; then
-	gum style --border double --padding "0 2" --border-foreground 208 "🟧📦 squarebox setup complete."
+	gum style --border double --padding "0 2" --border-foreground 208 "🟧📦 All boxed up."
 else
-	echo "🟧📦 squarebox setup complete."
+	echo "🟧📦 All boxed up."
 fi
