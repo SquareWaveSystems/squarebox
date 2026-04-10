@@ -107,19 +107,49 @@ sb_url() {
 
 # ── Latest-version resolution (GitHub releases API) ──────────────────
 
+# Internal: GET a GitHub API URL with consistent error reporting.
+# On success, prints the response body on stdout.
+# On failure, prints a diagnostic on stderr and returns non-zero.
+_sb_gh_api_get() {
+	local url="$1" context="$2"
+	local response curl_rc http_code body message
+	response=$(curl -sSL -w '\n%{http_code}' "$url" 2>/dev/null)
+	curl_rc=$?
+	if [ "$curl_rc" -ne 0 ]; then
+		echo "Error: failed to reach GitHub API for ${context} (curl exit ${curl_rc})" >&2
+		return 1
+	fi
+	http_code=$(echo "$response" | tail -1)
+	body=$(echo "$response" | sed '$d')
+	if [ -z "$http_code" ]; then
+		echo "Error: GitHub API returned no HTTP status for ${context}" >&2
+		return 1
+	fi
+	if [ "$http_code" = "200" ]; then
+		echo "$body"
+		return 0
+	fi
+	message=$(echo "$body" | jq -r '.message // empty' 2>/dev/null)
+	if [ "$http_code" = "403" ]; then
+		if [ -n "$message" ]; then
+			echo "Error: GitHub API returned HTTP 403 for ${context}: ${message} (possible rate limit)" >&2
+		else
+			echo "Error: GitHub API returned HTTP 403 for ${context} (possible rate limit)" >&2
+		fi
+	elif [ -n "$message" ]; then
+		echo "Error: GitHub API returned HTTP ${http_code} for ${context}: ${message}" >&2
+	else
+		echo "Error: GitHub API returned HTTP ${http_code} for ${context}" >&2
+	fi
+	return 1
+}
+
 # Fetch the latest release tag for a GitHub repo.
 # Returns the raw tag (e.g. "v0.40.3") on stdout.
 sb_gh_latest_tag() {
 	local repo="$1"
-	local response http_code body tag
-	response=$(curl -fsSL -w '\n%{http_code}' \
-		"https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) || true
-	http_code=$(echo "$response" | tail -1)
-	body=$(echo "$response" | sed '$d')
-	if [ "$http_code" != "200" ]; then
-		echo "Error: GitHub API returned HTTP ${http_code} for ${repo}" >&2
-		return 1
-	fi
+	local body tag
+	body=$(_sb_gh_api_get "https://api.github.com/repos/${repo}/releases/latest" "${repo}") || return 1
 	tag=$(echo "$body" | jq -r '.tag_name')
 	if [ -z "$tag" ] || [ "$tag" = "null" ]; then
 		echo "Error: no release tag for ${repo}" >&2
@@ -144,18 +174,34 @@ sb_latest_version() {
 
 # Some tools publish assets whose embedded version differs from the tag
 # (e.g. microsoft/edit). For tools marked asset_version_from_api: true in
-# tools.yaml, query the latest release, locate an asset matching this
+# tools.yaml, query the release that matches the requested version (or the
+# latest release if no version is given), locate an asset matching this
 # architecture, and extract a semver from its filename into SB_ASSET_VERSION.
 sb_resolve_asset_version() {
-	local tool="$1"
+	local tool="$1" version="${2:-}"
 	[ "$(sb_get "$tool" asset_version_from_api)" = "true" ] || return 0
-	local repo body name ver
+	local repo prefix tag url body name ver context
 	repo=$(sb_get "$tool" repo)
-	body=$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null) || return 1
+	if [ -n "$version" ] && [ "$version" != "latest" ]; then
+		prefix=$(sb_get "$tool" version_prefix)
+		tag="${prefix}${version}"
+		url="https://api.github.com/repos/${repo}/releases/tags/${tag}"
+		context="${repo}@${tag}"
+	else
+		url="https://api.github.com/repos/${repo}/releases/latest"
+		context="${repo}"
+	fi
+	body=$(_sb_gh_api_get "$url" "$context") || return 1
 	name=$(echo "$body" | jq -r '.assets[].name' | grep -F "${SB_ZARCH}" | head -1)
-	[ -z "$name" ] && { echo "Error: no ${SB_ZARCH} asset for ${repo}" >&2; return 1; }
+	if [ -z "$name" ]; then
+		echo "Error: no ${SB_ZARCH} asset for ${context}" >&2
+		return 1
+	fi
 	ver=$(echo "$name" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-	[ -z "$ver" ] && { echo "Error: no semver in asset name ${name}" >&2; return 1; }
+	if [ -z "$ver" ]; then
+		echo "Error: no semver in asset name ${name} for ${context}" >&2
+		return 1
+	fi
 	SB_ASSET_VERSION="$ver"
 	export SB_ASSET_VERSION
 }
@@ -173,8 +219,9 @@ sb_install() {
 	fi
 	# Some tools (e.g. microsoft/edit) have an asset version that differs
 	# from the tag; sb_resolve_asset_version is a no-op unless the tool
-	# is marked asset_version_from_api: true in tools.yaml.
-	sb_resolve_asset_version "$tool" || return 1
+	# is marked asset_version_from_api: true in tools.yaml. Pass the
+	# concrete version so the resolver queries the matching release.
+	sb_resolve_asset_version "$tool" "$version" || return 1
 	local method dest_type artifact url binaries find_bin
 	method=$(sb_get "$tool" method)
 	dest_type=$(sb_get "$tool" dest)
