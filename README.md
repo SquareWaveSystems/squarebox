@@ -73,12 +73,18 @@ PowerShell aliases (`sqrbx`, `squarebox`, etc.):
 
     irm https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.ps1 | iex
 
-Or if you already have the repo cloned:
+Once installed, you can re-run or pass flags from the local copy:
 
-    .\install.ps1
+    .\install.ps1              # re-install / update
+    .\install.ps1 -Edge        # latest main instead of latest release
+    .\install.ps1 -Verbose     # show full build output
+
+> **Note:** `irm ... | iex` does not support flags — PowerShell interprets them
+> as arguments to `Invoke-Expression`, not the script. Use the local
+> `.\install.ps1` form for `-Edge` or `-Verbose`.
 
 This runs `install.sh` via Git Bash under the hood and then writes the
-PowerShell profile. Pass `-Edge` or `-Verbose` for the same options as above.
+PowerShell profile.
 
 Start
 -----
