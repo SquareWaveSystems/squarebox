@@ -66,6 +66,20 @@ If the install fails or you want to see the full docker build and git output, re
 
     curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash -s -- --verbose
 
+**Windows (PowerShell 7+)**
+
+Windows users can install directly from PowerShell, which also sets up
+PowerShell aliases (`sqrbx`, `squarebox`, etc.):
+
+    irm https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.ps1 | iex
+
+Or if you already have the repo cloned:
+
+    .\install.ps1
+
+This runs `install.sh` via Git Bash under the hood and then writes the
+PowerShell profile. Pass `-Edge` or `-Verbose` for the same options as above.
+
 Start
 -----
 

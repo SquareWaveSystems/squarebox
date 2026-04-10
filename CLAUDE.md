@@ -33,7 +33,7 @@ docker start -ai squarebox
 
 The `install.sh` script automates initial setup (clone, build, create container, add `sqrbx` shell alias). A `.devcontainer/devcontainer.json` is also provided for VS Code Dev Containers / Codespaces.
 
-**Windows PowerShell**: Only PowerShell 7+ (`pwsh`) is supported. Windows PowerShell 5.1 is not supported.
+**Windows PowerShell**: Only PowerShell 7+ (`pwsh`) is supported. Windows PowerShell 5.1 is not supported. `install.ps1` is the recommended Windows entry point — it writes the PowerShell profile natively (using `$PROFILE` directly, no cross-shell detection) and delegates Docker setup to `install.sh` via Git Bash. Running `install.sh` directly from Git Bash still works but only sets up bash aliases; it prints instructions to run `install.ps1` for PowerShell.
 
 ## First-Run Setup
 
@@ -85,7 +85,7 @@ The Dockerfile uses `SHELL ["/bin/bash", "-c"]` because `tool-lib.sh` relies on 
 - **Git Bash**: install.sh uses `MSYS_NO_PATHCONV=1` to prevent MSYS2 path mangling in Docker volume mounts.
 - **Install directory**: uses `USERPROFILE` (not MSYS2 `HOME`) so the clone lands at `C:\Users\<user>\squarebox`.
 - **`$HOME` vs `$USER_HOME`** (install.sh): on Git Bash these diverge — `$HOME` is the MSYS home (`/home/user`, where bash actually reads `.bashrc` from), while `$USER_HOME` is derived from `USERPROFILE` (`C:/Users/user`, where the clone lives). Things anchored to the running shell (rc files, the `~/.squarebox-shell-init` file the sentinel sources) must use `$HOME`; things anchored to the filesystem install (`$INSTALL_DIR`, git config path, volume mounts) use `$USER_HOME`. Baking `$INSTALL_DIR` into shell function bodies at install time avoids runtime `$HOME` resolving wrong. On Linux/macOS the two are identical.
-- **Shell integration**: install.sh writes the four function bodies to `~/.squarebox-shell-init` and adds a single sentinel-marked `. ~/.squarebox-shell-init` line to `~/.bashrc` / `~/.zshrc` / PowerShell `$PROFILE`. The sentinel block (`# >>> squarebox >>>` / `# <<< squarebox <<<`) is scrubbed and rewritten on every run, along with any legacy `alias sqrbx=...` or one-liner `sqrbx() {...}` lines from pre-646a589 installs (those collide with the function definitions at parse time due to `expand_aliases` and produce a `syntax error near unexpected token '('`).
+- **Shell integration**: install.sh writes bash/zsh function bodies to `~/.squarebox-shell-init` and adds a single sentinel-marked `. ~/.squarebox-shell-init` line to `~/.bashrc` / `~/.zshrc`. PowerShell profile setup is handled by `install.ps1` (uses `$PROFILE` natively — no cross-shell detection). The sentinel block (`# >>> squarebox >>>` / `# <<< squarebox <<<`) is scrubbed and rewritten on every run, along with any legacy `alias sqrbx=...` or one-liner `sqrbx() {...}` lines from pre-646a589 installs.
 
 ## Tool Registry
 
