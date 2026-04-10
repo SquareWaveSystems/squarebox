@@ -156,6 +156,9 @@ if [ ! -f ~/.squarebox-setup-done ]; then
 		touch ~/.squarebox-setup-done
 	else
 		~/setup.sh && touch ~/.squarebox-setup-done
+		[ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
+		[ -f ~/.squarebox-editor-aliases ] && source ~/.squarebox-editor-aliases
+		[ -f ~/.squarebox-tui-aliases ] && source ~/.squarebox-tui-aliases
 		[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
 	fi
 fi
