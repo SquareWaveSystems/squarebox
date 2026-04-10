@@ -92,7 +92,8 @@ fi
 
 # Build
 _build_log="$(mktemp)"
-trap 'rm -f "$_build_log"' EXIT
+_rc_tmp=""
+trap 'rm -f "$_build_log" "$_rc_tmp" 2>/dev/null || true' EXIT
 if [ "$VERBOSE" = 1 ]; then
 	echo "Building image..."
 	docker_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR"
@@ -118,33 +119,65 @@ fi
 # Shell config must go where bash/zsh actually reads from ($HOME), which may
 # differ from USER_HOME on standalone MSYS2. The install directory uses
 # USER_HOME so it lands somewhere visible, but shell config is separate.
-case "${SHELL:-}" in
-	*/zsh) SHELL_RC="${HOME}/.zshrc" ;;
-	*)     SHELL_RC="${HOME}/.bashrc" ;;
-esac
-
-# Use shell functions (not aliases) so winpty detection happens at runtime
-# rather than being baked in at install time. This way the same config works
-# regardless of which terminal the user opens (Git Bash, PowerShell, etc.).
-ALIASES_ADDED=false
-
-_add_shell_func() {
-	local name="$1" body="$2"
-	if ! grep -q "^${name}()" "$SHELL_RC" 2>/dev/null; then
-		printf '%s() { %s; }\n' "$name" "$body" >> "$SHELL_RC"
-		ALIASES_ADDED=true
-	fi
-}
-
-_docker_start='if command -v winpty &>/dev/null && [[ -n "${MSYSTEM:-}" ]]; then winpty docker start -ai squarebox; else docker start -ai squarebox; fi'
-_add_shell_func "sqrbx" "$_docker_start"
-_add_shell_func "squarebox" "$_docker_start"
-_add_shell_func "sqrbx-rebuild" "${INSTALL_DIR}/install.sh"
-_add_shell_func "squarebox-rebuild" "${INSTALL_DIR}/install.sh"
-
-if [ "$ALIASES_ADDED" = true ]; then
-	echo "Added squarebox functions to $SHELL_RC — restart your shell or run: source $SHELL_RC"
+# On Git Bash (MSYSTEM set) force .bashrc regardless of $SHELL — if install.sh
+# is re-invoked from a parent PowerShell, $SHELL may be unset or unrelated.
+if [ -n "${MSYSTEM:-}" ]; then
+	SHELL_RC="${HOME}/.bashrc"
+else
+	case "${SHELL:-}" in
+		*/zsh) SHELL_RC="${HOME}/.zshrc" ;;
+		*)     SHELL_RC="${HOME}/.bashrc" ;;
+	esac
 fi
+
+# Write the function bodies to a dedicated file that install.sh overwrites on
+# every run, and reference it from $SHELL_RC via a sentinel one-liner. Mirrors
+# the pattern already used inside the container (see Dockerfile: ~/.squarebox-*
+# aliases sourced from ~/.bashrc). Benefits:
+#  - Future updates just overwrite the init file, no rc-file splicing.
+#  - Legacy `alias sqrbx=...` / `sqrbx() {...}` cruft from older install.sh
+#    versions gets scrubbed on every run — critical because an old alias
+#    shadows the new function definition at parse time (expand_aliases is on
+#    in interactive bash), producing a `syntax error near unexpected token '('`.
+SQRBX_INIT="${USER_HOME}/.squarebox-shell-init"
+cat > "$SQRBX_INIT" <<'SQRBXEOF'
+# Managed by squarebox install.sh — overwritten on every install.
+# Drop any stale aliases with these names so they don't shadow the functions.
+unalias sqrbx squarebox sqrbx-rebuild squarebox-rebuild 2>/dev/null || true
+sqrbx() { if command -v winpty &>/dev/null && [[ -n "${MSYSTEM:-}" ]]; then winpty docker start -ai squarebox; else docker start -ai squarebox; fi; }
+squarebox() { sqrbx "$@"; }
+sqrbx-rebuild() { "$HOME/squarebox/install.sh" "$@"; }
+squarebox-rebuild() { sqrbx-rebuild "$@"; }
+SQRBXEOF
+
+# Scrub legacy content from $SHELL_RC and append a fresh sentinel block that
+# sources $SQRBX_INIT. Portable awk + mktemp + mv (no `sed -i` GNU/BSD footgun).
+if [ -f "$SHELL_RC" ]; then
+	_rc_tmp="$(mktemp "${SHELL_RC}.sqrbx.XXXXXX")"
+	awk '
+		/^# >>> squarebox >>>/ { skip=1; next }
+		/^# <<< squarebox <<</ { skip=0; next }
+		skip { next }
+		/^[[:space:]]*alias[[:space:]]+(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild)=/ { next }
+		/^(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild)\(\)[[:space:]]*\{/ { next }
+		{ print }
+	' "$SHELL_RC" > "$_rc_tmp" && mv "$_rc_tmp" "$SHELL_RC"
+	_rc_tmp=""
+fi
+
+cat >> "$SHELL_RC" <<'SQRBXRCEOF'
+# >>> squarebox >>>
+[ -f "$HOME/.squarebox-shell-init" ] && . "$HOME/.squarebox-shell-init"
+# <<< squarebox <<<
+SQRBXRCEOF
+
+echo "Installed squarebox shell integration → $SHELL_RC"
+
+# Self-check: catch future regressions that would break the rc file at source time.
+if ! bash -n "$SHELL_RC" 2>/dev/null; then
+	echo "Warning: $SHELL_RC fails bash syntax check after edit — please inspect." >&2
+fi
+# end squarebox shell integration
 
 # Git Bash on Windows opens a login shell which reads .bash_profile (not
 # .bashrc). Ensure .bash_profile sources .bashrc so aliases are available.
@@ -168,46 +201,93 @@ _pwsh=""
 if command -v pwsh &>/dev/null; then
 	_pwsh="$(command -v pwsh)"
 elif [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; then
-	# pwsh is often not on Git Bash's PATH — search common Windows install locations
-	for _candidate in \
-		"$(cygpath -u "${PROGRAMFILES:-/c/Program Files}" 2>/dev/null)/PowerShell/7/pwsh.exe" \
-		"$(cygpath -u "${LOCALAPPDATA:-}" 2>/dev/null)/Microsoft/PowerShell/pwsh.exe"; do
-		if [ -x "$_candidate" ] 2>/dev/null; then
-			_pwsh="$_candidate"
-			break
+	# pwsh is typically not on Git Bash's PATH. Try where.exe first (queries the
+	# Windows PATH that Git Bash doesn't fully inherit), then fall back to
+	# probing common install locations directly.
+	if command -v where.exe &>/dev/null; then
+		_where_pwsh="$(where.exe pwsh 2>/dev/null | tr -d '\r' | head -1 || true)"
+		if [ -n "$_where_pwsh" ]; then
+			_pwsh="$(cygpath -u "$_where_pwsh" 2>/dev/null || echo "$_where_pwsh")"
 		fi
-	done
+	fi
+	if [ -z "$_pwsh" ]; then
+		for _candidate in \
+			"$(cygpath -u "${PROGRAMFILES:-/c/Program Files}" 2>/dev/null)/PowerShell/7/pwsh.exe" \
+			"$(cygpath -u "${LOCALAPPDATA:-}" 2>/dev/null)/Microsoft/PowerShell/7/pwsh.exe" \
+			"$(cygpath -u "${LOCALAPPDATA:-}" 2>/dev/null)/Microsoft/WindowsApps/pwsh.exe"; do
+			if [ -x "$_candidate" ] 2>/dev/null; then
+				_pwsh="$_candidate"
+				break
+			fi
+		done
+	fi
 fi
 
 if [ -n "$_pwsh" ]; then
 	[ "$VERBOSE" = 1 ] && echo "PowerShell: using $_pwsh"
-	_ps_profile_raw="$("$_pwsh" -NoProfile -Command '$PROFILE' 2>/dev/null | tr -d '\r' || true)"
+	# -OutputFormat Text and [Console]::Out.Write avoid a trailing newline; strip
+	# any leftover CR plus a possible UTF-8 BOM that PowerShell sometimes emits.
+	_ps_profile_raw="$("$_pwsh" -NoProfile -NonInteractive \
+		-Command '[Console]::Out.Write($PROFILE)' 2>/dev/null \
+		| tr -d '\r' \
+		| sed $'1s/^\xEF\xBB\xBF//' || true)"
 	[ "$VERBOSE" = 1 ] && echo "PowerShell \$PROFILE: ${_ps_profile_raw:-<empty>}"
 	if [ -n "$_ps_profile_raw" ]; then
 		_ps_profile="$(cygpath -u "$_ps_profile_raw" 2>/dev/null || echo "$_ps_profile_raw")"
 		[ "$VERBOSE" = 1 ] && echo "PowerShell profile (unix): $_ps_profile"
+		# Sanity check: a real profile path lives under Documents/PowerShell or
+		# Documents/WindowsPowerShell. Guards against stray bytes producing bogus paths.
+		case "$_ps_profile" in
+			*/Documents/PowerShell/*|*/Documents/WindowsPowerShell/*|*/PowerShell/*) ;;
+			*)
+				echo "Warning: pwsh returned unexpected profile path ($_ps_profile) — skipping PowerShell profile setup." >&2
+				_ps_profile=""
+				;;
+		esac
+	fi
+	if [ -n "${_ps_profile:-}" ]; then
 		mkdir -p "$(dirname "$_ps_profile")"
-		if ! grep -q 'function sqrbx ' "$_ps_profile" 2>/dev/null; then
-			cat >> "$_ps_profile" <<-'PSEOF'
+		touch "$_ps_profile"
+		# Managed block: strip any existing squarebox block (or legacy one-line
+		# function defs) and append a fresh one. Same sentinel as the bash rc.
+		_ps_tmp="$(mktemp "${_ps_profile}.sqrbx.XXXXXX")"
+		awk '
+			/^# >>> squarebox >>>/ { skip=1; next }
+			/^# <<< squarebox <<</ { skip=0; next }
+			skip { next }
+			/^[[:space:]]*function[[:space:]]+(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild)[[:space:]]*(\{|$)/ { next }
+			{ print }
+		' "$_ps_profile" > "$_ps_tmp" && mv "$_ps_tmp" "$_ps_profile"
 
-			# squarebox aliases
-			function sqrbx { docker start -ai squarebox }
-			function squarebox { docker start -ai squarebox }
-			function sqrbx-rebuild { bash "$HOME/squarebox/install.sh" }
-			function squarebox-rebuild { bash "$HOME/squarebox/install.sh" }
-			PSEOF
-			if grep -q 'function sqrbx ' "$_ps_profile" 2>/dev/null; then
-				echo "Added squarebox functions to PowerShell profile."
-			else
-				echo "Warning: failed to write squarebox functions to PowerShell profile." >&2
-				[ "$VERBOSE" = 1 ] && echo "  Tried to write to: $_ps_profile" >&2
-			fi
-		fi
-	else
-		echo "Warning: pwsh found but \$PROFILE returned empty — skipping PowerShell profile setup."
+		cat >> "$_ps_profile" <<'PSEOF'
+# >>> squarebox >>>
+# squarebox shell integration — managed by install.sh.
+Remove-Item Alias:sqrbx, Alias:squarebox, Alias:sqrbx-rebuild, Alias:squarebox-rebuild -ErrorAction SilentlyContinue
+function sqrbx { docker start -ai squarebox }
+function squarebox { docker start -ai squarebox }
+function sqrbx-rebuild {
+    $bash = @(
+        "$env:PROGRAMFILES\Git\bin\bash.exe",
+        "${env:PROGRAMFILES(x86)}\Git\bin\bash.exe",
+        (Get-Command bash.exe -ErrorAction SilentlyContinue).Source
+    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    if (-not $bash) {
+        Write-Error "squarebox: Git Bash not found — install Git for Windows."
+        return
+    }
+    & $bash "$env:USERPROFILE/squarebox/install.sh" @args
+}
+function squarebox-rebuild { sqrbx-rebuild @args }
+# <<< squarebox <<<
+PSEOF
+		echo "Installed squarebox shell integration → $_ps_profile"
+	elif [ -z "$_ps_profile_raw" ]; then
+		echo "Warning: pwsh found but \$PROFILE returned empty — skipping PowerShell profile setup." >&2
 	fi
 elif [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; then
-	[ "$VERBOSE" = 1 ] && echo "PowerShell: pwsh not found on PATH or in standard locations — skipping."
+	# Always notify on Windows — a silent skip was the main reason the last
+	# round of "aliases not being added" bugs was hard to diagnose.
+	echo "Note: pwsh not found on PATH or in standard install locations — skipping PowerShell profile setup."
 fi
 
 # Prepare host directories

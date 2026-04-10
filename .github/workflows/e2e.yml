@@ -65,20 +65,46 @@ jobs:
           test -d "$INSTALL_DIR/workspace"
           echo "PASS: 1.3 workspace directory created"
 
-      - name: "1.4 Shell aliases generation"
+      - name: "1.4 Shell integration generation"
         run: |
-          SHELL_RC=$(mktemp)
-          # Simulate alias insertion logic from install.sh
-          echo "alias sqrbx='docker start -ai squarebox'" >> "$SHELL_RC"
-          echo "alias squarebox='docker start -ai squarebox'" >> "$SHELL_RC"
-          echo "alias sqrbx-rebuild='~/squarebox/install.sh'" >> "$SHELL_RC"
-          echo "alias squarebox-rebuild='~/squarebox/install.sh'" >> "$SHELL_RC"
+          # Verify install.sh's shell-integration block by running it against a
+          # fixture rc file that contains legacy cruft from pre-646a589 installs.
+          # Regression guard for the "alias shadows function ⇒ parse error" bug.
+          export HOME="$(mktemp -d)"
+          export USER_HOME="$HOME"
+          SHELL_RC="$HOME/.bashrc"
+          cat > "$SHELL_RC" <<'LEGACY'
+          # Existing user content
+          alias ll='ls -la'
+          # Junk from an older install.sh
+          alias sqrbx='docker start -ai squarebox'
+          alias squarebox='docker start -ai squarebox'
+          alias sqrbx-rebuild='~/squarebox/install.sh'
+          alias squarebox-rebuild='~/squarebox/install.sh'
+          sqrbx() { if command -v winpty &>/dev/null && [[ -n "${MSYSTEM:-}" ]]; then winpty docker start -ai squarebox; else docker start -ai squarebox; fi; }
+          LEGACY
 
-          grep -q 'alias sqrbx=' "$SHELL_RC" || { echo "FAIL: sqrbx alias"; exit 1; }
-          grep -q 'alias squarebox=' "$SHELL_RC" || { echo "FAIL: squarebox alias"; exit 1; }
-          grep -q 'alias sqrbx-rebuild=' "$SHELL_RC" || { echo "FAIL: sqrbx-rebuild alias"; exit 1; }
-          grep -q 'alias squarebox-rebuild=' "$SHELL_RC" || { echo "FAIL: squarebox-rebuild alias"; exit 1; }
-          echo "PASS: all 4 aliases present"
+          # Run the exact shell-integration block from install.sh against the fixture.
+          # Extract lines from "# Shell config must go" through the syntax-check block.
+          awk '/^# Shell config must go/{f=1} f{print; if (/^# end squarebox shell integration$/) exit}' install.sh > /tmp/shell_block.sh
+          bash /tmp/shell_block.sh
+
+          # Assertions
+          test -f "$HOME/.squarebox-shell-init" || { echo "FAIL: init file not created"; exit 1; }
+          grep -q '^sqrbx() {' "$HOME/.squarebox-shell-init" || { echo "FAIL: sqrbx function missing"; exit 1; }
+          grep -q '^# >>> squarebox >>>' "$SHELL_RC" || { echo "FAIL: sentinel block missing from rc"; exit 1; }
+          grep -q 'squarebox-shell-init' "$SHELL_RC" || { echo "FAIL: rc does not source init file"; exit 1; }
+          grep -q "^alias sqrbx=" "$SHELL_RC" && { echo "FAIL: legacy alias not scrubbed"; exit 1; }
+          grep -q "^sqrbx() {" "$SHELL_RC" && { echo "FAIL: legacy one-liner function not scrubbed"; exit 1; }
+          grep -q "^alias ll=" "$SHELL_RC" || { echo "FAIL: unrelated user content removed"; exit 1; }
+          bash -n "$SHELL_RC" || { echo "FAIL: rc fails bash -n after edit"; exit 1; }
+          bash -O expand_aliases -i -c "source '$SHELL_RC'; type sqrbx | grep -q function" </dev/null || { echo "FAIL: sqrbx not a function after source"; exit 1; }
+
+          # Idempotency
+          bash /tmp/shell_block.sh
+          [ "$(grep -c '^# >>> squarebox >>>' "$SHELL_RC")" = 1 ] || { echo "FAIL: sentinel block duplicated on re-run"; exit 1; }
+
+          echo "PASS: shell integration managed block generated and idempotent"
 
       - name: "1.6 Host configs seeded"
         run: |
