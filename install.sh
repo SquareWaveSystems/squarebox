@@ -313,20 +313,25 @@ fi
 # Prepare host directories
 mkdir -p "${USER_HOME}/.config/git" "${INSTALL_DIR}/workspace" "${INSTALL_DIR}/.config/lazygit"
 
-# On Linux where host uid != 1000, a previous install may have chowned these
-# paths to 1000:1000 (for the container's `dev` user). On this run we need to
-# write to them as the host user first, so reclaim ownership before the writes.
-# The final chown-to-1000 still happens further down.
-if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 1000 ]; then
-	_reclaim_paths=(
-		"${USER_HOME}/.config/git"
-		"${INSTALL_DIR}/workspace"
-		"${INSTALL_DIR}/.config"
-	)
+# On Linux where host uid != 1000, a previous install may have chowned
+# ${USER_HOME}/.config/git to 1000:1000 (for the container's `dev` user), so
+# `git config --file` below would fail with "could not lock config file". If
+# that's the case, reclaim ownership back to the current user before writing.
+# Only this one path needs reclaiming — INSTALL_DIR/workspace is never written
+# to from install.sh, and INSTALL_DIR/.config writes further down are all
+# guarded by `[ ! -f ]` so only fire on first install where we just mkdir'd
+# the dir as the current user. The final chown-to-1000 still runs further down.
+if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 1000 ] && [ ! -w "${USER_HOME}/.config/git" ]; then
 	if [ "$(id -u)" -eq 0 ]; then
-		chown -R "$(id -u):$(id -g)" "${_reclaim_paths[@]}" 2>/dev/null || true
+		chown -R "$(id -u):$(id -g)" "${USER_HOME}/.config/git"
 	elif command -v sudo &>/dev/null; then
-		sudo chown -R "$(id -u):$(id -g)" "${_reclaim_paths[@]}" 2>/dev/null || true
+		sudo chown -R "$(id -u):$(id -g)" "${USER_HOME}/.config/git"
+	fi
+	if [ ! -w "${USER_HOME}/.config/git" ]; then
+		echo "Error: ${USER_HOME}/.config/git is not writable by uid $(id -u)." >&2
+		echo "       A previous install chowned it to uid 1000 for the container." >&2
+		echo "       Fix: sudo chown -R $(id -u):$(id -g) ${USER_HOME}/.config/git" >&2
+		exit 1
 	fi
 fi
 
