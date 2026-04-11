@@ -70,14 +70,21 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Using $Runtime as container runtime."
 
 # --- Clone or update ---
-$gitQuiet = if ($Verbose) { @() } else { @('--quiet') }
 if (Test-Path (Join-Path $InstallDir '.git')) {
     Write-Host "Updating existing install..."
-    git -C $InstallDir fetch --tags --force @gitQuiet origin
+    if ($Verbose) {
+        git -C $InstallDir fetch --tags --force origin
+    } else {
+        git -C $InstallDir fetch --tags --force --quiet origin
+    }
     if ($LASTEXITCODE -ne 0) { Abort "git fetch failed." }
 } else {
     Write-Host "Cloning squarebox..."
-    git clone @gitQuiet $Repo $InstallDir
+    if ($Verbose) {
+        git clone -- $Repo $InstallDir
+    } else {
+        git clone --quiet -- $Repo $InstallDir
+    }
     if ($LASTEXITCODE -ne 0) { Abort "git clone failed." }
 }
 
