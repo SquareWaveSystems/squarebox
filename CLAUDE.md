@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-squarebox is a containerized development environment (Docker) combining modern CLI/TUI tools with Claude Code. It uses a persistent container model — the container suspends on exit and resumes on restart, preserving state. Workspace code lives on the host at `~/squarebox/workspace` via volume mount.
+squarebox is a containerized development environment (Docker or Podman) combining modern CLI/TUI tools with Claude Code. It uses a persistent container model — the container suspends on exit and resumes on restart, preserving state. Workspace code lives on the host at `~/squarebox/workspace` via volume mount.
 
 ## Build & Run
 
 ```bash
-# Build the Docker image
+# Build the image (docker or podman — both work)
 docker build -t squarebox .
 
 # Create and run a new container (SSH agent forwarding, capability-restricted)
@@ -30,6 +30,8 @@ docker run -it --name squarebox \
 # Resume an existing container
 docker start -ai squarebox
 ```
+
+Replace `docker` with `podman` above if using Podman. The `install.sh` script auto-detects the runtime; override with `SQUAREBOX_RUNTIME=docker|podman`.
 
 The `install.sh` script automates initial setup (clone, build, create container, add `sqrbx` shell alias). A `.devcontainer/devcontainer.json` is also provided for VS Code Dev Containers / Codespaces.
 

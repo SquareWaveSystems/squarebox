@@ -37,13 +37,31 @@ function Abort([string]$msg) {
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Abort "Git is not installed. See https://git-scm.com/download/win"
 }
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Abort "Docker is not installed. See https://docs.docker.com/get-docker/"
+# Detect container runtime. Override with $env:SQUAREBOX_RUNTIME.
+$hasDocker = [bool](Get-Command docker -ErrorAction SilentlyContinue)
+$hasPodman = [bool](Get-Command podman -ErrorAction SilentlyContinue)
+
+if ($env:SQUAREBOX_RUNTIME) {
+    $Runtime = $env:SQUAREBOX_RUNTIME
+} elseif ($hasDocker -and $hasPodman) {
+    Write-Host "Both Docker and Podman detected."
+    Write-Host "  1) Docker"
+    Write-Host "  2) Podman"
+    $choice = Read-Host "Which runtime? [1]"
+    $Runtime = if ($choice -eq '2') { 'podman' } else { 'docker' }
+} elseif ($hasDocker) {
+    $Runtime = 'docker'
+} elseif ($hasPodman) {
+    $Runtime = 'podman'
+} else {
+    Abort "Neither Docker nor Podman is installed. See https://docs.docker.com/get-docker/ or https://podman.io"
 }
-try { docker info 2>$null | Out-Null } catch {}
+
+try { & $Runtime info 2>$null | Out-Null } catch {}
 if ($LASTEXITCODE -ne 0) {
-    Abort "Docker daemon is not running or current user lacks permissions."
+    Abort "$Runtime is not running or current user lacks permissions."
 }
+Write-Host "Using $Runtime as container runtime."
 
 # --- Clone or update ---
 $gitQuiet = if ($Verbose) { @() } else { @('--quiet') }
@@ -85,24 +103,24 @@ if ($Edge) {
 Write-Host "Building image... " -NoNewline
 if ($Verbose) {
     Write-Host ""
-    docker build -t $ImageName $InstallDir
-    if ($LASTEXITCODE -ne 0) { Abort "Docker build failed." }
+    & $Runtime build -t $ImageName $InstallDir
+    if ($LASTEXITCODE -ne 0) { Abort "$Runtime build failed." }
 } else {
-    $buildLog = docker build -t $ImageName $InstallDir 2>&1
+    $buildLog = & $Runtime build -t $ImageName $InstallDir 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "FAILED" -ForegroundColor Red
         Write-Host ($buildLog -join "`n")
-        Abort "Docker build failed."
+        Abort "$Runtime build failed."
     }
     Write-Host "done"
 }
 
 # --- Remove old container ---
-$existing = docker ps -a --format '{{.Names}}' | Where-Object { $_ -eq $ContainerName }
+$existing = & $Runtime ps -a --format '{{.Names}}' | Where-Object { $_ -eq $ContainerName }
 if ($existing) {
     Write-Host "Removing old container..."
-    docker stop $ContainerName 2>$null | Out-Null
-    docker rm $ContainerName | Out-Null
+    & $Runtime stop $ContainerName 2>$null | Out-Null
+    & $Runtime rm $ContainerName | Out-Null
 }
 
 # --- Propagate host git identity ---
@@ -142,7 +160,7 @@ git:
 # --- Create container ---
 Write-Host "Creating container..."
 
-$dockerVolumes = @(
+$rtVolumes = @(
     '-v', "$workspaceDir`:/workspace"
     '-v', "$gitCfgDir`:/home/dev/.config/git"
     '-v', "${starshipDest}:/home/dev/.config/starship.toml"
@@ -151,21 +169,21 @@ $dockerVolumes = @(
 
 # SSH: mount ~/.ssh read-only so git/ssh inside the container can use the
 # host's keys and config. Windows named-pipe agent forwarding (\\.\pipe\...)
-# into a Linux container's Unix socket is not reliably supported by Docker
-# Desktop, so we don't attempt pipe forwarding — keys are available directly.
+# into a Linux container's Unix socket is not reliably supported, so we don't
+# attempt pipe forwarding — keys are available directly.
 $sshDir = Join-Path $env:USERPROFILE '.ssh'
 if (Test-Path $sshDir) {
-    $dockerVolumes += @('-v', "${sshDir}:/home/dev/.ssh:ro")
+    $rtVolumes += @('-v', "${sshDir}:/home/dev/.ssh:ro")
 }
 
 # Drop all capabilities except those needed for scoped sudo
-$dockerOpts = @(
+$rtOpts = @(
     '--cap-drop=ALL'
     '--cap-add=CHOWN', '--cap-add=DAC_OVERRIDE', '--cap-add=FOWNER'
     '--cap-add=SETUID', '--cap-add=SETGID', '--cap-add=KILL'
 )
 
-$createResult = docker create -it --name $ContainerName @dockerOpts @dockerVolumes $ImageName 2>&1
+$createResult = & $Runtime create -it --name $ContainerName @rtOpts @rtVolumes $ImageName 2>&1
 if ($LASTEXITCODE -ne 0) {
     Abort "Failed to create container '$ContainerName':`n$createResult"
 }
@@ -197,13 +215,14 @@ $profileBlock = @'
 # >>> squarebox >>>
 # squarebox shell integration - managed by install.ps1.
 Remove-Item Alias:sqrbx, Alias:squarebox, Alias:sqrbx-rebuild, Alias:squarebox-rebuild -ErrorAction SilentlyContinue
-function sqrbx { docker start -ai squarebox }
-function squarebox { docker start -ai squarebox }
+function sqrbx { & __RUNTIME__ start -ai squarebox }
+function squarebox { & __RUNTIME__ start -ai squarebox }
 function sqrbx-rebuild { & "__INSTALL_DIR__\install.ps1" @args }
 function squarebox-rebuild { sqrbx-rebuild @args }
 # <<< squarebox <<<
 '@
 $profileBlock = $profileBlock -replace '__INSTALL_DIR__', $InstallDir
+$profileBlock = $profileBlock -replace '__RUNTIME__', $Runtime
 $profileBlock | Add-Content -Path $PROFILE
 
 Write-Host "Installed squarebox shell integration -> $PROFILE"
@@ -212,5 +231,5 @@ Write-Host "Installed squarebox shell integration -> $PROFILE"
 if ([System.Console]::IsInputRedirected) {
     Write-Host "Install complete. Run 'squarebox' (or 'sqrbx') to start."
 } else {
-    docker start -ai $ContainerName
+    & $Runtime start -ai $ContainerName
 }

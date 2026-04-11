@@ -21,4 +21,4 @@ Items are listed in priority order.
 - **Network firewall / sandboxing mode** — optional network-level isolation (iptables/seccomp) so AI agents can only reach approved endpoints, inspired by trailofbits and clampdown
 - **Multiple concurrent container instances** — support running more than one squarebox container simultaneously
 - **Multi-agent workflow orchestration** — explore adding a layer to run multiple AI coding agents simultaneously in isolated contexts (git worktrees + tmux sessions), inspired by agent-of-empires; may be better to integrate an existing tool than build from scratch
-- **Podman compatibility** — support Podman as a drop-in alternative to Docker for building and running squarebox containers
+- ~~**Podman compatibility**~~ — ✅ done: install scripts auto-detect Docker or Podman and skip UID chown logic for Podman's rootless user namespace mapping

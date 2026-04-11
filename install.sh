@@ -4,26 +4,26 @@ set -euo pipefail
 REPO="https://github.com/SquareWaveSystems/squarebox.git"
 
 # On MSYS2/Git Bash, automatic path conversion mangles the ":" separator in
-# Docker volume mounts (-v host:container), causing mounts to point to wrong
-# locations. MSYS_NO_PATHCONV disables this for docker commands.
-docker_cmd() {
+# volume mounts (-v host:container), causing mounts to point to wrong
+# locations. MSYS_NO_PATHCONV disables this for container runtime commands.
+rt_cmd() {
     if [[ -n "${MSYSTEM:-}" ]]; then
-        MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker "$@"
+        MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' "$RUNTIME" "$@"
     else
-        docker "$@"
+        "$RUNTIME" "$@"
     fi
 }
 
-# On Windows/mintty (Git Bash), docker needs winpty for interactive TTY
-# passthrough. mintty uses named pipes instead of the Windows Console API,
-# which breaks interactive docker commands. winpty bridges the gap.
+# On Windows/mintty (Git Bash), the container runtime needs winpty for
+# interactive TTY passthrough. mintty uses named pipes instead of the Windows
+# Console API, which breaks interactive commands. winpty bridges the gap.
 # PowerShell and CMD work natively — this only activates in MSYS2/mintty.
-docker_interactive() {
+rt_interactive() {
     if [[ -n "${MSYSTEM:-}" || "${TERM_PROGRAM:-}" == "mintty" ]] \
         && command -v winpty &>/dev/null; then
-        MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' winpty docker "$@"
+        MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' winpty "$RUNTIME" "$@"
     else
-        docker "$@"
+        "$RUNTIME" "$@"
     fi
 }
 
@@ -94,13 +94,40 @@ else
 	fi
 fi
 
-# Verify Docker is available
-if ! command -v docker &>/dev/null; then
-	echo "Error: Docker is not installed. See https://docs.docker.com/get-docker/" >&2
+# Detect container runtime. Override with SQUAREBOX_RUNTIME=docker|podman.
+_has_docker=0; command -v docker &>/dev/null && _has_docker=1
+_has_podman=0; command -v podman &>/dev/null && _has_podman=1
+
+if [ -n "${SQUAREBOX_RUNTIME:-}" ]; then
+	RUNTIME="$SQUAREBOX_RUNTIME"
+elif [ "$_has_docker" = 1 ] && [ "$_has_podman" = 1 ]; then
+	if [ -t 0 ]; then
+		echo "Both Docker and Podman detected."
+		echo "  1) Docker"
+		echo "  2) Podman"
+		printf "Which runtime? [1]: "
+		read -r _choice
+		case "$_choice" in
+			2) RUNTIME="podman" ;;
+			*) RUNTIME="docker" ;;
+		esac
+	else
+		RUNTIME="docker"
+	fi
+elif [ "$_has_docker" = 1 ]; then
+	RUNTIME="docker"
+elif [ "$_has_podman" = 1 ]; then
+	RUNTIME="podman"
+else
+	echo "Error: Neither Docker nor Podman is installed." >&2
+	echo "  Docker: https://docs.docker.com/get-docker/" >&2
+	echo "  Podman: https://podman.io/getting-started/installation" >&2
 	exit 1
 fi
-if ! docker_cmd info &>/dev/null; then
-	echo "Error: Docker daemon is not running or current user lacks permissions." >&2
+
+# Verify runtime is functional
+if ! rt_cmd info &>/dev/null; then
+	echo "Error: $RUNTIME is not running or current user lacks permissions." >&2
 	exit 1
 fi
 
@@ -111,10 +138,10 @@ _create_log=""
 trap 'rm -f "$_build_log" "$_rc_tmp" "$_create_log" 2>/dev/null || true' EXIT
 if [ "$VERBOSE" = 1 ]; then
 	echo "Building image..."
-	docker_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR"
+	rt_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR"
 else
 	printf "Building image... "
-	if docker_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR" > "$_build_log" 2>&1; then
+	if rt_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR" > "$_build_log" 2>&1; then
 		echo "done"
 	else
 		echo "FAILED" >&2
@@ -125,10 +152,10 @@ else
 fi
 
 # Remove old container if it exists
-if docker_cmd ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+if rt_cmd ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
 	echo "Removing old container..."
-	docker_cmd stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
-	docker_cmd rm "$CONTAINER_NAME" >/dev/null
+	rt_cmd stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+	rt_cmd rm "$CONTAINER_NAME" >/dev/null
 fi
 
 # Shell config must go where bash/zsh actually reads from ($HOME), which may
@@ -167,7 +194,7 @@ cat > "$SQRBX_INIT" <<SQRBXEOF
 # Managed by squarebox install.sh — overwritten on every install.
 # Drop any stale aliases with these names so they don't shadow the functions.
 unalias sqrbx squarebox sqrbx-rebuild squarebox-rebuild 2>/dev/null || true
-sqrbx() { if command -v winpty &>/dev/null && [[ -n "\${MSYSTEM:-}" ]]; then winpty docker start -ai squarebox; else docker start -ai squarebox; fi; }
+sqrbx() { if command -v winpty &>/dev/null && [[ -n "\${MSYSTEM:-}" ]]; then winpty $RUNTIME start -ai squarebox; else $RUNTIME start -ai squarebox; fi; }
 squarebox() { sqrbx "\$@"; }
 sqrbx-rebuild() { "${INSTALL_DIR}/install.sh" "\$@"; }
 squarebox-rebuild() { sqrbx-rebuild "\$@"; }
@@ -251,7 +278,8 @@ mkdir -p "${USER_HOME}/.config/git" "${INSTALL_DIR}/workspace" "${INSTALL_DIR}/.
 # to from install.sh, and INSTALL_DIR/.config writes further down are all
 # guarded by `[ ! -f ]` so only fire on first install where we just mkdir'd
 # the dir as the current user. The final chown-to-1000 still runs further down.
-if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 1000 ] && [ ! -w "${USER_HOME}/.config/git" ]; then
+# Podman: rootless Podman maps UIDs via user namespaces, so this is unnecessary.
+if [ "$RUNTIME" = "docker" ] && [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 1000 ] && [ ! -w "${USER_HOME}/.config/git" ]; then
 	if [ "$(id -u)" -eq 0 ]; then
 		chown -R "$(id -u):$(id -g)" "${USER_HOME}/.config/git"
 	elif command -v sudo &>/dev/null; then
@@ -303,7 +331,9 @@ fi
 # Linux-only: macOS and Windows Docker Desktop remap bind-mount ownership
 # transparently via their VMs, so chowning host dirs there is both unnecessary
 # and harmful (uid 1000 typically doesn't exist on the host).
-if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 1000 ]; then
+# Podman: rootless Podman maps UIDs via user namespaces automatically — the
+# container's uid 1000 maps to the invoking user. Chowning is unnecessary.
+if [ "$RUNTIME" = "docker" ] && [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 1000 ]; then
 	_chown_paths=(
 		"${USER_HOME}/.config/git"
 		"${INSTALL_DIR}/workspace"
@@ -326,35 +356,35 @@ if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 1000 ]; then
 fi
 
 echo "Creating container..."
-DOCKER_OPTS=()
-DOCKER_VOLUMES=(
+RT_OPTS=()
+RT_VOLUMES=(
 	-v "${INSTALL_DIR}/workspace:/workspace"
 	-v "${USER_HOME}/.config/git:/home/dev/.config/git"
 	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml"
 	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit"
 )
 # /etc/localtime doesn't exist on Windows — only mount it on Linux/macOS
-[ -f /etc/localtime ] && DOCKER_VOLUMES+=(-v /etc/localtime:/etc/localtime:ro)
+[ -f /etc/localtime ] && RT_VOLUMES+=(-v /etc/localtime:/etc/localtime:ro)
 
 # SSH: prefer agent forwarding (private keys never enter the container).
 # Falls back to mounting ~/.ssh read-only if no agent is detected.
 if [ -n "${SSH_AUTH_SOCK:-}" ] && [ -S "$SSH_AUTH_SOCK" ]; then
-	DOCKER_VOLUMES+=(-v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock")
-	DOCKER_OPTS+=(-e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
-	[ -f "${USER_HOME}/.ssh/config" ] && DOCKER_VOLUMES+=(-v "${USER_HOME}/.ssh/config:/home/dev/.ssh/config:ro")
-	[ -f "${USER_HOME}/.ssh/known_hosts" ] && DOCKER_VOLUMES+=(-v "${USER_HOME}/.ssh/known_hosts:/home/dev/.ssh/known_hosts:ro")
+	RT_VOLUMES+=(-v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock")
+	RT_OPTS+=(-e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
+	[ -f "${USER_HOME}/.ssh/config" ] && RT_VOLUMES+=(-v "${USER_HOME}/.ssh/config:/home/dev/.ssh/config:ro")
+	[ -f "${USER_HOME}/.ssh/known_hosts" ] && RT_VOLUMES+=(-v "${USER_HOME}/.ssh/known_hosts:/home/dev/.ssh/known_hosts:ro")
 elif [ -d "${USER_HOME}/.ssh" ]; then
 	echo "Note: SSH agent not detected — mounting ~/.ssh read-only"
-	DOCKER_VOLUMES+=(-v "${USER_HOME}/.ssh:/home/dev/.ssh:ro")
+	RT_VOLUMES+=(-v "${USER_HOME}/.ssh:/home/dev/.ssh:ro")
 fi
 
 # Drop all Linux capabilities except those needed for scoped sudo
-DOCKER_OPTS+=(--cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --cap-add=KILL)
+RT_OPTS+=(--cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --cap-add=KILL)
 
 _create_log="$(mktemp)"
-if ! docker_cmd create -it --name "$CONTAINER_NAME" \
-	"${DOCKER_OPTS[@]}" \
-	"${DOCKER_VOLUMES[@]}" \
+if ! rt_cmd create -it --name "$CONTAINER_NAME" \
+	"${RT_OPTS[@]}" \
+	"${RT_VOLUMES[@]}" \
 	"$IMAGE_NAME" > "$_create_log" 2>&1; then
 	echo "Error: failed to create container '$CONTAINER_NAME'." >&2
 	cat "$_create_log" >&2
@@ -362,7 +392,7 @@ if ! docker_cmd create -it --name "$CONTAINER_NAME" \
 fi
 
 if [ -t 0 ]; then
-	docker_interactive start -ai "$CONTAINER_NAME"
+	rt_interactive start -ai "$CONTAINER_NAME"
 else
 	echo "Install complete. Run 'squarebox' (or 'sqrbx') to start (you may need to restart your shell first)."
 fi
