@@ -163,6 +163,13 @@ if [ ! -f ~/.squarebox-setup-done ]; then
 		[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
 	fi
 fi
+# Hand off to zsh if the user opted in via setup.sh (experimental).
+# SQUAREBOX_IN_ZSH guards against re-exec loops; SQUAREBOX_NO_ZSH lets
+# users force bash for one shell without removing the marker.
+if [ -f ~/.squarebox-use-zsh ] && [ -z "${SQUAREBOX_IN_ZSH:-}" ] && [ -z "${SQUAREBOX_NO_ZSH:-}" ] && command -v zsh >/dev/null 2>&1; then
+	export SQUAREBOX_IN_ZSH=1
+	exec zsh -l
+fi
 EOFRC
 
 # Display MOTD on interactive shell login

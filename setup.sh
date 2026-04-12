@@ -17,7 +17,7 @@ done
 
 # If --rerun with no specific sections, run all sections
 if $SB_RERUN && [ ${#SB_SECTIONS[@]} -eq 0 ]; then
-	SB_SECTIONS=(git github ai editors tuis multiplexers sdks)
+	SB_SECTIONS=(git github ai editors tuis multiplexers sdks shell)
 fi
 
 should_run() {
@@ -1292,6 +1292,141 @@ for sdk in $(echo "$sdk_list" | tr ',' ' '); do
 	esac
 done
 fi # should_run sdks
+
+# Shell (experimental) — offer Zsh + Oh My Zsh as an alternative to Bash
+if should_run shell; then
+SHELL_CONFIG="/workspace/.squarebox/shell"
+
+shell_prev=""
+if [ -f "$SHELL_CONFIG" ]; then
+	shell_prev=$(cat "$SHELL_CONFIG")
+fi
+
+if $INTERACTIVE; then
+	echo
+	section_header "Shell (experimental)"
+	if $HAS_GUM; then
+		gum_selected=""
+		case "$shell_prev" in
+			zsh) gum_selected="zsh (experimental)" ;;
+			bash) gum_selected="bash" ;;
+		esac
+		gum_args=(--header "Select default shell:")
+		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
+		shell_pick=$(gum choose "${gum_args[@]}" "bash" "zsh (experimental)") || shell_pick=""
+		case "$shell_pick" in
+			"zsh (experimental)") shell_choice="zsh" ;;
+			"bash")               shell_choice="bash" ;;
+			*)                    shell_choice="$shell_prev" ;;
+		esac
+	else
+		echo "Select default shell:"
+		for sh_item in "1:bash:GNU Bash (default)" "2:zsh:Zsh + Oh My Zsh + autosuggestions + syntax highlighting (experimental)"; do
+			num="${sh_item%%:*}"; rest="${sh_item#*:}"; key="${rest%%:*}"; desc="${rest#*:}"
+			if [ "$key" = "$shell_prev" ]; then
+				echo "  ${num}) ${key} — ${desc} [current]"
+			else
+				echo "  ${num}) ${key} — ${desc}"
+			fi
+		done
+		read -rp "Selection [1,2/skip]: " shell_selection
+		if [ -z "$shell_selection" ] && [ -n "$shell_prev" ]; then
+			shell_choice="$shell_prev"
+		else
+			case "$shell_selection" in
+				1) shell_choice="bash" ;;
+				2) shell_choice="zsh" ;;
+				*) shell_choice="${shell_prev:-bash}" ;;
+			esac
+		fi
+	fi
+	[ -z "$shell_choice" ] && shell_choice="bash"
+	echo "$shell_choice" > "$SHELL_CONFIG"
+elif [ -n "$shell_prev" ]; then
+	shell_choice="$shell_prev"
+	[ "$shell_choice" = "zsh" ] && echo "Configuring shell: zsh (from previous selection)"
+else
+	shell_choice="bash"
+	echo "$shell_choice" > "$SHELL_CONFIG"
+fi
+
+_install_zsh_inner() {
+	sudo apt-get update -qq && sudo apt-get install -y -qq zsh >/dev/null 2>&1
+	# Trust boundary: the Oh My Zsh installer manages its own files via HTTPS.
+	# RUNZSH=no prevents launching a subshell, CHSH=no skips the chsh prompt
+	# (we handle shell switching via the .squarebox-use-zsh marker), and
+	# KEEP_ZSHRC=yes prevents it from writing a .zshrc we'd immediately overwrite.
+	if [ ! -d "$HOME/.oh-my-zsh" ]; then
+		RUNZSH=no CHSH=no KEEP_ZSHRC=yes \
+			sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended >/dev/null 2>&1
+	fi
+	local custom="$HOME/.oh-my-zsh/custom"
+	if [ ! -d "$custom/plugins/zsh-autosuggestions" ]; then
+		git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions \
+			"$custom/plugins/zsh-autosuggestions" >/dev/null 2>&1
+	fi
+	if [ ! -d "$custom/plugins/zsh-syntax-highlighting" ]; then
+		git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting \
+			"$custom/plugins/zsh-syntax-highlighting" >/dev/null 2>&1
+	fi
+	# Generate ~/.zshrc that mirrors ~/.bashrc, layered on Oh My Zsh.
+	cat > "$HOME/.zshrc" <<-'ZSHRC'
+		# squarebox zsh config (experimental) — mirrors ~/.bashrc
+		export ZSH="$HOME/.oh-my-zsh"
+		ZSH_THEME=""
+		plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
+		[ -f "$ZSH/oh-my-zsh.sh" ] && source "$ZSH/oh-my-zsh.sh"
+
+		eval "$(starship init zsh)"
+		eval "$(zoxide init zsh --cmd cd)"
+		alias ls='eza --icons'
+		alias ll='eza -la --icons'
+		alias lsa='ls -a'
+		alias lt='eza --tree --level=2 --long --icons --git'
+		alias lta='lt -a'
+		alias cat='bat --paging=never'
+		alias ff="fzf --preview 'bat --style=numbers --color=always {}'"
+		alias eff='$EDITOR "$(ff)"'
+		alias ..='cd ..'
+		alias ...='cd ../..'
+		alias ....='cd ../../..'
+		export EDITOR='nano'
+		[ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
+		[ -f ~/.squarebox-editor-aliases ] && source ~/.squarebox-editor-aliases
+		[ -f ~/.squarebox-tui-aliases ] && source ~/.squarebox-tui-aliases
+		[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
+		alias g='git'
+		alias gcm='git commit -m'
+		alias gcam='git commit -a -m'
+		alias gcad='git commit -a --amend'
+		export PATH="$HOME/.local/bin:$PATH"
+		[ -x ~/motd.sh ] && ~/motd.sh
+	ZSHRC
+}
+
+install_zsh() {
+	if command -v zsh &>/dev/null && [ -d "$HOME/.oh-my-zsh" ] && [ -f "$HOME/.zshrc" ]; then
+		echo "Zsh already configured, skipping."
+		return 0
+	fi
+	run_with_spinner "Installing Zsh + Oh My Zsh..." _install_zsh_inner
+}
+
+case "$shell_choice" in
+	zsh)
+		if install_zsh; then
+			touch ~/.squarebox-use-zsh
+			echo "Zsh will be used on the next shell start."
+		else
+			echo "Warning: Zsh installation failed; staying on bash."
+			rm -f ~/.squarebox-use-zsh
+		fi
+		;;
+	bash|*)
+		rm -f ~/.squarebox-use-zsh
+		;;
+esac
+fi # should_run shell
 
 echo
 

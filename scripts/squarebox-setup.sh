@@ -16,7 +16,7 @@ GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 RESET='\033[0m'
 
-VALID_SECTIONS=(git github ai editors tuis multiplexers sdks)
+VALID_SECTIONS=(git github ai editors tuis multiplexers sdks shell)
 
 usage() {
 	cat <<-EOF
@@ -36,6 +36,7 @@ usage() {
 	  tuis           TUI tools (lazygit, gh-dash, yazi)
 	  multiplexers   Terminal multiplexers (tmux, zellij)
 	  sdks           SDKs (node, python, go, dotnet)
+	  shell          Default shell (bash, zsh — experimental)
 
 	${BOLD}Examples:${RESET}
 	  sqrbx-setup ai editors       Re-run AI assistant and editor selection
@@ -74,6 +75,7 @@ show_list() {
 		"tuis:TUI tools"
 		"multiplexer:Multiplexers"
 		"sdks:SDKs"
+		"shell:Shell"
 	)
 	for entry in "${configs[@]}"; do
 		local file="${entry%%:*}"

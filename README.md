@@ -176,6 +176,28 @@ Installed during first-run setup. Choose either, both, or neither:
 | [tmux](https://github.com/tmux/tmux) | Classic terminal multiplexer |
 | [zellij](https://github.com/zellij-org/zellij) | Friendly terminal workspace |
 
+### Shell (Experimental)
+
+By default, squarebox uses Bash. During first-run setup you can opt in to
+**Zsh** instead, which installs:
+
+| Name | Description |
+|------|-------------|
+| [zsh](https://www.zsh.org) | Z shell (via apt) |
+| [Oh My Zsh](https://ohmyz.sh) | Community framework for managing zsh config |
+| [zsh-autosuggestions](https://github.com/zsh-users/zsh-autosuggestions) | Fish-like history-based suggestions |
+| [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting) | Inline command syntax highlighting |
+
+The generated `~/.zshrc` mirrors the default bashrc — same aliases, starship
+prompt, zoxide, and AI/editor/SDK sourcing — layered on top of Oh My Zsh.
+
+> **Experimental:** the marker file `~/.squarebox-use-zsh` causes `~/.bashrc`
+> to `exec zsh -l` on every interactive login, so the next shell start picks
+> up the new shell. Set `SQUAREBOX_NO_ZSH=1` to force bash for a single
+> session, or re-run `sqrbx-setup shell` to switch back permanently. Tooling
+> is primarily tested against bash, so a few edge cases (custom alias files,
+> rebuilds) may need polish — please file an issue if you hit one.
+
 ### SDKs
 
 | SDK | Installed via |

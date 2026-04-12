@@ -48,6 +48,7 @@ The `install.sh` script automates initial setup (clone, build, create container,
 5. **TUI tools** — lazygit, gh-dash, yazi (any combination)
 6. **Terminal multiplexers** — tmux, zellij
 7. **SDKs** — Node.js (via nvm), Python (via uv), Go, .NET
+8. **Shell** — bash (default) or zsh + Oh My Zsh + autosuggestions + syntax highlighting (experimental)
 
 Selections are saved to `/workspace/.squarebox/` and reused on subsequent rebuilds.
 
@@ -62,7 +63,7 @@ sqrbx-setup --list            # Show current tool selections
 sqrbx-setup --help            # Show usage
 ```
 
-Valid sections: `git`, `github`, `ai`, `editors`, `tuis`, `multiplexers`, `sdks`.
+Valid sections: `git`, `github`, `ai`, `editors`, `tuis`, `multiplexers`, `sdks`, `shell`.
 
 Run `source ~/.bashrc` after setup to pick up new aliases and PATH changes in the current shell.
 
