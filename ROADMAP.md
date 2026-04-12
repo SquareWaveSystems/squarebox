@@ -6,7 +6,6 @@ Items are listed in priority order.
 
 - **just** — add [just](https://github.com/casey/just) (modern task runner) to the default image; single binary, zero dependencies, gives users a standard way to define project commands
 - **difftastic** — add [difftastic](https://github.com/Wilfred/difftastic) (syntax-aware structural diffs) to the default image; complements delta with language-aware diffing
-- **btop** — add [btop](https://github.com/aristocratos/btop) (system resource monitor TUI) to the default image; fills the "what's eating my CPU/memory" gap without requiring manual package installation
 - **direnv** — add [direnv](https://github.com/direnv/direnv) (automatic per-directory environment loading) to the default image; auto-loads `.envrc` files on `cd`, integrates with zoxide for seamless per-project environment variables
 - **Zsh option** — offer Zsh with Oh My Zsh, autosuggestions, and syntax highlighting as a selectable shell in `setup.sh` alongside the Bash default; closes the biggest UX gap vs. competing dev environments
 - **Dotfile portability** — let users mount or bootstrap their own dotfiles (starship.toml, tmux.conf, aliases, etc.) via a `~/.squarebox/` convention, with sensible merge/override behaviour against the defaults
