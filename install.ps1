@@ -204,7 +204,7 @@ function sqrbx {
     # Reset so the next start attaches to a fresh PID1 that paints a visible prompt.
     $running = (docker inspect -f '{{.State.Running}}' squarebox 2>$null)
     if ($running -and $running.Trim() -eq 'true') {
-        docker stop squarebox | Out-Null
+        docker stop squarebox > $null 2>&1
     }
     docker start -ai squarebox
 }
