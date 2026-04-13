@@ -167,7 +167,21 @@ cat > "$SQRBX_INIT" <<SQRBXEOF
 # Managed by squarebox install.sh — overwritten on every install.
 # Drop any stale aliases with these names so they don't shadow the functions.
 unalias sqrbx squarebox sqrbx-rebuild squarebox-rebuild 2>/dev/null || true
-sqrbx() { if command -v winpty &>/dev/null && [[ -n "\${MSYSTEM:-}" ]]; then winpty docker start -ai squarebox; else docker start -ai squarebox; fi; }
+sqrbx() {
+	# If the container was left running after an ungraceful exit (closed
+	# terminal instead of \`exit\`), attaching to PID1 bash drops you onto a
+	# prompt it already printed to the dead TTY — blinking cursor, no
+	# output. Reset so the next start attaches to a fresh PID1 that paints
+	# a visible prompt.
+	if [ "\$(docker inspect -f '{{.State.Running}}' squarebox 2>/dev/null)" = "true" ]; then
+		docker stop squarebox >/dev/null 2>&1 || true
+	fi
+	if command -v winpty &>/dev/null && [[ -n "\${MSYSTEM:-}" ]]; then
+		winpty docker start -ai squarebox
+	else
+		docker start -ai squarebox
+	fi
+}
 squarebox() { sqrbx "\$@"; }
 sqrbx-rebuild() { "${INSTALL_DIR}/install.sh" "\$@"; }
 squarebox-rebuild() { sqrbx-rebuild "\$@"; }

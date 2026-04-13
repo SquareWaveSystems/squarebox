@@ -197,8 +197,18 @@ $profileBlock = @'
 # >>> squarebox >>>
 # squarebox shell integration - managed by install.ps1.
 Remove-Item Alias:sqrbx, Alias:squarebox, Alias:sqrbx-rebuild, Alias:squarebox-rebuild -ErrorAction SilentlyContinue
-function sqrbx { docker start -ai squarebox }
-function squarebox { docker start -ai squarebox }
+function sqrbx {
+    # If the container was left running after an ungraceful exit (closed
+    # terminal instead of 'exit'), attaching to PID1 bash drops you onto a
+    # prompt it already printed to the dead TTY - blinking cursor, no output.
+    # Reset so the next start attaches to a fresh PID1 that paints a visible prompt.
+    $running = (docker inspect -f '{{.State.Running}}' squarebox 2>$null)
+    if ($running -and $running.Trim() -eq 'true') {
+        docker stop squarebox | Out-Null
+    }
+    docker start -ai squarebox
+}
+function squarebox { sqrbx @args }
 function sqrbx-rebuild { & "__INSTALL_DIR__\install.ps1" @args }
 function squarebox-rebuild { sqrbx-rebuild @args }
 # <<< squarebox <<<
