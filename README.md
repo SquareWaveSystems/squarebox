@@ -31,7 +31,8 @@ asks which to use. Override with `SQUAREBOX_RUNTIME=docker` or
 > have rough edges around volume mounts, SSH agent forwarding, or rebuild
 > flows — please file an issue if you hit one.
 
-### Don't have Docker or Podman? One-line install
+<details>
+<summary><strong>Don't have Docker or Podman? One-line install</strong></summary>
 
 **macOS** (via [Homebrew](https://brew.sh)):
 
@@ -49,6 +50,8 @@ Log out and back in (or run `newgrp docker`) so your shell picks up the new grou
 
 On macOS and Windows, start Docker Desktop once after install so the daemon is
 running before you continue.
+
+</details>
 
 Install
 -------
