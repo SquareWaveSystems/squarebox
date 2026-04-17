@@ -377,13 +377,32 @@ using `gh codespace ssh`.
 Uninstall
 ---------
 
-    docker stop squarebox 2>/dev/null; docker rm squarebox
-    docker rmi squarebox
-    rm -rf ~/squarebox
+    sqrbx-uninstall
 
-Then remove the `sqrbx` and `sqrbx-rebuild` aliases from your shell config
-(`~/.bashrc`, `~/.zshrc`, or `~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1`).
-Back up `~/squarebox/workspace` first if you need your code.
+Removes the container, image, and shell integration but **keeps**
+`~/squarebox` (including `workspace/`) so your code is safe by default.
+Pass `--purge` to also remove `~/squarebox`:
+
+    sqrbx-uninstall --purge
+
+A second confirmation is required if `~/squarebox/workspace` is non-empty.
+Pass `-y` (or `-Yes` on PowerShell) to skip all prompts for scripting.
+Idempotent: safe to re-run once uninstalled.
+
+**Windows (PowerShell 7+):**
+
+    sqrbx-uninstall                # keep ~/squarebox
+    sqrbx-uninstall -Purge         # also remove ~/squarebox
+    sqrbx-uninstall -Yes           # skip confirmations
+
+**Broken-state recovery** (e.g. shell functions are missing, or after partial
+install): run the script directly from the install directory:
+
+    ~/squarebox/uninstall.sh              # Linux / macOS / Git Bash
+    ~/squarebox/uninstall.ps1             # Windows PowerShell
+
+Start a new shell afterwards (or `exec bash` / `exec zsh`) so the `sqrbx` and
+`squarebox` functions are dropped from the current session.
 
 Make it your own
 -----------------

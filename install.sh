@@ -200,8 +200,15 @@ SQRBX_INIT="${HOME}/.squarebox-shell-init"
 cat > "$SQRBX_INIT" <<SQRBXEOF
 # Managed by squarebox install.sh — overwritten on every install.
 # Drop any stale aliases with these names so they don't shadow the functions.
-unalias sqrbx squarebox sqrbx-rebuild squarebox-rebuild 2>/dev/null || true
+unalias sqrbx squarebox sqrbx-rebuild squarebox-rebuild sqrbx-uninstall squarebox-uninstall 2>/dev/null || true
 sqrbx() {
+	# Dispatch subcommands (currently: uninstall) so \`sqrbx uninstall\` is
+	# symmetric with the standalone \`sqrbx-uninstall\` function below.
+	if [ "\${1:-}" = "uninstall" ]; then
+		shift
+		"${INSTALL_DIR}/uninstall.sh" "\$@"
+		return
+	fi
 	# If the container was left running after an ungraceful exit (closed
 	# terminal instead of \`exit\`), attaching to PID1 bash drops you onto a
 	# prompt it already printed to the dead TTY — blinking cursor, no
@@ -219,6 +226,8 @@ sqrbx() {
 squarebox() { sqrbx "\$@"; }
 sqrbx-rebuild() { "${INSTALL_DIR}/install.sh" "\$@"; }
 squarebox-rebuild() { sqrbx-rebuild "\$@"; }
+sqrbx-uninstall() { "${INSTALL_DIR}/uninstall.sh" "\$@"; }
+squarebox-uninstall() { sqrbx-uninstall "\$@"; }
 SQRBXEOF
 
 # Scrub legacy content from $SHELL_RC and append a fresh sentinel block that
@@ -229,8 +238,8 @@ if [ -f "$SHELL_RC" ]; then
 		/^# >>> squarebox >>>/ { skip=1; next }
 		/^# <<< squarebox <<</ { skip=0; next }
 		skip { next }
-		/^[[:space:]]*alias[[:space:]]+(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild)=/ { next }
-		/^(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild)\(\)[[:space:]]*\{/ { next }
+		/^[[:space:]]*alias[[:space:]]+(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild|sqrbx-uninstall|squarebox-uninstall)=/ { next }
+		/^(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild|sqrbx-uninstall|squarebox-uninstall)\(\)[[:space:]]*\{/ { next }
 		{ print }
 	' "$SHELL_RC" > "$_rc_tmp" && mv "$_rc_tmp" "$SHELL_RC"
 	_rc_tmp=""

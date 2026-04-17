@@ -216,7 +216,7 @@ if (Test-Path $PROFILE) {
         if ($line -match '^# >>> squarebox >>>') { $skip = $true; continue }
         if ($line -match '^# <<< squarebox <<<') { $skip = $false; continue }
         if ($skip) { continue }
-        if ($line -match '^\s*function\s+(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild)\s*(\{|$)') { continue }
+        if ($line -match '^\s*function\s+(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild|sqrbx-uninstall|squarebox-uninstall)\s*(\{|$)') { continue }
         $filtered.Add($line)
     }
     Set-Content -Path $PROFILE -Value ($filtered -join "`n")
@@ -227,8 +227,15 @@ if (Test-Path $PROFILE) {
 $profileBlock = @'
 # >>> squarebox >>>
 # squarebox shell integration - managed by install.ps1.
-Remove-Item Alias:sqrbx, Alias:squarebox, Alias:sqrbx-rebuild, Alias:squarebox-rebuild -ErrorAction SilentlyContinue
+Remove-Item Alias:sqrbx, Alias:squarebox, Alias:sqrbx-rebuild, Alias:squarebox-rebuild, Alias:sqrbx-uninstall, Alias:squarebox-uninstall -ErrorAction SilentlyContinue
 function sqrbx {
+    # Dispatch subcommands (currently: uninstall) so 'sqrbx uninstall' is
+    # symmetric with the standalone sqrbx-uninstall function below.
+    if ($args.Count -gt 0 -and $args[0] -eq 'uninstall') {
+        $rest = if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { @() }
+        & "__INSTALL_DIR__\uninstall.ps1" @rest
+        return
+    }
     # If the container was left running after an ungraceful exit (closed
     # terminal instead of 'exit'), attaching to PID1 bash drops you onto a
     # prompt it already printed to the dead TTY - blinking cursor, no output.
@@ -242,6 +249,8 @@ function sqrbx {
 function squarebox { sqrbx @args }
 function sqrbx-rebuild { & "__INSTALL_DIR__\install.ps1" @args }
 function squarebox-rebuild { sqrbx-rebuild @args }
+function sqrbx-uninstall { & "__INSTALL_DIR__\uninstall.ps1" @args }
+function squarebox-uninstall { sqrbx-uninstall @args }
 # <<< squarebox <<<
 '@
 $profileBlock = $profileBlock -replace '__INSTALL_DIR__', $InstallDir

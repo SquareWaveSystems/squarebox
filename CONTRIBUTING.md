@@ -50,6 +50,8 @@ docker run --rm squarebox:test bash -c '
 | `setup.sh` | First-run interactive setup (AI tools, editors, SDKs) |
 | `install.sh` | Host-side install script for Linux/macOS (clone, build, create container) |
 | `install.ps1` | Host-side install script for Windows/PowerShell 7+ |
+| `uninstall.sh` | Host-side uninstall script for Linux/macOS/Git Bash |
+| `uninstall.ps1` | Host-side uninstall script for Windows/PowerShell 7+ |
 | `scripts/squarebox-update.sh` | In-container tool updater (`sqrbx-update`) |
 | `scripts/update-versions.sh` | Fetches latest Dockerfile-tier releases and updates checksums |
 | `checksums.txt` | SHA256 checksums for Dockerfile binary tools |
