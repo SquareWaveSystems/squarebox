@@ -35,7 +35,7 @@ usage() {
 	  editors        Text editors (micro, edit, fresh, nvim)
 	  tuis           TUI tools (lazygit, gh-dash, yazi)
 	  multiplexers   Terminal multiplexers (tmux, zellij)
-	  sdks           SDKs (node, python, go, dotnet)
+	  sdks           SDKs (node, python, go, dotnet, rust)
 	  shell          Default shell (bash, zsh/fish — experimental)
 
 	${BOLD}Examples:${RESET}

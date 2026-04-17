@@ -6,7 +6,7 @@
 multiple platforms and devices.*
 
 **squarebox** packages a complete terminal-based development environment
-into a single container (Docker or Podman): modern CLI tools, AI coding
+into a single container (Docker; Podman experimental): modern CLI tools, AI coding
 assistants, language SDKs, and an opinionated set of shell aliases. Run the
 same box anywhere (desktop, VPS, or Codespace) and SSH in from your laptop,
 tablet, or phone (please don't).
@@ -20,12 +20,16 @@ install, interactive first-run setup, sensible defaults (thanks [omarchy](https:
 Prerequisites
 -------------
 
-- [Docker](https://docs.docker.com/get-docker/) or [Podman](https://podman.io/getting-started/installation) (see one-line install below if you don't have either)
+- [Docker](https://docs.docker.com/get-docker/) or [Podman](https://podman.io/getting-started/installation) (experimental — see one-line install below if you don't have either)
 - [Git](https://git-scm.com/) - on Windows, install [Git for Windows](https://gitforwindows.org/)
 
 The installer auto-detects which runtime is available. If both are installed, it
 asks which to use. Override with `SQUAREBOX_RUNTIME=docker` or
 `SQUAREBOX_RUNTIME=podman`.
+
+> **Podman (Experimental):** Docker is the primary tested runtime; Podman may
+> have rough edges around volume mounts, SSH agent forwarding, or rebuild
+> flows — please file an issue if you hit one.
 
 ### Don't have Docker or Podman? One-line install
 
@@ -217,6 +221,7 @@ AI/editor/TUI/SDK selections are translated from their bash files into
 | Python | [uv](https://github.com/astral-sh/uv) |
 | Go | [go.dev](https://go.dev) |
 | .NET | [dotnet-install](https://dot.net) |
+| Rust | [rustup](https://rustup.rs) |
 
 Aliases
 -------

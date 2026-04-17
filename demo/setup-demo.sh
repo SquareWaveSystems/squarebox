@@ -95,7 +95,7 @@ echo
 section_header "SDKs"
 selected=$(gum choose --no-limit \
     --header "Select SDKs to install:" \
-    "Node.js" "Python" "Go" ".NET") || true
+    "Node.js" "Python" "Go" ".NET" "Rust") || true
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue
@@ -111,6 +111,7 @@ while IFS= read -r line; do
         "Python") run_with_spinner "Installing Python (via uv)..." 0.8 ;;
         "Go")     run_with_spinner "Installing Go go1.26.1..." 0.8 ;;
         ".NET")   run_with_spinner "Installing .NET..." 0.8 ;;
+        "Rust")   run_with_spinner "Installing Rust (via rustup)..." 0.8 ;;
     esac
 done <<< "$selected"
 

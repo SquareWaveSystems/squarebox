@@ -18,7 +18,7 @@ If VHS is not installed, install it before proceeding. On macOS: `brew install v
    - GitHub CLI auth
    - AI coding assistant selection (Claude Code, OpenCode, Both)
    - Text editor selection (micro, edit, fresh, helix, nvim)
-   - SDK selection (Node.js, Python, Go, .NET)
+   - SDK selection (Node.js, Python, Go, .NET, Rust)
 
 3. If the user wants to change the recording settings (dimensions, theme, timing), update `demo/demo.tape`.
 

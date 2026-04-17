@@ -50,7 +50,7 @@ at each layer:
 | **setup.sh optional tools** | OpenCode, nvm, Go, editors (micro, edit, fresh, nvim), TUIs (lazygit, gh-dash, yazi), zellij | HTTPS | None beyond transport | No, latest upstream at install time |
 | **sqrbx-update (Dockerfile tier)** | delta, yq, xh, glow, gum, starship | HTTPS | SHA256 checksum fetched from repo, update refused on mismatch or missing checksum | Only vetted versions |
 | **sqrbx-update (optional tier)** | Optional tools listed above | HTTPS | None beyond transport | Latest upstream |
-| **setup.sh third-party installers** | Claude Code, uv, .NET | HTTPS | Delegates to vendor installer | No (latest/LTS) |
+| **setup.sh third-party installers** | Claude Code, uv, .NET, rustup | HTTPS | Delegates to vendor installer | No (latest/LTS) |
 
 **What this means in practice:**
 
@@ -63,8 +63,8 @@ at each layer:
   tool's installer yourself. You get new features without waiting for a
   squarebox release, at the cost of the build-time pinning guarantee.
 - Third-party install scripts (Claude Code from Anthropic, uv from Astral, .NET
-  from Microsoft) delegate to the vendor installer and inherit whatever
-  verification that installer performs.
+  from Microsoft, rustup from the Rust project) delegate to the vendor installer
+  and inherit whatever verification that installer performs.
 - APT packages are verified by Ubuntu's and each repo's GPG signatures.
 
 ## Container isolation
