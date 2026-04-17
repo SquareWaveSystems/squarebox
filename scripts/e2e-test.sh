@@ -52,7 +52,7 @@ run_test_grep() {
 }
 
 # ── Suite: tools ─────────────────────────────────────────────────────────
-# Covers: 5.1-5.12 (tool verification)
+# Covers: 5.1-5.14 (tool verification)
 
 suite_tools() {
 	# 5.1 bat --version + syntax highlighting
