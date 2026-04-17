@@ -17,6 +17,7 @@ if [ -f "$sdk_config" ]; then
 			python) ver=$(python3 --version 2>/dev/null | awk '{print $2}'); [ -z "$ver" ] && ver=$(uv --version 2>/dev/null | awk '{print $2}') && ver="uv $ver"; [ -n "$ver" ] && sdks+=("Python $ver") ;;
 			go)     ver=$(go version 2>/dev/null | awk '{print $3}' | tr -d 'go') && [ -n "$ver" ] && sdks+=("Go $ver") ;;
 			dotnet) ver=$(DOTNET_NOLOGO=1 dotnet --version 2>/dev/null | tail -1) && [ -n "$ver" ] && sdks+=(".NET $ver") ;;
+			rust)   ver=$(rustc --version 2>/dev/null | awk '{print $2}') && [ -n "$ver" ] && sdks+=("Rust $ver") ;;
 		esac
 	done
 fi

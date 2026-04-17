@@ -1152,12 +1152,13 @@ if $INTERACTIVE; then
 				python) gum_selected="${gum_selected:+$gum_selected,}Python" ;;
 				go)     gum_selected="${gum_selected:+$gum_selected,}Go" ;;
 				dotnet) gum_selected="${gum_selected:+$gum_selected,}.NET" ;;
+				rust)   gum_selected="${gum_selected:+$gum_selected,}Rust" ;;
 			esac
 		done
 		gum_args=(--no-limit --header "Select SDKs to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		selected=$(gum choose "${gum_args[@]}" \
-			"Node.js" "Python" "Go" ".NET") || true
+			"Node.js" "Python" "Go" ".NET" "Rust") || true
 		sdk_list=""
 		while IFS= read -r line; do
 			case "$line" in
@@ -1165,13 +1166,14 @@ if $INTERACTIVE; then
 				"Python")  sdk_list="${sdk_list:+$sdk_list,}python" ;;
 				"Go")      sdk_list="${sdk_list:+$sdk_list,}go" ;;
 				".NET")    sdk_list="${sdk_list:+$sdk_list,}dotnet" ;;
+				"Rust")    sdk_list="${sdk_list:+$sdk_list,}rust" ;;
 			esac
 		done <<< "$selected"
 		# Empty gum output means nothing selected
 		[ -z "$selected" ] && sdk_list=""
 	else
 		echo "Select SDKs to install (comma-separated, 'all', or 'none' to skip):"
-		for sdk_item in "1:node:Node.js" "2:python:Python" "3:go:Go" "4:dotnet:.NET"; do
+		for sdk_item in "1:node:Node.js" "2:python:Python" "3:go:Go" "4:dotnet:.NET" "5:rust:Rust"; do
 			num="${sdk_item%%:*}"; rest="${sdk_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
 			if [[ ",$sdk_prev," == *",${key},"* ]]; then
 				echo "  ${num}) ${label} [installed]"
@@ -1179,13 +1181,13 @@ if $INTERACTIVE; then
 				echo "  ${num}) ${label}"
 			fi
 		done
-		read -rp "Selection [1,2,3,4/all/none]: " sdk_selection
+		read -rp "Selection [1,2,3,4,5/all/none]: " sdk_selection
 		if [ -z "$sdk_selection" ] && [ -n "$sdk_prev" ]; then
 			sdk_list="$sdk_prev"
 		else
 			sdk_list=""
 			if [ "$sdk_selection" = "all" ]; then
-				sdk_list="node,python,go,dotnet"
+				sdk_list="node,python,go,dotnet,rust"
 			elif [ "$sdk_selection" != "none" ] && [ -n "$sdk_selection" ]; then
 				for item in $(echo "$sdk_selection" | tr ',' ' '); do
 					case "$item" in
@@ -1193,6 +1195,7 @@ if $INTERACTIVE; then
 						2) sdk_list="${sdk_list:+$sdk_list,}python" ;;
 						3) sdk_list="${sdk_list:+$sdk_list,}go" ;;
 						4) sdk_list="${sdk_list:+$sdk_list,}dotnet" ;;
+						5) sdk_list="${sdk_list:+$sdk_list,}rust" ;;
 					esac
 				done
 			fi
@@ -1283,12 +1286,35 @@ install_dotnet() {
 	fi
 }
 
+_install_rust_inner() {
+	# Trust boundary: the rustup install script manages its own binary
+	# fetching and verification. We rely on HTTPS for script integrity.
+	# --no-modify-path: squarebox manages PATH via ~/.squarebox-sdk-paths.
+	curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
+		| sh -s -- -y --default-toolchain stable --no-modify-path &>/dev/null
+	if ! grep -q '\.cargo/bin' ~/.squarebox-sdk-paths 2>/dev/null; then
+		cat <<'PATHS' >> ~/.squarebox-sdk-paths
+export PATH="$HOME/.cargo/bin:$PATH"
+PATHS
+	fi
+}
+
+install_rust() {
+	if [ -x "${HOME}/.cargo/bin/rustc" ]; then echo "Rust already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Rust (via rustup)..." _install_rust_inner
+	if [ ! -x "${HOME}/.cargo/bin/rustc" ]; then
+		echo "Error: rustc binary not found after installation" >&2
+		return 1
+	fi
+}
+
 for sdk in $(echo "$sdk_list" | tr ',' ' '); do
 	case "$sdk" in
 		node) install_node || echo "Warning: Node.js installation failed." ;;
 		python) install_python || echo "Warning: Python (uv) installation failed." ;;
 		go) install_go || echo "Warning: Go installation failed." ;;
 		dotnet) install_dotnet || echo "Warning: .NET installation failed." ;;
+		rust) install_rust || echo "Warning: Rust installation failed." ;;
 	esac
 done
 fi # should_run sdks

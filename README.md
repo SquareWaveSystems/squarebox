@@ -206,6 +206,7 @@ prompt, zoxide, and AI/editor/SDK sourcing — layered on top of Oh My Zsh.
 | Python | [uv](https://github.com/astral-sh/uv) |
 | Go | [go.dev](https://go.dev) |
 | .NET | [dotnet-install](https://dot.net) |
+| Rust | [rustup](https://rustup.rs) |
 
 Aliases
 -------
