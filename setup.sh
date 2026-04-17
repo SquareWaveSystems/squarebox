@@ -1471,7 +1471,9 @@ _install_fish_inner() {
 	# highlighting, so no plugins are needed.
 	cat > "$HOME/.config/fish/config.fish" <<-'FISHRC' || return 1
 		# squarebox fish config (experimental) — mirrors ~/.bashrc
-		status is-interactive; or exit 0
+		# Use `return` (not `exit`) so non-interactive invocations like
+		# `fish -c '…'` skip this config without terminating the shell.
+		status is-interactive; or return
 
 		starship init fish | source
 		zoxide init fish --cmd cd | source

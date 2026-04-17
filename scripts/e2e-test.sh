@@ -217,7 +217,7 @@ suite_setup_editors() {
 	run_test "3.11e sdks config saved" test -f /workspace/.squarebox/sdks
 	run_test "3.11f shell config saved" test -f /workspace/.squarebox/shell
 
-	# 3.12 shell section: bash selection leaves no zsh handoff marker
+	# 3.12 shell section: bash selection leaves no zsh/fish handoff markers
 	run_test_grep "3.12a shell config is bash" "bash" cat /workspace/.squarebox/shell
 	TEST_NUM=$((TEST_NUM + 1))
 	if [ ! -e ~/.squarebox-use-zsh ]; then
@@ -226,6 +226,14 @@ suite_setup_editors() {
 	else
 		FAIL_COUNT=$((FAIL_COUNT + 1))
 		echo "not ok ${TEST_NUM} - 3.12b no zsh marker for bash selection"
+	fi
+	TEST_NUM=$((TEST_NUM + 1))
+	if [ ! -e ~/.squarebox-use-fish ]; then
+		PASS_COUNT=$((PASS_COUNT + 1))
+		echo "ok ${TEST_NUM} - 3.12c no fish marker for bash selection"
+	else
+		FAIL_COUNT=$((FAIL_COUNT + 1))
+		echo "not ok ${TEST_NUM} - 3.12c no fish marker for bash selection"
 	fi
 
 	# 4.4 EDITOR set to first selected editor (micro)
