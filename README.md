@@ -103,9 +103,11 @@ PowerShell 7+.
 
 The container is persistent: it suspends on exit and resumes on start, keeping
 installed packages, config, and shell history intact between sessions. Your
-code and tool config live on the host under `~/squarebox` (`workspace/` for
-code, `.config/` for tool config) via volume mounts, so they survive even if
-the container is deleted.
+code lives on the host at `~/squarebox/workspace` (bind-mounted), and per-user
+state — shell history, GitHub CLI auth, claude-code data, mise toolchains —
+lives in a named Docker volume (`squarebox-home`) that survives container
+recreation. Image-managed config like `.bashrc` is bind-mounted from the repo
+so updates flow through to the running container.
 
 What's included
 ---------------
@@ -291,22 +293,23 @@ preserved.
     sqrbx-rebuild
 
 Pulls the latest changes, rebuilds the image, and replaces the container.
-Your code in ~/squarebox/workspace is safe since it lives on the host.
-Setup selections (AI tool, editors, SDKs, GitHub auth) are persisted in the
-workspace volume and restored automatically. However, shell history, manually
-installed packages, and custom config files inside the container are lost.
+Your code in ~/squarebox/workspace is safe since it lives on the host. Most
+in-container state (shell history, GitHub auth, SDK toolchains) survives
+because /home/dev is backed by the `squarebox-home` named Docker volume.
+Manually installed apt packages are still lost, since the image is rebuilt.
 
 #### What survives a rebuild
 
 | Survives | Lost |
 |----------|------|
-| Code in ~/squarebox/workspace (host volume) | Shell history (~/.bash_history) |
-| Starship and lazygit config (host volume) | Manually installed apt packages |
-| AI tool / editor / SDK selections | Custom dotfiles in /home/dev/ |
-| GitHub CLI auth | Caches and temp files |
+| Code in ~/squarebox/workspace (host bind mount) | Manually installed apt packages |
+| /home/dev (squarebox-home named volume): shell history, GitHub CLI auth, claude-code data, mise toolchains | |
+| Starship, lazygit, .bashrc (bind-mounted from repo, picks up updates) | |
+| AI tool / editor / SDK selections (in /workspace/.squarebox) | |
 | SSH keys (on host, forwarded via agent) | |
 
-To preserve extra files across rebuilds, store them in `/workspace/.squarebox/`.
+To wipe per-user state and start fresh, remove the named volume:
+`docker volume rm squarebox-home`.
 
 > **Tip:** Use `sqrbx-update` from inside the container to update tools without
 > rebuilding. Only use `sqrbx-rebuild` when the base image itself needs to

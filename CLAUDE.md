@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-squarebox is a containerized development environment (Docker or Podman) combining modern CLI/TUI tools with Claude Code. It uses a persistent container model — the container suspends on exit and resumes on restart, preserving state. Workspace code lives on the host at `~/squarebox/workspace` via volume mount.
+squarebox is a containerized development environment (Docker or Podman) combining modern CLI/TUI tools with Claude Code. It uses a persistent container model — the container suspends on exit and resumes on restart, preserving state. Workspace code lives on the host at `~/squarebox/workspace` via bind mount; per-user state (shell history, gh auth, claude-code data, mise toolchains) lives in the `squarebox-home` named Docker volume; image-managed config (`.bashrc`, `starship.toml`, `lazygit/`) is bind-mounted from `~/squarebox/dotfiles` so repo updates flow through.
 
 ## Build & Run
 
@@ -21,6 +21,8 @@ docker run -it --name squarebox \
   -v ~/.ssh/config:/home/dev/.ssh/config:ro \
   -v ~/.ssh/known_hosts:/home/dev/.ssh/known_hosts:ro \
   -v ~/squarebox/workspace:/workspace \
+  -v squarebox-home:/home/dev \
+  -v ~/squarebox/dotfiles/bashrc:/home/dev/.bashrc:ro \
   -v ~/.config/git:/home/dev/.config/git \
   -v ~/squarebox/.config/starship.toml:/home/dev/.config/starship.toml \
   -v ~/squarebox/.config/lazygit:/home/dev/.config/lazygit \
@@ -30,6 +32,8 @@ docker run -it --name squarebox \
 # Resume an existing container
 docker start -ai squarebox
 ```
+
+The `squarebox-home` named volume holds per-user state. Bind mounts at sub-paths inside `/home/dev` (`.bashrc`, `.config/starship.toml`, `.config/lazygit`, `.config/git`) override the volume so repo-managed files stay in lockstep with the image.
 
 Replace `docker` with `podman` above if using Podman. The `install.sh` script auto-detects the runtime; override with `SQUAREBOX_RUNTIME=docker|podman`.
 

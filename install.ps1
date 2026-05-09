@@ -173,8 +173,18 @@ git:
 # --- Create container ---
 Write-Host "Creating container..."
 
+# Volume strategy: a single named volume backs /home/dev so shell history,
+# claude-code state, mise toolchains, and gh auth survive container recreates.
+# Bind mounts at sub-paths inside /home/dev override the volume - that's how
+# we keep image-managed config (bashrc, starship.toml, lazygit) in lockstep
+# with the repo while user state stays in the volume.
+$homeVolume = if ($env:SQUAREBOX_HOME_VOLUME) { $env:SQUAREBOX_HOME_VOLUME } else { 'squarebox-home' }
+$bashrcPath = Join-Path $InstallDir 'dotfiles\bashrc'
+
 $rtVolumes = @(
     '-v', "$workspaceDir`:/workspace"
+    '-v', "$homeVolume`:/home/dev"
+    '-v', "${bashrcPath}:/home/dev/.bashrc:ro"
     '-v', "$gitCfgDir`:/home/dev/.config/git"
     '-v', "${starshipDest}:/home/dev/.config/starship.toml"
     '-v', "${lazygitDir}:/home/dev/.config/lazygit"

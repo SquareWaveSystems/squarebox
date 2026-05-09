@@ -173,12 +173,20 @@ if should_run git; then
 	fi
 fi
 
-# Restore GitHub CLI config from persistent storage if available
-GH_PERSIST="/workspace/.squarebox/gh"
-GH_SKIP_MARKER="/workspace/.squarebox/gh-skip"
-if [ -d "$GH_PERSIST" ] && [ ! -d ~/.config/gh ]; then
+# GitHub CLI config lives at ~/.config/gh (the gh default) and is preserved
+# by the squarebox-home named volume. The legacy persistence path
+# (/workspace/.squarebox/gh) is migrated once for users upgrading from a
+# pre-named-volume install; new installs never touch it.
+GH_PERSIST_LEGACY="/workspace/.squarebox/gh"
+GH_SKIP_MARKER="$HOME/.squarebox-gh-skip"
+GH_SKIP_MARKER_LEGACY="/workspace/.squarebox/gh-skip"
+if [ -d "$GH_PERSIST_LEGACY" ] && [ ! -d ~/.config/gh ]; then
 	mkdir -p ~/.config
-	cp -r "$GH_PERSIST" ~/.config/gh
+	cp -r "$GH_PERSIST_LEGACY" ~/.config/gh
+fi
+# Migrate legacy skip marker into $HOME so it persists with the rest of state.
+if [ -f "$GH_SKIP_MARKER_LEGACY" ] && [ ! -f "$GH_SKIP_MARKER" ]; then
+	touch "$GH_SKIP_MARKER"
 fi
 
 # GitHub CLI (optional — users who don't use GitHub can skip this)
@@ -199,10 +207,6 @@ if should_run github; then
 			fi
 			if $_do_reauth; then
 				BROWSER=echo gh auth login
-				if gh auth status &>/dev/null; then
-					mkdir -p "$GH_PERSIST"
-					cp -r ~/.config/gh/. "$GH_PERSIST"/
-				fi
 			fi
 		else
 			echo "GitHub CLI: already authenticated"
@@ -223,11 +227,9 @@ if should_run github; then
 				echo "Logging into GitHub..."
 				BROWSER=echo gh auth login
 				if gh auth status &>/dev/null; then
-					mkdir -p "$GH_PERSIST"
-					cp -r ~/.config/gh/. "$GH_PERSIST"/
 					rm -f "$GH_SKIP_MARKER"
 				else
-					echo "GitHub CLI auth was not completed — skipping config persistence"
+					echo "GitHub CLI auth was not completed — skipping"
 				fi
 			fi
 		else
@@ -244,18 +246,14 @@ if should_run github; then
 				*)     do_gh_login=true ;;
 			esac
 		fi
-		mkdir -p /workspace/.squarebox
 		if $do_gh_login; then
 			echo "Logging into GitHub..."
 			# BROWSER=echo makes gh print the auth URL instead of trying to open a browser
 			BROWSER=echo gh auth login
-			# Persist gh config for future rebuilds (only if auth succeeded)
 			if gh auth status &>/dev/null; then
-				mkdir -p "$GH_PERSIST"
-				cp -r ~/.config/gh/. "$GH_PERSIST"/
 				rm -f "$GH_SKIP_MARKER"
 			else
-				echo "GitHub CLI auth was not completed — skipping config persistence"
+				echo "GitHub CLI auth was not completed — skipping"
 			fi
 		else
 			touch "$GH_SKIP_MARKER"

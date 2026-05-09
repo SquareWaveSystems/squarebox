@@ -132,61 +132,12 @@ ENV HOME=/home/dev
 ENV SQUAREBOX=1
 
 # 7. Shell Config
+# The .bashrc lives in dotfiles/ on the host so install.sh can bind-mount it
+# into the container — keeping it in sync with the repo while shell history
+# and per-user state stay in the squarebox-home named volume. The COPY here
+# is what seeds a fresh volume; subsequent runs see the bind-mounted version.
 
-RUN cat <<'EOFRC' >> ~/.bashrc
-eval "$(starship init bash)"
-eval "$(zoxide init bash --cmd cd)"
-alias ls='eza --icons'
-alias ll='eza -la --icons'
-alias lsa='ls -a'
-alias lt='eza --tree --level=2 --long --icons --git'
-alias lta='lt -a'
-alias cat='bat --paging=never'
-alias ff="fzf --preview 'bat --style=numbers --color=always {}'"
-alias eff='$EDITOR "$(ff)"'
-alias ..='cd ..'
-alias ...='cd ../..'
-alias ....='cd ../../..'
-export EDITOR='nano'
-[ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
-[ -f ~/.squarebox-editor-aliases ] && source ~/.squarebox-editor-aliases
-[ -f ~/.squarebox-tui-aliases ] && source ~/.squarebox-tui-aliases
-[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
-alias g='git'
-alias gcm='git commit -m'
-alias gcam='git commit -a -m'
-alias gcad='git commit -a --amend'
-export PATH="$HOME/.local/bin:$PATH"
-# First-run setup
-if [ ! -f ~/.squarebox-setup-done ]; then
-	if [ -n "${DEVCONTAINER:-}" ]; then
-		touch ~/.squarebox-setup-done
-	else
-		~/setup.sh && touch ~/.squarebox-setup-done
-		[ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
-		[ -f ~/.squarebox-editor-aliases ] && source ~/.squarebox-editor-aliases
-		[ -f ~/.squarebox-tui-aliases ] && source ~/.squarebox-tui-aliases
-		[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
-	fi
-fi
-# Hand off to zsh if the user opted in via setup.sh (experimental).
-# SQUAREBOX_IN_ZSH guards against re-exec loops; SQUAREBOX_NO_ZSH lets
-# users force bash for one shell without removing the marker.
-if [ -f ~/.squarebox-use-zsh ] && [ -z "${SQUAREBOX_IN_ZSH:-}" ] && [ -z "${SQUAREBOX_NO_ZSH:-}" ] && command -v zsh >/dev/null 2>&1; then
-	export SQUAREBOX_IN_ZSH=1
-	exec zsh -l
-fi
-# Hand off to fish if the user opted in via setup.sh (experimental).
-# SQUAREBOX_IN_FISH guards against re-exec loops; SQUAREBOX_NO_FISH lets
-# users force bash for one shell without removing the marker.
-if [ -f ~/.squarebox-use-fish ] && [ -z "${SQUAREBOX_IN_FISH:-}" ] && [ -z "${SQUAREBOX_NO_FISH:-}" ] && command -v fish >/dev/null 2>&1; then
-	export SQUAREBOX_IN_FISH=1
-	exec fish -l
-fi
-EOFRC
-
-# Display MOTD on interactive shell login
-RUN echo '~/motd.sh' >> ~/.bashrc
+COPY --chown=dev:dev dotfiles/bashrc /home/dev/.bashrc
 
 WORKDIR /workspace
 CMD ["/bin/bash"]
