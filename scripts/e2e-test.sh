@@ -187,10 +187,13 @@ suite_setup_editors() {
 	# Run setup.sh non-interactively (uses saved selections)
 	echo "" | ~/setup.sh 2>&1 || true
 
-	# Source SDK paths and add ~/.local/bin to PATH for this session
+	# Activate mise so SDK shims are visible in this session, and add
+	# ~/.local/bin to PATH (where opencode/editors/TUIs install).
 	export PATH="$HOME/.local/bin:$PATH"
-	# shellcheck source=/dev/null
-	[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
+	if command -v mise >/dev/null 2>&1; then
+		eval "$(mise activate bash --shims)"
+		export PATH="$HOME/.local/share/mise/shims:$PATH"
+	fi
 
 	# 3.7 editors installed
 	run_test "3.7a opencode installed" command -v opencode
@@ -211,9 +214,10 @@ suite_setup_editors() {
 	run_test "3.8a tmux installed" command -v tmux
 	run_test "3.8b zellij installed" command -v zellij
 
-	# 3.9 SDKs installed
-	run_test "3.9a node installed" command -v node
-	run_test "3.9b go installed" test -x "$HOME/.local/go/bin/go"
+	# 3.9 SDKs installed (via mise)
+	run_test "3.9a node installed (via mise)" command -v node
+	run_test "3.9b go installed (via mise)" command -v go
+	run_test "3.9c mise tracks node + go" sh -c 'mise ls --current 2>/dev/null | grep -E "^(node|go)\\b"'
 
 	# 3.11 selections saved
 	run_test "3.11a ai-tool config saved" test -f /workspace/.squarebox/ai-tool

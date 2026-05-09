@@ -21,6 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	toilet-fonts \
 	libicu-dev \
 	locales \
+	# Runtime deps for mise-managed SDKs:
+	#   gpg        — mise verifies upstream signatures (Node, etc.)
+	#   libatomic1 — required by official Node Linux builds
+	gpg \
+	libatomic1 \
 	&& sed -i '/en_US.UTF-8/s/^# //' /etc/locale.gen \
 	&& locale-gen \
 	&& rm -rf /var/lib/apt/lists/* \
@@ -41,6 +46,7 @@ ARG GLOW_VERSION=2.1.2
 ARG GUM_VERSION=0.17.0
 ARG JUST_VERSION=1.49.0
 ARG DIFFTASTIC_VERSION=0.68.0
+ARG MISE_VERSION=2026.5.4
 
 # Validate version ARGs are non-empty
 RUN test -n "$DELTA_VERSION"       || { echo "Error: DELTA_VERSION is empty" >&2; exit 1; } \
@@ -50,7 +56,8 @@ RUN test -n "$DELTA_VERSION"       || { echo "Error: DELTA_VERSION is empty" >&2
  && test -n "$GLOW_VERSION"        || { echo "Error: GLOW_VERSION is empty" >&2; exit 1; } \
  && test -n "$GUM_VERSION"         || { echo "Error: GUM_VERSION is empty" >&2; exit 1; } \
  && test -n "$JUST_VERSION"        || { echo "Error: JUST_VERSION is empty" >&2; exit 1; } \
- && test -n "$DIFFTASTIC_VERSION"  || { echo "Error: DIFFTASTIC_VERSION is empty" >&2; exit 1; }
+ && test -n "$DIFFTASTIC_VERSION"  || { echo "Error: DIFFTASTIC_VERSION is empty" >&2; exit 1; } \
+ && test -n "$MISE_VERSION"        || { echo "Error: MISE_VERSION is empty" >&2; exit 1; }
 
 # Checksum verification infrastructure
 COPY checksums.txt /tmp/checksums.txt
@@ -77,8 +84,8 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 	# Install from repos
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends gh eza \
-	# Purge build-only dependency
-	&& apt-get purge -y --auto-remove gnupg \
+	# Note: gnupg is kept (also installed in layer 1 as `gpg`) — mise needs it
+	# at runtime to verify Node release signatures.
 	&& rm -rf /var/lib/apt/lists/*
 
 # Build-time tool install helper: sources library + wires up checksum verification
@@ -93,6 +100,7 @@ RUN . /tmp/sb-init.sh && sb_install gum "$GUM_VERSION"
 RUN . /tmp/sb-init.sh && sb_install starship "$STARSHIP_VERSION"
 RUN . /tmp/sb-init.sh && sb_install just "$JUST_VERSION"
 RUN . /tmp/sb-init.sh && sb_install difftastic "$DIFFTASTIC_VERSION"
+RUN . /tmp/sb-init.sh && sb_install mise "$MISE_VERSION"
 
 # Clean up build-time files
 RUN rm -f /tmp/checksums.txt /tmp/tools.yaml /tmp/tool-lib.sh /tmp/sb-init.sh

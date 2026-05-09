@@ -108,6 +108,7 @@ update_arg GLOW_VERSION "${VERSIONS[glow]}"
 update_arg GUM_VERSION "${VERSIONS[gum]}"
 update_arg JUST_VERSION "${VERSIONS[just]}"
 update_arg DIFFTASTIC_VERSION "${VERSIONS[difftastic]}"
+update_arg MISE_VERSION "${VERSIONS[mise]}"
 
 echo
 echo "Done. Review changes with: git diff"
