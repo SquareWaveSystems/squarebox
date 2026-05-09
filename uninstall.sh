@@ -3,6 +3,7 @@ set -euo pipefail
 
 IMAGE_NAME="squarebox"
 CONTAINER_NAME="squarebox"
+HOME_VOLUME="${SQUAREBOX_HOME_VOLUME:-squarebox-home}"
 
 # On MSYS2/Git Bash, HOME points to the MSYS home (/home/user) while the
 # install dir was placed under $USERPROFILE (C:/Users/user/squarebox). Mirror
@@ -30,7 +31,9 @@ Remove the squarebox container, image, and shell integration.
 
 Options:
   --purge              Also remove the install directory (~/squarebox),
-                       including workspace/ and any host-side config under it.
+                       including workspace/ and any host-side config under it,
+                       plus the squarebox-home named volume (shell history,
+                       gh auth, mise toolchains).
   -y, --yes            Skip all confirmation prompts (for scripting).
   --runtime RUNTIME    Use docker or podman explicitly (default: auto-detect by
                        looking for the squarebox container/image).
@@ -39,8 +42,10 @@ Options:
 Environment:
   SQUAREBOX_RUNTIME    Same as --runtime (the flag takes priority).
 
-By default, ~/squarebox is preserved so your workspace is not lost. Use --purge
-to remove it; a second confirmation is required if workspace/ is non-empty.
+By default, ~/squarebox and the squarebox-home named volume are preserved so
+your workspace and per-user state (shell history, gh auth, mise toolchains)
+survive a reinstall. Use --purge to remove both; a second confirmation is
+required if workspace/ is non-empty.
 EOF
 }
 
@@ -175,6 +180,14 @@ fi
 has_install_dir=0
 [ -d "$INSTALL_DIR" ] && has_install_dir=1
 
+# Detect the named volume (only meaningful if a runtime is detected).
+has_home_volume=0
+if [ -n "$RUNTIME" ]; then
+	if rt_cmd volume inspect "$HOME_VOLUME" >/dev/null 2>&1; then
+		has_home_volume=1
+	fi
+fi
+
 # Summary.
 echo "squarebox uninstall"
 echo "==================="
@@ -221,14 +234,19 @@ if [ "$PURGE" = 1 ] && [ "$has_install_dir" = 1 ]; then
 	echo "  - Install dir:    $INSTALL_DIR"
 	anything_to_do=1
 fi
+if [ "$PURGE" = 1 ] && [ "$has_home_volume" = 1 ]; then
+	echo "  - Named volume:   $HOME_VOLUME ($RUNTIME)"
+	anything_to_do=1
+fi
 if [ "$anything_to_do" = 0 ]; then
 	echo "  (nothing)"
 fi
 
-if [ "$PURGE" = 0 ] && [ "$has_install_dir" = 1 ]; then
+if [ "$PURGE" = 0 ] && { [ "$has_install_dir" = 1 ] || [ "$has_home_volume" = 1 ]; }; then
 	echo ""
 	echo "Will KEEP:"
-	echo "  - $INSTALL_DIR (re-run with --purge to remove, including workspace)"
+	[ "$has_install_dir" = 1 ]   && echo "  - $INSTALL_DIR (re-run with --purge to remove, including workspace)"
+	[ "$has_home_volume" = 1 ]   && echo "  - $HOME_VOLUME named volume (shell history, gh auth, mise toolchains)"
 fi
 
 echo ""
@@ -282,6 +300,7 @@ removed_shell_init=0
 removed_rc_entries=()
 removed_bash_profile_source=0
 removed_install_dir=0
+removed_home_volume=0
 
 if [ "$has_container" = 1 ]; then
 	echo "Stopping container..."
@@ -369,6 +388,19 @@ if [ "$PURGE" = 1 ] && [ "$has_install_dir" = 1 ]; then
 	removed_install_dir=1
 fi
 
+# Named volume removal is gated on --purge: it holds shell history, gh auth,
+# and mise toolchains. The container has to be gone first (volumes can't be
+# removed while in use) — `docker volume rm` returns non-zero if so, which is
+# the safety we want.
+if [ "$PURGE" = 1 ] && [ "$has_home_volume" = 1 ]; then
+	echo "Removing named volume..."
+	if rt_cmd volume rm "$HOME_VOLUME" >/dev/null 2>&1; then
+		removed_home_volume=1
+	else
+		echo "Warning: failed to remove $HOME_VOLUME (may still be in use)." >&2
+	fi
+fi
+
 echo ""
 echo "Done."
 [ "$removed_container" = 1 ] && echo "  Removed container $CONTAINER_NAME from $RUNTIME."
@@ -379,11 +411,19 @@ for f in "${removed_rc_entries[@]}"; do
 done
 [ "$removed_bash_profile_source" = 1 ] && echo "  Scrubbed .bashrc source snippet from $_bash_profile."
 [ "$removed_install_dir" = 1 ]         && echo "  Removed $INSTALL_DIR."
+[ "$removed_home_volume" = 1 ]         && echo "  Removed named volume $HOME_VOLUME."
 
-if [ "$PURGE" = 0 ] && [ "$has_install_dir" = 1 ]; then
-	echo ""
-	echo "Kept $INSTALL_DIR (including workspace). Remove manually with:"
-	echo "  rm -rf $INSTALL_DIR"
+if [ "$PURGE" = 0 ]; then
+	if [ "$has_install_dir" = 1 ]; then
+		echo ""
+		echo "Kept $INSTALL_DIR (including workspace). Remove manually with:"
+		echo "  rm -rf $INSTALL_DIR"
+	fi
+	if [ "$has_home_volume" = 1 ]; then
+		echo ""
+		echo "Kept $HOME_VOLUME named volume. Remove manually with:"
+		echo "  $RUNTIME volume rm $HOME_VOLUME"
+	fi
 fi
 
 echo ""

@@ -31,7 +31,7 @@ your home directory (the install script runs entirely as your user).
 If you prefer to inspect the script before running it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh -o install.sh
+curl -fsSL https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.sh -o install.sh
 less install.sh        # read it
 bash install.sh        # run it
 ```
@@ -44,13 +44,15 @@ at each layer:
 
 | Layer | What's fetched | Transport | Integrity check | Version pinned? |
 |-------|---------------|-----------|-----------------|-----------------|
-| **install.sh** | Git repo from GitHub | HTTPS | Git transport verification | Tracks `main` branch |
+| **install.sh** | Git repo from GitHub | HTTPS | Git transport verification | Tracks the latest tag (or `--edge` for `main`) |
+| **bootstrap script** | `install.sh` itself, served as a release asset | HTTPS | Pinned to a tagged release; pushes to `main` don't affect new installs | Yes (tagged release) |
 | **Dockerfile APT packages** | Ubuntu 24.04 packages, GitHub CLI, Eza | HTTPS | APT GPG signatures | Distro versions (not pinned) |
-| **Dockerfile binary tools** | 8 tools from GitHub Releases (delta, yq, xh, glow, gum, starship, just, difftastic) | HTTPS | SHA256 checksum, build fails on mismatch | Yes, all pinned |
-| **setup.sh optional tools** | OpenCode, nvm, Go, editors (micro, edit, fresh, nvim), TUIs (lazygit, gh-dash, yazi), zellij | HTTPS | None beyond transport | No, latest upstream at install time |
-| **sqrbx-update (Dockerfile tier)** | delta, yq, xh, glow, gum, starship, just, difftastic | HTTPS | SHA256 checksum fetched from repo, update refused on mismatch or missing checksum | Only vetted versions |
+| **Dockerfile binary tools** | 9 tools from GitHub Releases (delta, yq, xh, glow, gum, starship, just, difftastic, mise) | HTTPS | SHA256 checksum, build fails on mismatch | Yes, all pinned |
+| **setup.sh optional tools** | OpenCode, editors (micro, edit, fresh, nvim), TUIs (lazygit, gh-dash, yazi), zellij | HTTPS | None beyond transport | No, latest upstream at install time |
+| **sqrbx-update (Dockerfile tier)** | delta, yq, xh, glow, gum, starship, just, difftastic, mise | HTTPS | SHA256 checksum fetched from repo, update refused on mismatch or missing checksum | Only vetted versions |
 | **sqrbx-update (optional tier)** | Optional tools listed above | HTTPS | None beyond transport | Latest upstream |
-| **setup.sh third-party installers** | Claude Code, uv, .NET, rustup | HTTPS | Delegates to vendor installer | No (latest/LTS) |
+| **setup.sh SDKs (Node, Python, Go, .NET, Rust)** | Installed by mise from upstream | HTTPS | mise's own integrity checks (signatures / checksums per language) | mise itself is pinned; SDKs install latest |
+| **setup.sh third-party installers** | Claude Code (npm) | HTTPS | npm's built-in package integrity verification | No (latest) |
 
 **What this means in practice:**
 
@@ -62,9 +64,13 @@ at each layer:
   release from GitHub over HTTPS. Trust model is the same as running each
   tool's installer yourself. You get new features without waiting for a
   squarebox release, at the cost of the build-time pinning guarantee.
-- Third-party install scripts (Claude Code from Anthropic, uv from Astral, .NET
-  from Microsoft, rustup from the Rust project) delegate to the vendor installer
-  and inherit whatever verification that installer performs.
+- SDKs (Node, Python, Go, .NET, Rust) are installed by [mise](https://github.com/jdx/mise),
+  which is itself a Dockerfile-tier pinned binary. mise downloads each SDK
+  toolchain from its upstream over HTTPS and applies its own integrity checks
+  (e.g. signature verification for Node, checksums for Python). The trust
+  anchor for SDKs is therefore mise itself, not each language's installer.
+- npm-based AI tools (Claude Code) inherit npm's built-in package integrity
+  verification.
 - APT packages are verified by Ubuntu's and each repo's GPG signatures.
 
 ## Container isolation
