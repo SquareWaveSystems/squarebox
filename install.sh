@@ -397,8 +397,16 @@ fi
 
 echo "Creating container..."
 RT_OPTS=()
+# Volume strategy: a single named volume backs /home/dev so shell history,
+# claude-code state, mise toolchains, and gh auth survive container recreates.
+# Bind mounts at sub-paths inside /home/dev override the volume — that's how
+# we keep image-managed config (bashrc, starship.toml, lazygit) in lockstep
+# with the repo while user state stays in the volume.
+HOME_VOLUME="${SQUAREBOX_HOME_VOLUME:-squarebox-home}"
 RT_VOLUMES=(
 	-v "${INSTALL_DIR}/workspace:/workspace"
+	-v "${HOME_VOLUME}:/home/dev"
+	-v "${INSTALL_DIR}/dotfiles/bashrc:/home/dev/.bashrc:ro"
 	-v "${USER_HOME}/.config/git:/home/dev/.config/git"
 	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml"
 	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit"
