@@ -119,7 +119,7 @@ suite_shell() {
 	run_test_grep "4.6a ai-aliases sourced" "squarebox-ai-aliases" cat ~/.bashrc
 	run_test_grep "4.6b editor-aliases sourced" "squarebox-editor-aliases" cat ~/.bashrc
 	run_test_grep "4.6c tui-aliases sourced" "squarebox-tui-aliases" cat ~/.bashrc
-	run_test_grep "4.6d sdk-paths sourced" "squarebox-sdk-paths" cat ~/.bashrc
+	run_test_grep "4.6d mise activated" 'mise activate bash' cat ~/.bashrc
 
 	# Shell config loads without errors (also in build.yml)
 	run_test "4.0 shell config loads" bash -lc 'echo ok'

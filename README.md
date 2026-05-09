@@ -388,8 +388,9 @@ Uninstall
     sqrbx-uninstall
 
 Removes the container, image, and shell integration but **keeps**
-`~/squarebox` (including `workspace/`) so your code is safe by default.
-Pass `--purge` to also remove `~/squarebox`:
+`~/squarebox` (including `workspace/`) and the `squarebox-home` named volume
+(shell history, gh auth, mise toolchains) so your code and per-user state are
+safe by default. Pass `--purge` to also remove both:
 
     sqrbx-uninstall --purge
 

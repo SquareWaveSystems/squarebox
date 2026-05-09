@@ -51,7 +51,7 @@ The `install.sh` script automates initial setup (clone, build, create container,
 4. **Text editors** — micro, edit (Microsoft), fresh, nvim (nano is always available)
 5. **TUI tools** — lazygit, gh-dash, yazi (any combination)
 6. **Terminal multiplexers** — tmux, zellij
-7. **SDKs** — Node.js (via nvm), Python (via uv), Go, .NET, Rust (via rustup)
+7. **SDKs** — Node.js, Python, Go, .NET, Rust (all installed and managed by [mise](https://github.com/jdx/mise) via `~/.config/mise/config.toml`)
 8. **Shell** — bash (default) or zsh + Oh My Zsh + autosuggestions + syntax highlighting (experimental)
 
 Selections are saved to `/workspace/.squarebox/` and reused on subsequent rebuilds.
@@ -83,7 +83,7 @@ sqrbx-update
 
 `scripts/update-versions.sh` only touches the Dockerfile tier (delta, yq, xh, glow, gum, starship, just, difftastic). It fetches latest GitHub releases, downloads artifacts for both architectures, computes SHA256 checksums, and updates `checksums.txt` and the Dockerfile ARGs.
 
-Optional tools installed by `setup.sh` (opencode, editors, TUIs, zellij, Go, nvm) are not pinned. They install the latest upstream release at setup time, so there is no checksum file or version variable to update in the repo.
+Optional tools installed by `setup.sh` (opencode, editors, TUIs, zellij) are not pinned. They install the latest upstream release at setup time, so there is no checksum file or version variable to update in the repo. SDKs are installed by mise (a Dockerfile-tier pinned binary), so SDK trust is anchored to mise's own pinning rather than per-language installers.
 
 ## CI
 

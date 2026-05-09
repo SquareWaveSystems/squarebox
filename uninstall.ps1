@@ -31,6 +31,7 @@ $ErrorActionPreference = 'Stop'
 $ImageName     = 'squarebox'
 $ContainerName = 'squarebox'
 $InstallDir    = Join-Path $env:USERPROFILE 'squarebox'
+$HomeVolume    = if ($env:SQUAREBOX_HOME_VOLUME) { $env:SQUAREBOX_HOME_VOLUME } else { 'squarebox-home' }
 
 function Abort([string]$msg) {
     Write-Host "Error: $msg" -ForegroundColor Red
@@ -114,6 +115,13 @@ if (Test-Path $PROFILE) {
 
 $hasInstallDir = Test-Path $InstallDir
 
+# Detect the named volume (only meaningful if a runtime is detected).
+$hasHomeVolume = $false
+if ($SelectedRuntime) {
+    & $SelectedRuntime volume inspect $HomeVolume 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { $hasHomeVolume = $true }
+}
+
 # Summary.
 Write-Host "squarebox uninstall"
 Write-Host "==================="
@@ -143,14 +151,19 @@ if ($Purge -and $hasInstallDir) {
     Write-Host "  - Install dir:    $InstallDir"
     $anythingToDo = $true
 }
+if ($Purge -and $hasHomeVolume) {
+    Write-Host "  - Named volume:   $HomeVolume ($SelectedRuntime)"
+    $anythingToDo = $true
+}
 if (-not $anythingToDo) {
     Write-Host "  (nothing)"
 }
 
-if (-not $Purge -and $hasInstallDir) {
+if (-not $Purge -and ($hasInstallDir -or $hasHomeVolume)) {
     Write-Host ""
     Write-Host "Will KEEP:"
-    Write-Host "  - $InstallDir (re-run with -Purge to remove, including workspace)"
+    if ($hasInstallDir)  { Write-Host "  - $InstallDir (re-run with -Purge to remove, including workspace)" }
+    if ($hasHomeVolume)  { Write-Host "  - $HomeVolume named volume (shell history, gh auth, mise toolchains)" }
 }
 
 Write-Host ""
@@ -199,6 +212,7 @@ $removedContainer    = $false
 $removedImage        = $false
 $removedProfileBlock = $false
 $removedInstallDir   = $false
+$removedHomeVolume   = $false
 
 if ($hasContainer) {
     Write-Host "Stopping container..."
@@ -237,17 +251,38 @@ if ($Purge -and $hasInstallDir) {
     $removedInstallDir = $true
 }
 
+# Named volume removal is gated on -Purge: the volume holds shell history, gh
+# auth, and mise toolchains. The container has to be gone first (volume rm
+# refuses if the volume is in use) - the rm above ensures that.
+if ($Purge -and $hasHomeVolume) {
+    Write-Host "Removing named volume..."
+    & $SelectedRuntime volume rm $HomeVolume 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        $removedHomeVolume = $true
+    } else {
+        Write-Host "Warning: failed to remove $HomeVolume (may still be in use)." -ForegroundColor Yellow
+    }
+}
+
 Write-Host ""
 Write-Host "Done."
 if ($removedContainer)    { Write-Host "  Removed container $ContainerName from $SelectedRuntime." }
 if ($removedImage)        { Write-Host "  Removed image $ImageName from $SelectedRuntime." }
 if ($removedProfileBlock) { Write-Host "  Scrubbed squarebox block from $PROFILE." }
 if ($removedInstallDir)   { Write-Host "  Removed $InstallDir." }
+if ($removedHomeVolume)   { Write-Host "  Removed named volume $HomeVolume." }
 
-if (-not $Purge -and $hasInstallDir) {
-    Write-Host ""
-    Write-Host "Kept $InstallDir (including workspace). Remove manually with:"
-    Write-Host "  Remove-Item -Recurse -Force $InstallDir"
+if (-not $Purge) {
+    if ($hasInstallDir) {
+        Write-Host ""
+        Write-Host "Kept $InstallDir (including workspace). Remove manually with:"
+        Write-Host "  Remove-Item -Recurse -Force $InstallDir"
+    }
+    if ($hasHomeVolume) {
+        Write-Host ""
+        Write-Host "Kept $HomeVolume named volume. Remove manually with:"
+        Write-Host "  $SelectedRuntime volume rm $HomeVolume"
+    }
 }
 
 Write-Host ""

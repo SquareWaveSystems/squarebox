@@ -75,10 +75,14 @@ Dockerfile-tier tools (delta, yq, xh, glow, gum, starship, just, difftastic) are
 2. Review the diff. Verify version bumps and checksums look correct.
 3. Rebuild and test.
 
-Optional tools (editors, TUIs, opencode, zellij, Go, nvm) track upstream
-latest at install time. To add a new optional tool, add an entry to
+Optional tools (editors, TUIs, opencode, zellij) track upstream latest at
+install time. To add a new optional tool, add an entry to
 `scripts/lib/tools.yaml` and call `sb_install <tool> latest` from `setup.sh`.
 No checksum file update is required.
+
+SDKs (Node, Python, Go, .NET, Rust) are installed by mise itself, which is
+part of the Dockerfile-pinned tier — so SDK availability is gated by mise's
+own pinning, not the SDK installers individually.
 
 Never skip checksum verification for the Dockerfile tier.
 
