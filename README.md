@@ -64,13 +64,13 @@ assistant, and language SDKs.
 
 **Stable**
 
-    curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash
+    curl -fsSL https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.sh | bash
 
 **Edge**
 
-    curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash -s -- --edge
+    curl -fsSL https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.sh | bash -s -- --edge
 
-Stable installs the latest tagged release (pre-release tags like `-rc` are skipped). Edge uses the latest commit on main.
+Stable installs the latest tagged release (pre-release tags like `-rc` are skipped). Edge uses the latest commit on main. The install script itself is published as a release asset, so the URL is pinned to a tagged version of the script — pushes to `main` won't break new installs until a release is cut.
 
 If the install fails or you want to see the full docker build and git output, re-run with `--verbose`.
 
@@ -80,7 +80,7 @@ Windows users can install directly from PowerShell - no Git Bash required.
 This handles clone, build, container creation, and PowerShell aliases
 (`sqrbx`, `squarebox`, etc.) natively:
 
-    irm https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.ps1 | iex
+    irm https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.ps1 | iex
 
 Once installed, you can re-run or pass flags from the local copy:
 
