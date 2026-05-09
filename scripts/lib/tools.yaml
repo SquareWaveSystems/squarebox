@@ -93,6 +93,15 @@ tools:
     dest: system
     group: dockerfile
 
+  mise:
+    repo: jdx/mise
+    version_prefix: v
+    artifact: mise-v{version}-linux-{ocarch}
+    method: binary
+    binaries: mise
+    dest: system
+    group: dockerfile
+
   # ── setup.sh tools (installed as user to ~/.local/bin) ──────────────
 
   lazygit:

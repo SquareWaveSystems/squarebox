@@ -26,3 +26,6 @@ b0b9ed95cbf7c8b7073f17b9591811f5c001e33c7cfd066ca83ce8a07c576f9c  gum_0.17.0_Lin
 # Difftastic 0.68.0
 f50c2d77f44a551fe24a7abfa955fbb893e6d0ab2a3767f39ca3823f0995dabd  difft-x86_64-unknown-linux-gnu.tar.gz
 faadfb3a88c194033449092fad3a86f1179738a0b3bfc44580c83473bdb17451  difft-aarch64-unknown-linux-gnu.tar.gz
+# Mise 2026.5.4
+96a0eefa1ad8c92461c808e6e07644f95cda830d7719895b98c819c94b0e0b1c  mise-v2026.5.4-linux-x64
+49e2d71d72d68dcb5d554724602d69f33358e1060a0352e5b02b1afcbeecc9b6  mise-v2026.5.4-linux-arm64

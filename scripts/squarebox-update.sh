@@ -141,6 +141,7 @@ opencode_current() { opencode --version 2>/dev/null | grep -oP '[\d.]+' | head -
 zellij_current() { zellij --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
 just_current() { just --version 2>/dev/null | awk '{print $2}' || echo "not installed"; }
 difftastic_current() { difft --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
+mise_current() { mise --version 2>/dev/null | awk '{print $1}' || echo "not installed"; }
 
 # ── Latest version fetching ────────────────────────────────────────────
 # Uses repo from tools.yaml via sb_get; strips v prefix where needed.
@@ -160,8 +161,8 @@ tool_latest() {
 
 # ── Tool registry ──────────────────────────────────────────────────────
 
-TOOLS=(delta yq lazygit xh yazi starship ghdash glow gum just difftastic micro fresh edit helix nvim opencode zellij)
-TOOL_DISPLAY_NAMES=(delta yq lazygit xh yazi starship gh-dash glow gum just difftastic micro fresh edit helix nvim opencode zellij)
+TOOLS=(delta yq lazygit xh yazi starship ghdash glow gum just difftastic mise micro fresh edit helix nvim opencode zellij)
+TOOL_DISPLAY_NAMES=(delta yq lazygit xh yazi starship gh-dash glow gum just difftastic mise micro fresh edit helix nvim opencode zellij)
 
 # Map display names to tools.yaml names (ghdash → gh-dash)
 yaml_name() {
@@ -185,7 +186,7 @@ usage() {
 	  sqrbx-update --help       Show this help
 
 	${BOLD}Tools:${RESET}
-	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, gum, just, difftastic, micro, fresh, edit, helix, nvim, opencode, zellij
+	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, gum, just, difftastic, mise, micro, fresh, edit, helix, nvim, opencode, zellij
 
 	EOF
 }

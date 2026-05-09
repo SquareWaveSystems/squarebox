@@ -266,51 +266,60 @@ fi
 
 # Shared infrastructure (needed by multiple sections)
 mkdir -p /workspace/.squarebox ~/.local/bin
-touch ~/.squarebox-sdk-paths
 
 # Optional tools install the latest upstream release at setup time.
 # Pinned versions live only in the Dockerfile tier (checksums.txt).
+#
+# SDKs are managed by mise (jdx/mise) — a single polyglot version manager
+# replaces the previous per-language grab-bag (nvm, uv, Go tarball, .NET
+# script, rustup). mise itself is installed in the Dockerfile tier and
+# activated by ~/.bashrc. We write tool selections to ~/.config/mise/config.toml
+# via `mise use -g`, which both registers the tool and triggers install.
 
-_install_node_inner() {
-	rm -rf "$HOME/.nvm"
-	local nvm_tag
-	nvm_tag=$(sb_gh_latest_tag nvm-sh/nvm) || return 1
-	curl -fsSo "${SB_TMPDIR}/nvm-install.sh" "https://raw.githubusercontent.com/nvm-sh/nvm/${nvm_tag}/install.sh"
-	bash "${SB_TMPDIR}/nvm-install.sh" >/dev/null 2>&1
-	export NVM_DIR="$HOME/.nvm"
-	# shellcheck source=/dev/null
-	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-	# Node.js binary verification is handled by nvm
-	nvm install --lts >/dev/null 2>&1
-	if ! grep -q 'NVM_DIR' ~/.squarebox-sdk-paths 2>/dev/null; then
-		cat <<'PATHS' >> ~/.squarebox-sdk-paths
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-PATHS
-	fi
+# Make mise-installed binaries visible in *this* shell. dotfiles/bashrc
+# already runs `mise activate bash`, but setup.sh on first launch may execute
+# in an environment where mise wasn't yet on PATH (or the shims dir is empty
+# and gets repopulated mid-script). Re-eval is cheap and idempotent.
+_squarebox_mise_activate() {
+	command -v mise >/dev/null 2>&1 || return 0
+	eval "$(mise activate bash --shims)"
+	export PATH="$HOME/.local/share/mise/shims:$PATH"
 }
 
-install_node() {
-	if command -v node &>/dev/null; then echo "Node.js already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Node.js (via nvm)..." _install_node_inner
-	# Source nvm in current shell (spinner runs in subshell)
-	export NVM_DIR="$HOME/.nvm"
-	# shellcheck source=/dev/null
-	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-	if ! command -v node &>/dev/null; then
-		echo "Error: Node.js binary not found after installation" >&2
+_install_mise_sdk_inner() {
+	mise use -g "$1@latest" >/dev/null 2>&1
+}
+
+_install_mise_sdk() {
+	local tool="$1" label="$2"
+	if ! command -v mise >/dev/null 2>&1; then
+		echo "Error: mise is not installed (expected at /usr/local/bin/mise)" >&2
+		return 1
+	fi
+	if mise which "$tool" >/dev/null 2>&1; then
+		echo "${label} already installed, skipping."
+		return 0
+	fi
+	run_with_spinner "Installing ${label} (via mise)..." _install_mise_sdk_inner "$tool"
+	_squarebox_mise_activate
+	if ! mise which "$tool" >/dev/null 2>&1; then
+		echo "Error: ${label} not available after mise install" >&2
 		return 1
 	fi
 }
 
+install_node()   { _install_mise_sdk node   "Node.js"; }
+install_python() { _install_mise_sdk python "Python"; }
+install_go()     { _install_mise_sdk go     "Go"; }
+install_dotnet() { _install_mise_sdk dotnet ".NET"; }
+install_rust()   { _install_mise_sdk rust   "Rust"; }
+
 # Ensure Node.js is available for npm-based AI tools
 ensure_node_for_npm() {
+	_squarebox_mise_activate
 	if command -v node &>/dev/null; then return 0; fi
 	install_node
-	# Ensure node/npm are available in this session
-	export NVM_DIR="$HOME/.nvm"
-	# shellcheck source=/dev/null
-	[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+	_squarebox_mise_activate
 	# Persist Node.js in SDK config so it survives rebuilds
 	local sdk_cfg="/workspace/.squarebox/sdks"
 	if [ -f "$sdk_cfg" ]; then
@@ -1222,108 +1231,16 @@ else
 	echo "$sdk_list" > "$SDK_CONFIG"
 fi
 
-# install_node is defined earlier (shared by AI tools and SDKs sections)
-
-_install_python_inner() {
-	# Trust boundary: the uv install script manages its own binary fetching
-	# and verification. We rely on HTTPS for script integrity.
-	curl -fsSL https://astral.sh/uv/install.sh | bash &>/dev/null
-	if ! grep -q '\.local/bin' ~/.squarebox-sdk-paths 2>/dev/null; then
-		cat <<'PATHS' >> ~/.squarebox-sdk-paths
-export PATH="$HOME/.local/bin:$PATH"
-PATHS
-	fi
-}
-
-install_python() {
-	if command -v uv &>/dev/null; then echo "uv already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Python (via uv)..." _install_python_inner
-	export PATH="$HOME/.local/bin:$PATH"
-	if ! command -v uv &>/dev/null; then
-		echo "Error: uv binary not found after installation" >&2
-		return 1
-	fi
-}
-
-_install_go_inner() {
-	rm -rf "$HOME/.local/go"
-	local go_version
-	go_version=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1)
-	if ! echo "$go_version" | grep -qE '^go[0-9]+\.[0-9]+'; then
-		echo "Error: unexpected Go version format: '$go_version'" >&2
-		return 1
-	fi
-	curl -fsSLo "${SB_TMPDIR}/go.tar.gz" "https://go.dev/dl/${go_version}.linux-${SB_GOARCH}.tar.gz"
-	tar xzf "${SB_TMPDIR}/go.tar.gz" -C ~/.local
-	if ! grep -q 'GOROOT' ~/.squarebox-sdk-paths 2>/dev/null; then
-		cat <<'PATHS' >> ~/.squarebox-sdk-paths
-export GOROOT="$HOME/.local/go"
-export GOPATH="$HOME/go"
-export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
-PATHS
-	fi
-}
-
-install_go() {
-	if [ -x "${HOME}/.local/go/bin/go" ]; then echo "Go already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Go..." _install_go_inner
-	if [ ! -x "${HOME}/.local/go/bin/go" ]; then
-		echo "Error: Go binary not found after installation" >&2
-		return 1
-	fi
-}
-
-_install_dotnet_inner() {
-	rm -rf "$HOME/.dotnet"
-	# Trust boundary: the .NET install script manages its own binary fetching
-	# and verification. We rely on HTTPS for script integrity.
-	curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS >/dev/null 2>&1
-	if ! grep -q 'DOTNET_ROOT' ~/.squarebox-sdk-paths 2>/dev/null; then
-		cat <<'PATHS' >> ~/.squarebox-sdk-paths
-export DOTNET_ROOT="$HOME/.dotnet"
-export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
-PATHS
-	fi
-}
-
-install_dotnet() {
-	if [ -x "${HOME}/.dotnet/dotnet" ]; then echo ".NET already installed, skipping."; return 0; fi
-	run_with_spinner "Installing .NET..." _install_dotnet_inner
-	if [ ! -x "${HOME}/.dotnet/dotnet" ]; then
-		echo "Error: .NET binary not found after installation" >&2
-		return 1
-	fi
-}
-
-_install_rust_inner() {
-	# Trust boundary: the rustup install script manages its own binary
-	# fetching and verification. We rely on HTTPS for script integrity.
-	# --no-modify-path: squarebox manages PATH via ~/.squarebox-sdk-paths.
-	curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
-		| sh -s -- -y --default-toolchain stable --no-modify-path &>/dev/null
-	if ! grep -q '\.cargo/bin' ~/.squarebox-sdk-paths 2>/dev/null; then
-		cat <<'PATHS' >> ~/.squarebox-sdk-paths
-export PATH="$HOME/.cargo/bin:$PATH"
-PATHS
-	fi
-}
-
-install_rust() {
-	if [ -x "${HOME}/.cargo/bin/rustc" ]; then echo "Rust already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Rust (via rustup)..." _install_rust_inner
-	if [ ! -x "${HOME}/.cargo/bin/rustc" ]; then
-		echo "Error: rustc binary not found after installation" >&2
-		return 1
-	fi
-}
+# All SDK installers (install_node/python/go/dotnet/rust) are defined earlier
+# in setup.sh and delegate to mise via _install_mise_sdk.
 
 for sdk in $(echo "$sdk_list" | tr ',' ' '); do
 	case "$sdk" in
-		node) install_node || echo "Warning: Node.js installation failed." ;;
-		python) install_python || echo "Warning: Python (uv) installation failed." ;;
-		go) install_go || echo "Warning: Go installation failed." ;;
+		node)   install_node   || echo "Warning: Node.js installation failed." ;;
+		python) install_python || echo "Warning: Python installation failed." ;;
+		go)     install_go     || echo "Warning: Go installation failed." ;;
 		dotnet) install_dotnet || echo "Warning: .NET installation failed." ;;
-		rust) install_rust || echo "Warning: Rust installation failed." ;;
+		rust)   install_rust   || echo "Warning: Rust installation failed." ;;
 	esac
 done
 fi # should_run sdks
@@ -1449,7 +1366,7 @@ _install_zsh_inner() {
 		[ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
 		[ -f ~/.squarebox-editor-aliases ] && source ~/.squarebox-editor-aliases
 		[ -f ~/.squarebox-tui-aliases ] && source ~/.squarebox-tui-aliases
-		[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
+		command -v mise >/dev/null 2>&1 && eval "$(mise activate zsh)"
 		alias g='git'
 		alias gcm='git commit -m'
 		alias gcam='git commit -a -m'
@@ -1467,13 +1384,13 @@ install_zsh() {
 	run_with_spinner "Installing Zsh + Oh My Zsh..." _install_zsh_inner
 }
 
-# Translate one bash-syntax line from a ~/.squarebox-* alias/path file into
-# its fish equivalent on stdout. Handles:
+# Translate one bash-syntax line from a ~/.squarebox-* alias file into its
+# fish equivalent on stdout. Handles:
 #   export PATH="A:B:$PATH"          → set -x PATH A B $PATH
 #   export NAME='value'              → set -x NAME value
 #   alias name='cmd'                 → passed through (fish accepts this form)
-# Bash-only constructs (nvm sourcing, [ -s ... ] && . ..., etc.) are dropped;
-# users who need nvm in fish should install a fish plugin (e.g. nvm.fish).
+# Other constructs are dropped. SDK PATHs are now handled by `mise activate
+# fish` directly — this translator is only used for AI/editor/TUI aliases.
 _squarebox_bash_line_to_fish() {
 	local line="$1"
 	case "$line" in
@@ -1532,7 +1449,11 @@ _install_fish_inner() {
 		set -x EDITOR nano
 		fish_add_path -g $HOME/.local/bin
 
-		# User selections translated from bash files at install time.
+		# mise (SDK manager) wires PATH and shims for whatever the user
+		# selected during setup. Safe to run unconditionally — fish-native.
+		command -v mise >/dev/null 2>&1; and mise activate fish | source
+
+		# User AI/editor/TUI selections translated from bash files at install time.
 		test -f $HOME/.config/fish/conf.d/squarebox-selections.fish
 			and source $HOME/.config/fish/conf.d/squarebox-selections.fish
 
@@ -1540,16 +1461,16 @@ _install_fish_inner() {
 	FISHRC
 	[ -f "$HOME/.config/fish/config.fish" ] || return 1
 
-	# Translate AI/editor/TUI/SDK bash-syntax files into a single fish
-	# conf.d snippet. Regenerated each install to reflect current selections.
+	# Translate AI/editor/TUI bash-syntax files into a single fish conf.d
+	# snippet. Regenerated each install to reflect current selections.
+	# (SDK paths are no longer translated — mise handles that natively.)
 	local sel_out="$HOME/.config/fish/conf.d/squarebox-selections.fish"
 	{
 		echo "# Generated by setup.sh from ~/.squarebox-* bash files."
 		for src in \
 			"$HOME/.squarebox-ai-aliases" \
 			"$HOME/.squarebox-editor-aliases" \
-			"$HOME/.squarebox-tui-aliases" \
-			"$HOME/.squarebox-sdk-paths"; do
+			"$HOME/.squarebox-tui-aliases"; do
 			[ -f "$src" ] || continue
 			echo "# --- from $(basename "$src") ---"
 			while IFS= read -r _sq_line; do
