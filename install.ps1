@@ -6,7 +6,7 @@
     Run this from PowerShell 7+ to install squarebox. Handles clone, build,
     container creation, and PowerShell profile setup natively.
 
-    First install:  irm https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.ps1 | iex
+    First install:  irm https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.ps1 | iex
     Re-install:     .\install.ps1
     Edge:           .\install.ps1 -Edge
     Verbose:        .\install.ps1 -Verbose
