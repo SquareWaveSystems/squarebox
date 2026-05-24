@@ -348,13 +348,14 @@ if $INTERACTIVE; then
 				gemini)   gum_selected="${gum_selected:+$gum_selected,}Google Gemini CLI" ;;
 				codex)    gum_selected="${gum_selected:+$gum_selected,}OpenAI Codex CLI" ;;
 				opencode) gum_selected="${gum_selected:+$gum_selected,}OpenCode" ;;
+				pi)       gum_selected="${gum_selected:+$gum_selected,}Pi Coding Agent" ;;
 			esac
 		done
 		gum_args=(--no-limit --header "Select AI coding assistants (space=toggle, enter=confirm):")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		selected=$(gum choose "${gum_args[@]}" \
 			"Claude Code" "GitHub Copilot CLI" "Google Gemini CLI" \
-			"OpenAI Codex CLI" "OpenCode") || true
+			"OpenAI Codex CLI" "OpenCode" "Pi Coding Agent") || true
 		ai_choice=""
 		while IFS= read -r line; do
 			case "$line" in
@@ -363,11 +364,12 @@ if $INTERACTIVE; then
 				"Google Gemini CLI")  ai_choice="${ai_choice:+$ai_choice,}gemini" ;;
 				"OpenAI Codex CLI")   ai_choice="${ai_choice:+$ai_choice,}codex" ;;
 				"OpenCode")           ai_choice="${ai_choice:+$ai_choice,}opencode" ;;
+				"Pi Coding Agent")    ai_choice="${ai_choice:+$ai_choice,}pi" ;;
 			esac
 		done <<< "$selected"
 	else
 		echo "Select AI coding assistants (comma-separated, 'all', or press Enter to skip):"
-		for ai_item in "1:claude:Claude Code" "2:copilot:GitHub Copilot CLI" "3:gemini:Google Gemini CLI" "4:codex:OpenAI Codex CLI" "5:opencode:OpenCode"; do
+		for ai_item in "1:claude:Claude Code" "2:copilot:GitHub Copilot CLI" "3:gemini:Google Gemini CLI" "4:codex:OpenAI Codex CLI" "5:opencode:OpenCode" "6:pi:Pi Coding Agent"; do
 			num="${ai_item%%:*}"; rest="${ai_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
 			if [[ ",$ai_prev," == *",${key},"* ]]; then
 				echo "  ${num}) ${label} [installed]"
@@ -375,13 +377,13 @@ if $INTERACTIVE; then
 				echo "  ${num}) ${label}"
 			fi
 		done
-		read -rp "Selection [1,2,3,4,5/all/skip]: " ai_selection
+		read -rp "Selection [1,2,3,4,5,6/all/skip]: " ai_selection
 		if [ -z "$ai_selection" ] && [ -n "$ai_prev" ]; then
 			ai_choice="$ai_prev"
 		else
 			ai_choice=""
 			if [ "$ai_selection" = "all" ]; then
-				ai_choice="claude,copilot,gemini,codex,opencode"
+				ai_choice="claude,copilot,gemini,codex,opencode,pi"
 			elif [ -n "$ai_selection" ]; then
 				for item in $(echo "$ai_selection" | tr ',' ' '); do
 					case "$item" in
@@ -390,6 +392,7 @@ if $INTERACTIVE; then
 						3) ai_choice="${ai_choice:+$ai_choice,}gemini" ;;
 						4) ai_choice="${ai_choice:+$ai_choice,}codex" ;;
 						5) ai_choice="${ai_choice:+$ai_choice,}opencode" ;;
+						6) ai_choice="${ai_choice:+$ai_choice,}pi" ;;
 					esac
 				done
 			fi
@@ -423,6 +426,13 @@ install_codex() {
 	run_with_spinner "Installing OpenAI Codex CLI..." npm install -g --silent @openai/codex
 }
 
+install_pi() {
+	if command -v pi &>/dev/null; then echo "Pi Coding Agent already installed, skipping."; return 0; fi
+	ensure_node_for_npm
+	# --ignore-scripts is the upstream-recommended install flag (see pi.dev).
+	run_with_spinner "Installing Pi Coding Agent..." npm install -g --silent --ignore-scripts @earendil-works/pi-coding-agent
+}
+
 for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 	case "$ai_tool" in
 		claude)
@@ -443,13 +453,14 @@ for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 		copilot)  install_copilot || echo "Warning: GitHub Copilot CLI installation failed." ;;
 		gemini)   install_gemini || echo "Warning: Google Gemini CLI installation failed." ;;
 		codex)    install_codex || echo "Warning: OpenAI Codex CLI installation failed." ;;
+		pi)       install_pi || echo "Warning: Pi Coding Agent installation failed." ;;
 	esac
 done
 
 # Set aliases based on selection — c maps to first selected tool in priority order
 {
 	c_target=""
-	for ai_tool in claude copilot gemini codex opencode; do
+	for ai_tool in claude copilot gemini codex opencode pi; do
 		if [[ ",$ai_choice," == *",$ai_tool,"* ]]; then
 			[ -z "$c_target" ] && c_target="$ai_tool"
 			case "$ai_tool" in
