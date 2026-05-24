@@ -149,6 +149,7 @@ container rebuilds.
 | [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) | TypeScript | Google Gemini in the terminal * |
 | [OpenAI Codex CLI](https://github.com/openai/codex) | TypeScript | OpenAI Codex in the terminal * |
 | [opencode](https://github.com/anomalyco/opencode) | Go | AI coding TUI |
+| [Pi Coding Agent](https://github.com/earendil-works/pi) | TypeScript | Minimal terminal coding harness (Earendil) * |
 
 \* Requires Node.js (auto-installed if needed).
 
@@ -325,6 +326,7 @@ First-run selections add to that:
 | Google Gemini CLI | ~50 MB |
 | OpenAI Codex CLI | ~50 MB |
 | OpenCode | ~30 MB |
+| Pi Coding Agent | ~50 MB |
 | lazygit / gh-dash / yazi | ~10 / ~10 / ~10 MB |
 | micro / edit | ~12 / ~7 MB |
 | fresh / nvim | ~10 / ~45 MB |
@@ -350,7 +352,7 @@ get new features without waiting for a squarebox release, at the cost of
 build-time pinning for that tier.
 
 Third-party install scripts (Claude Code, uv, .NET) delegate to the vendor
-installer. npm-based AI tools (Copilot CLI, Gemini CLI, Codex CLI) use npm's
+installer. npm-based AI tools (Copilot CLI, Gemini CLI, Codex CLI, Pi) use npm's
 built-in integrity verification.
 
 For the full trust model (what `install.sh` does on your machine, how each
