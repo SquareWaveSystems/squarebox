@@ -156,8 +156,8 @@ tools:
   edit:
     repo: microsoft/edit
     version_prefix: v
-    artifact: edit-{asset_version}-{zarch}-linux-gnu.tar.zst
-    method: tar.zst
+    artifact: edit-{asset_version}-{zarch}-linux-gnu.tar.gz
+    method: tar.gz
     binaries: edit
     find_binary: true
     asset_version_from_api: true
