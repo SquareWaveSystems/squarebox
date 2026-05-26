@@ -1361,7 +1361,7 @@ _install_zsh_inner() {
 		alias gcam='git commit -a -m'
 		alias gcad='git commit -a --amend'
 		export PATH="$HOME/.local/bin:$PATH"
-		[ -x ~/motd.sh ] && ~/motd.sh
+		[ -x /usr/local/lib/squarebox/motd.sh ] && /usr/local/lib/squarebox/motd.sh
 	ZSHRC
 	[ -f "$HOME/.zshrc" ] || return 1
 }
@@ -1446,7 +1446,7 @@ _install_fish_inner() {
 		test -f $HOME/.config/fish/conf.d/squarebox-selections.fish
 			and source $HOME/.config/fish/conf.d/squarebox-selections.fish
 
-		test -x ~/motd.sh; and ~/motd.sh
+		test -x /usr/local/lib/squarebox/motd.sh; and /usr/local/lib/squarebox/motd.sh
 	FISHRC
 	[ -f "$HOME/.config/fish/config.fish" ] || return 1
 

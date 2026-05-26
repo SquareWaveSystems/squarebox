@@ -118,18 +118,25 @@ RUN userdel -r ubuntu 2>/dev/null || true \
 RUN printf '[core]\n\tpager = delta\n[interactive]\n\tdiffFilter = delta --color-only\n[delta]\n\tnavigate = true\n\tdark = true\n[merge]\n\tconflictstyle = zdiff3\n' > /etc/gitconfig
 
 # 6. Setup script
+#
+# setup.sh and motd.sh live under /usr/local/lib/squarebox/ rather than
+# /home/dev/ so they stay image-managed. /home/dev/ is backed by the
+# squarebox-home named volume, which Docker only seeds from the image when
+# the volume is first created — anything we put there would go stale after
+# a `sqrbx-rebuild` against an existing volume.
 
-COPY --chown=dev:dev motd.sh /home/dev/motd.sh
-RUN chmod +x /home/dev/motd.sh
-
-COPY --chown=dev:dev setup.sh /home/dev/setup.sh
 COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
 
+COPY motd.sh /usr/local/lib/squarebox/motd.sh
+COPY setup.sh /usr/local/lib/squarebox/setup.sh
 COPY scripts/squarebox-update.sh /usr/local/bin/sqrbx-update
 COPY scripts/squarebox-setup.sh /usr/local/bin/sqrbx-setup
 COPY scripts/lib/tools.yaml /usr/local/lib/squarebox/tools.yaml
 COPY scripts/lib/tool-lib.sh /usr/local/lib/squarebox/tool-lib.sh
-RUN chmod +x /home/dev/setup.sh /usr/local/bin/sqrbx-update /usr/local/bin/sqrbx-setup
+RUN chmod +x /usr/local/lib/squarebox/setup.sh \
+	/usr/local/lib/squarebox/motd.sh \
+	/usr/local/bin/sqrbx-update \
+	/usr/local/bin/sqrbx-setup
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 	&& mkdir -p /workspace && chown dev:dev /workspace

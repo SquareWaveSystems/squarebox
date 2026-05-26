@@ -46,7 +46,7 @@ if [ ! -f ~/.squarebox-setup-done ]; then
 	if [ -n "${DEVCONTAINER:-}" ]; then
 		touch ~/.squarebox-setup-done
 	else
-		~/setup.sh && touch ~/.squarebox-setup-done
+		/usr/local/lib/squarebox/setup.sh && touch ~/.squarebox-setup-done
 		[ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
 		[ -f ~/.squarebox-editor-aliases ] && source ~/.squarebox-editor-aliases
 		[ -f ~/.squarebox-tui-aliases ] && source ~/.squarebox-tui-aliases
@@ -70,4 +70,4 @@ if [ -f ~/.squarebox-use-fish ] && [ -z "${SQUAREBOX_IN_FISH:-}" ] && [ -z "${SQ
 	exec fish -l
 fi
 
-[ -x ~/motd.sh ] && ~/motd.sh
+[ -x /usr/local/lib/squarebox/motd.sh ] && /usr/local/lib/squarebox/motd.sh
