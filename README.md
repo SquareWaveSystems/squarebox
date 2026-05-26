@@ -377,7 +377,7 @@ The included `.devcontainer/devcontainer.json` builds the full **squarebox** ima
 automatically.
 
 The interactive first-run setup is skipped in devcontainer mode. To configure
-AI tools or SDKs, run `~/setup.sh` from the integrated terminal.
+AI tools or SDKs, run `sqrbx-setup` from the integrated terminal.
 
 You can also attach to a running codespace directly from your local terminal
 using `gh codespace ssh`.
