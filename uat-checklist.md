@@ -30,4 +30,4 @@
 
 ## Dev Container
 - [ ] VS Code "Reopen in Container" builds and connects
-- [ ] Manual `~/setup.sh` works in VS Code integrated terminal
+- [ ] Manual `sqrbx-setup` works in VS Code integrated terminal

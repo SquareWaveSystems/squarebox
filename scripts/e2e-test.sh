@@ -65,7 +65,7 @@ suite_tools() {
 	run_test_grep "5.11 git pager uses delta" "delta" git config core.pager
 
 	# 5.6 glow renders markdown
-	run_test "5.6 glow renders file" glow /home/dev/motd.sh
+	run_test "5.6 glow renders file" glow /usr/local/lib/squarebox/motd.sh
 
 	# 5.7 xh version (skip actual HTTP to avoid flaky network)
 	run_test "5.7 xh --version" xh --version
@@ -97,7 +97,12 @@ suite_shell() {
 	run_test_grep "4.2 zoxide init in bashrc" "zoxide init" cat ~/.bashrc
 
 	# 4.3 MOTD runs without error
-	run_test "4.3 motd.sh runs" ~/motd.sh
+	run_test "4.3 motd.sh runs" /usr/local/lib/squarebox/motd.sh
+
+	# 4.4 image-managed scripts not seeded into /home/dev/ (named volume would
+	# pin them stale across rebuilds — keep this assertion to prevent regression).
+	run_test "4.4 setup.sh not in /home/dev" bash -c '! test -e /home/dev/setup.sh'
+	run_test "4.5 motd.sh not in /home/dev" bash -c '! test -e /home/dev/motd.sh'
 
 	# 4.7 aliases — check alias definitions exist in bashrc
 	# Already tested in build.yml: ls, ll, cat, g, lg
@@ -119,7 +124,7 @@ suite_shell() {
 	run_test_grep "4.6a ai-aliases sourced" "squarebox-ai-aliases" cat ~/.bashrc
 	run_test_grep "4.6b editor-aliases sourced" "squarebox-editor-aliases" cat ~/.bashrc
 	run_test_grep "4.6c tui-aliases sourced" "squarebox-tui-aliases" cat ~/.bashrc
-	run_test_grep "4.6d sdk-paths sourced" "squarebox-sdk-paths" cat ~/.bashrc
+	run_test_grep "4.6d mise activated" 'mise activate bash' cat ~/.bashrc
 
 	# Shell config loads without errors (also in build.yml)
 	run_test "4.0 shell config loads" bash -lc 'echo ok'
@@ -139,7 +144,7 @@ suite_setup() {
 
 	# Run setup.sh in non-interactive mode (piped stdin)
 	local setup_output
-	setup_output=$(echo "" | ~/setup.sh 2>&1) || true
+	setup_output=$(echo "" | /usr/local/lib/squarebox/setup.sh 2>&1) || true
 
 	TEST_NUM=$((TEST_NUM + 1))
 	if echo "$setup_output" | grep -qi "skipping\|non-interactive"; then
@@ -185,12 +190,15 @@ suite_setup_editors() {
 	git config --global user.email "e2e@test.local" 2>/dev/null || true
 
 	# Run setup.sh non-interactively (uses saved selections)
-	echo "" | ~/setup.sh 2>&1 || true
+	echo "" | /usr/local/lib/squarebox/setup.sh 2>&1 || true
 
-	# Source SDK paths and add ~/.local/bin to PATH for this session
+	# Activate mise so SDK shims are visible in this session, and add
+	# ~/.local/bin to PATH (where opencode/editors/TUIs install).
 	export PATH="$HOME/.local/bin:$PATH"
-	# shellcheck source=/dev/null
-	[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
+	if command -v mise >/dev/null 2>&1; then
+		eval "$(mise activate bash --shims)"
+		export PATH="$HOME/.local/share/mise/shims:$PATH"
+	fi
 
 	# 3.7 editors installed
 	run_test "3.7a opencode installed" command -v opencode
@@ -212,9 +220,10 @@ suite_setup_editors() {
 	run_test "3.8a tmux installed" command -v tmux
 	run_test "3.8b zellij installed" command -v zellij
 
-	# 3.9 SDKs installed
-	run_test "3.9a node installed" command -v node
-	run_test "3.9b go installed" test -x "$HOME/.local/go/bin/go"
+	# 3.9 SDKs installed (via mise)
+	run_test "3.9a node installed (via mise)" command -v node
+	run_test "3.9b go installed (via mise)" command -v go
+	run_test "3.9c mise tracks node + go" sh -c 'mise ls --current 2>/dev/null | grep -E "^(node|go)\\b"'
 
 	# 3.11 selections saved
 	run_test "3.11a ai-tool config saved" test -f /workspace/.squarebox/ai-tool
@@ -339,7 +348,7 @@ suite_setup_rerun() {
 	fi
 
 	# setup.sh accepts --rerun with a valid section without error (non-interactive)
-	run_test "9.6 setup.sh --rerun parses cleanly" bash -c '~/setup.sh --rerun git </dev/null'
+	run_test "9.6 setup.sh --rerun parses cleanly" bash -c '/usr/local/lib/squarebox/setup.sh --rerun git </dev/null'
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────

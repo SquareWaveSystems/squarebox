@@ -21,6 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	toilet-fonts \
 	libicu-dev \
 	locales \
+	# Runtime deps for mise-managed SDKs:
+	#   gpg        — mise verifies upstream signatures (Node, etc.)
+	#   libatomic1 — required by official Node Linux builds
+	gpg \
+	libatomic1 \
 	&& sed -i '/en_US.UTF-8/s/^# //' /etc/locale.gen \
 	&& locale-gen \
 	&& rm -rf /var/lib/apt/lists/* \
@@ -41,6 +46,7 @@ ARG GLOW_VERSION=2.1.2
 ARG GUM_VERSION=0.17.0
 ARG JUST_VERSION=1.49.0
 ARG DIFFTASTIC_VERSION=0.68.0
+ARG MISE_VERSION=2026.5.4
 
 # Validate version ARGs are non-empty
 RUN test -n "$DELTA_VERSION"       || { echo "Error: DELTA_VERSION is empty" >&2; exit 1; } \
@@ -50,7 +56,8 @@ RUN test -n "$DELTA_VERSION"       || { echo "Error: DELTA_VERSION is empty" >&2
  && test -n "$GLOW_VERSION"        || { echo "Error: GLOW_VERSION is empty" >&2; exit 1; } \
  && test -n "$GUM_VERSION"         || { echo "Error: GUM_VERSION is empty" >&2; exit 1; } \
  && test -n "$JUST_VERSION"        || { echo "Error: JUST_VERSION is empty" >&2; exit 1; } \
- && test -n "$DIFFTASTIC_VERSION"  || { echo "Error: DIFFTASTIC_VERSION is empty" >&2; exit 1; }
+ && test -n "$DIFFTASTIC_VERSION"  || { echo "Error: DIFFTASTIC_VERSION is empty" >&2; exit 1; } \
+ && test -n "$MISE_VERSION"        || { echo "Error: MISE_VERSION is empty" >&2; exit 1; }
 
 # Checksum verification infrastructure
 COPY checksums.txt /tmp/checksums.txt
@@ -77,8 +84,8 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 	# Install from repos
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends gh eza \
-	# Purge build-only dependency
-	&& apt-get purge -y --auto-remove gnupg \
+	# Note: gnupg is kept (also installed in layer 1 as `gpg`) — mise needs it
+	# at runtime to verify Node release signatures.
 	&& rm -rf /var/lib/apt/lists/*
 
 # Build-time tool install helper: sources library + wires up checksum verification
@@ -93,6 +100,7 @@ RUN . /tmp/sb-init.sh && sb_install gum "$GUM_VERSION"
 RUN . /tmp/sb-init.sh && sb_install starship "$STARSHIP_VERSION"
 RUN . /tmp/sb-init.sh && sb_install just "$JUST_VERSION"
 RUN . /tmp/sb-init.sh && sb_install difftastic "$DIFFTASTIC_VERSION"
+RUN . /tmp/sb-init.sh && sb_install mise "$MISE_VERSION"
 
 # Clean up build-time files
 RUN rm -f /tmp/checksums.txt /tmp/tools.yaml /tmp/tool-lib.sh /tmp/sb-init.sh
@@ -110,18 +118,25 @@ RUN userdel -r ubuntu 2>/dev/null || true \
 RUN printf '[core]\n\tpager = delta\n[interactive]\n\tdiffFilter = delta --color-only\n[delta]\n\tnavigate = true\n\tdark = true\n[merge]\n\tconflictstyle = zdiff3\n' > /etc/gitconfig
 
 # 6. Setup script
+#
+# setup.sh and motd.sh live under /usr/local/lib/squarebox/ rather than
+# /home/dev/ so they stay image-managed. /home/dev/ is backed by the
+# squarebox-home named volume, which Docker only seeds from the image when
+# the volume is first created — anything we put there would go stale after
+# a `sqrbx-rebuild` against an existing volume.
 
-COPY --chown=dev:dev motd.sh /home/dev/motd.sh
-RUN chmod +x /home/dev/motd.sh
-
-COPY --chown=dev:dev setup.sh /home/dev/setup.sh
 COPY --chown=dev:dev starship.toml /home/dev/.config/starship.toml
 
+COPY motd.sh /usr/local/lib/squarebox/motd.sh
+COPY setup.sh /usr/local/lib/squarebox/setup.sh
 COPY scripts/squarebox-update.sh /usr/local/bin/sqrbx-update
 COPY scripts/squarebox-setup.sh /usr/local/bin/sqrbx-setup
 COPY scripts/lib/tools.yaml /usr/local/lib/squarebox/tools.yaml
 COPY scripts/lib/tool-lib.sh /usr/local/lib/squarebox/tool-lib.sh
-RUN chmod +x /home/dev/setup.sh /usr/local/bin/sqrbx-update /usr/local/bin/sqrbx-setup
+RUN chmod +x /usr/local/lib/squarebox/setup.sh \
+	/usr/local/lib/squarebox/motd.sh \
+	/usr/local/bin/sqrbx-update \
+	/usr/local/bin/sqrbx-setup
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 	&& mkdir -p /workspace && chown dev:dev /workspace
@@ -132,61 +147,12 @@ ENV HOME=/home/dev
 ENV SQUAREBOX=1
 
 # 7. Shell Config
+# The .bashrc lives in dotfiles/ on the host so install.sh can bind-mount it
+# into the container — keeping it in sync with the repo while shell history
+# and per-user state stay in the squarebox-home named volume. The COPY here
+# is what seeds a fresh volume; subsequent runs see the bind-mounted version.
 
-RUN cat <<'EOFRC' >> ~/.bashrc
-eval "$(starship init bash)"
-eval "$(zoxide init bash --cmd cd)"
-alias ls='eza --icons'
-alias ll='eza -la --icons'
-alias lsa='ls -a'
-alias lt='eza --tree --level=2 --long --icons --git'
-alias lta='lt -a'
-alias cat='bat --paging=never'
-alias ff="fzf --preview 'bat --style=numbers --color=always {}'"
-alias eff='$EDITOR "$(ff)"'
-alias ..='cd ..'
-alias ...='cd ../..'
-alias ....='cd ../../..'
-export EDITOR='nano'
-[ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
-[ -f ~/.squarebox-editor-aliases ] && source ~/.squarebox-editor-aliases
-[ -f ~/.squarebox-tui-aliases ] && source ~/.squarebox-tui-aliases
-[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
-alias g='git'
-alias gcm='git commit -m'
-alias gcam='git commit -a -m'
-alias gcad='git commit -a --amend'
-export PATH="$HOME/.local/bin:$PATH"
-# First-run setup
-if [ ! -f ~/.squarebox-setup-done ]; then
-	if [ -n "${DEVCONTAINER:-}" ]; then
-		touch ~/.squarebox-setup-done
-	else
-		~/setup.sh && touch ~/.squarebox-setup-done
-		[ -f ~/.squarebox-ai-aliases ] && source ~/.squarebox-ai-aliases
-		[ -f ~/.squarebox-editor-aliases ] && source ~/.squarebox-editor-aliases
-		[ -f ~/.squarebox-tui-aliases ] && source ~/.squarebox-tui-aliases
-		[ -f ~/.squarebox-sdk-paths ] && source ~/.squarebox-sdk-paths
-	fi
-fi
-# Hand off to zsh if the user opted in via setup.sh (experimental).
-# SQUAREBOX_IN_ZSH guards against re-exec loops; SQUAREBOX_NO_ZSH lets
-# users force bash for one shell without removing the marker.
-if [ -f ~/.squarebox-use-zsh ] && [ -z "${SQUAREBOX_IN_ZSH:-}" ] && [ -z "${SQUAREBOX_NO_ZSH:-}" ] && command -v zsh >/dev/null 2>&1; then
-	export SQUAREBOX_IN_ZSH=1
-	exec zsh -l
-fi
-# Hand off to fish if the user opted in via setup.sh (experimental).
-# SQUAREBOX_IN_FISH guards against re-exec loops; SQUAREBOX_NO_FISH lets
-# users force bash for one shell without removing the marker.
-if [ -f ~/.squarebox-use-fish ] && [ -z "${SQUAREBOX_IN_FISH:-}" ] && [ -z "${SQUAREBOX_NO_FISH:-}" ] && command -v fish >/dev/null 2>&1; then
-	export SQUAREBOX_IN_FISH=1
-	exec fish -l
-fi
-EOFRC
-
-# Display MOTD on interactive shell login
-RUN echo '~/motd.sh' >> ~/.bashrc
+COPY --chown=dev:dev dotfiles/bashrc /home/dev/.bashrc
 
 WORKDIR /workspace
 CMD ["/bin/bash"]

@@ -397,8 +397,28 @@ fi
 
 echo "Creating container..."
 RT_OPTS=()
+# Volume strategy: a single named volume backs /home/dev so shell history,
+# claude-code state, mise toolchains, and gh auth survive container recreates.
+# Bind mounts at sub-paths inside /home/dev override the volume — that's how
+# we keep image-managed config (bashrc, starship.toml, lazygit) in lockstep
+# with the repo while user state stays in the volume.
+HOME_VOLUME="${SQUAREBOX_HOME_VOLUME:-squarebox-home}"
+
+# Guard the bashrc bind-mount source: if dotfiles/bashrc is missing (e.g. an
+# upgrader whose git pull silently failed), Docker would create an empty
+# directory at /home/dev/.bashrc on first start, leaving the container with
+# no shell init (no starship, no aliases, no first-run setup hand-off).
+if [ ! -f "${INSTALL_DIR}/dotfiles/bashrc" ]; then
+	echo "Error: ${INSTALL_DIR}/dotfiles/bashrc not found." >&2
+	echo "       Your squarebox checkout is out of date or incomplete." >&2
+	echo "       Run: (cd \"${INSTALL_DIR}\" && git pull) and retry." >&2
+	exit 1
+fi
+
 RT_VOLUMES=(
 	-v "${INSTALL_DIR}/workspace:/workspace"
+	-v "${HOME_VOLUME}:/home/dev"
+	-v "${INSTALL_DIR}/dotfiles/bashrc:/home/dev/.bashrc:ro"
 	-v "${USER_HOME}/.config/git:/home/dev/.config/git"
 	-v "${INSTALL_DIR}/.config/starship.toml:/home/dev/.config/starship.toml"
 	-v "${INSTALL_DIR}/.config/lazygit:/home/dev/.config/lazygit"

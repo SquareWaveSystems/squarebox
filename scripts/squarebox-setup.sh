@@ -124,7 +124,7 @@ for arg in "$@"; do
 done
 
 # Run setup.sh in rerun mode
-~/setup.sh --rerun "$@"
+/usr/local/lib/squarebox/setup.sh --rerun "$@"
 
 echo
 echo -e "${DIM}Run 'source ~/.bashrc' to apply changes in the current shell.${RESET}"

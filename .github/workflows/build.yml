@@ -49,7 +49,7 @@ jobs:
       - name: All tools exist
         run: |
           docker run --rm squarebox:test bash -c '
-            for cmd in bat curl delta difft eza fd fzf gh glow gum jq just nano rg starship xh yq zoxide; do
+            for cmd in bat curl delta difft eza fd fzf gh glow gum jq just mise nano rg starship xh yq zoxide; do
               which "$cmd" || { echo "MISSING: $cmd"; exit 1; }
             done
           '

@@ -64,13 +64,13 @@ assistant, and language SDKs.
 
 **Stable**
 
-    curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash
+    curl -fsSL https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.sh | bash
 
 **Edge**
 
-    curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.sh | bash -s -- --edge
+    curl -fsSL https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.sh | bash -s -- --edge
 
-Stable installs the latest tagged release (pre-release tags like `-rc` are skipped). Edge uses the latest commit on main.
+Stable installs the latest tagged release (pre-release tags like `-rc` are skipped). Edge uses the latest commit on main. The install script itself is published as a release asset, so the URL is pinned to a tagged version of the script — pushes to `main` won't break new installs until a release is cut.
 
 If the install fails or you want to see the full docker build and git output, re-run with `--verbose`.
 
@@ -80,7 +80,7 @@ Windows users can install directly from PowerShell - no Git Bash required.
 This handles clone, build, container creation, and PowerShell aliases
 (`sqrbx`, `squarebox`, etc.) natively:
 
-    irm https://raw.githubusercontent.com/SquareWaveSystems/squarebox/main/install.ps1 | iex
+    irm https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.ps1 | iex
 
 Once installed, you can re-run or pass flags from the local copy:
 
@@ -103,9 +103,11 @@ PowerShell 7+.
 
 The container is persistent: it suspends on exit and resumes on start, keeping
 installed packages, config, and shell history intact between sessions. Your
-code and tool config live on the host under `~/squarebox` (`workspace/` for
-code, `.config/` for tool config) via volume mounts, so they survive even if
-the container is deleted.
+code lives on the host at `~/squarebox/workspace` (bind-mounted), and per-user
+state — shell history, GitHub CLI auth, claude-code data, mise toolchains —
+lives in a named Docker volume (`squarebox-home`) that survives container
+recreation. Image-managed config like `.bashrc` is bind-mounted from the repo
+so updates flow through to the running container.
 
 What's included
 ---------------
@@ -213,19 +215,23 @@ AI/editor/TUI/SDK selections are translated from their bash files into
 > Set `SQUAREBOX_NO_ZSH=1` or `SQUAREBOX_NO_FISH=1` to force bash for a single
 > session, or re-run `sqrbx-setup shell` to switch back permanently. Tooling
 > is primarily tested against bash, so a few edge cases may need polish —
-> please file an issue if you hit one. Known fish limitation: nvm (Node.js)
-> is not wired into fish; install [nvm.fish](https://github.com/jorgebucaran/nvm.fish)
-> separately if you need it.
+> please file an issue if you hit one. SDK shims are wired into all three
+> shells via `mise activate {bash,zsh,fish}`.
 
 ### SDKs
 
-| SDK | Installed via |
-|-----|---------------|
-| Node.js | [nvm](https://github.com/nvm-sh/nvm) |
-| Python | [uv](https://github.com/astral-sh/uv) |
-| Go | [go.dev](https://go.dev) |
-| .NET | [dotnet-install](https://dot.net) |
-| Rust | [rustup](https://rustup.rs) |
+All SDKs are managed by [mise](https://github.com/jdx/mise) — a single
+polyglot version manager. Selections are written to `~/.config/mise/config.toml`
+and `mise activate` wires up shims and PATH automatically across bash, zsh,
+and fish.
+
+| SDK   | mise tool |
+|-------|-----------|
+| Node.js | `node` |
+| Python  | `python` |
+| Go      | `go` |
+| .NET    | `dotnet` |
+| Rust    | `rust` |
 
 Aliases
 -------
@@ -291,22 +297,23 @@ preserved.
     sqrbx-rebuild
 
 Pulls the latest changes, rebuilds the image, and replaces the container.
-Your code in ~/squarebox/workspace is safe since it lives on the host.
-Setup selections (AI tool, editors, SDKs, GitHub auth) are persisted in the
-workspace volume and restored automatically. However, shell history, manually
-installed packages, and custom config files inside the container are lost.
+Your code in ~/squarebox/workspace is safe since it lives on the host. Most
+in-container state (shell history, GitHub auth, SDK toolchains) survives
+because /home/dev is backed by the `squarebox-home` named Docker volume.
+Manually installed apt packages are still lost, since the image is rebuilt.
 
 #### What survives a rebuild
 
 | Survives | Lost |
 |----------|------|
-| Code in ~/squarebox/workspace (host volume) | Shell history (~/.bash_history) |
-| Starship and lazygit config (host volume) | Manually installed apt packages |
-| AI tool / editor / SDK selections | Custom dotfiles in /home/dev/ |
-| GitHub CLI auth | Caches and temp files |
+| Code in ~/squarebox/workspace (host bind mount) | Manually installed apt packages |
+| /home/dev (squarebox-home named volume): shell history, GitHub CLI auth, claude-code data, mise toolchains | |
+| Starship, lazygit, .bashrc (bind-mounted from repo, picks up updates) | |
+| AI tool / editor / SDK selections (in /workspace/.squarebox) | |
 | SSH keys (on host, forwarded via agent) | |
 
-To preserve extra files across rebuilds, store them in `/workspace/.squarebox/`.
+To wipe per-user state and start fresh, remove the named volume:
+`docker volume rm squarebox-home`.
 
 > **Tip:** Use `sqrbx-update` from inside the container to update tools without
 > rebuilding. Only use `sqrbx-rebuild` when the base image itself needs to
@@ -331,7 +338,7 @@ First-run selections add to that:
 | micro / edit | ~12 / ~7 MB |
 | fresh / nvim | ~10 / ~45 MB |
 | Node.js | ~90 MB |
-| Python (uv) | ~35 MB |
+| Python | ~50 MB |
 | Go | ~500 MB |
 | .NET | ~800 MB |
 
@@ -344,16 +351,17 @@ Security
 Base image tools are pinned to specific versions and verified against SHA256
 checksums when the Docker image is built, so `docker build` is reproducible.
 
-Optional tools selected during first-run setup (editors, TUIs, OpenCode, nvm,
-Go, zellij) install the latest upstream release at the time you run setup. The
+Optional tools selected during first-run setup (editors, TUIs, OpenCode,
+zellij) install the latest upstream release at the time you run setup. The
 trust model is the same as running each tool's installer yourself: HTTPS
 downloads from the project's official GitHub release (or upstream server). You
 get new features without waiting for a squarebox release, at the cost of
 build-time pinning for that tier.
 
-Third-party install scripts (Claude Code, uv, .NET) delegate to the vendor
-installer. npm-based AI tools (Copilot CLI, Gemini CLI, Codex CLI, Pi) use npm's
-built-in integrity verification.
+SDKs (Node, Python, Go, .NET, Rust) are installed by [mise](https://github.com/jdx/mise),
+which is itself a Dockerfile-tier pinned binary. mise downloads each SDK
+toolchain from its upstream over HTTPS using its own integrity checks. npm-based
+AI tools (Copilot CLI, Gemini CLI, Codex CLI, Pi) use npm's built-in integrity verification.
 
 For the full trust model (what `install.sh` does on your machine, how each
 layer is verified, and how to inspect the script before running it) see
@@ -369,7 +377,7 @@ The included `.devcontainer/devcontainer.json` builds the full **squarebox** ima
 automatically.
 
 The interactive first-run setup is skipped in devcontainer mode. To configure
-AI tools or SDKs, run `~/setup.sh` from the integrated terminal.
+AI tools or SDKs, run `sqrbx-setup` from the integrated terminal.
 
 You can also attach to a running codespace directly from your local terminal
 using `gh codespace ssh`.
@@ -380,8 +388,9 @@ Uninstall
     sqrbx-uninstall
 
 Removes the container, image, and shell integration but **keeps**
-`~/squarebox` (including `workspace/`) so your code is safe by default.
-Pass `--purge` to also remove `~/squarebox`:
+`~/squarebox` (including `workspace/`) and the `squarebox-home` named volume
+(shell history, gh auth, mise toolchains) so your code and per-user state are
+safe by default. Pass `--purge` to also remove both:
 
     sqrbx-uninstall --purge
 

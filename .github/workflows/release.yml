@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create release with install scripts as assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+
+          # Pre-release tags carry an `-rc`, `-beta`, etc. suffix.
+          prerelease_flag=""
+          case "$tag" in
+            *-*) prerelease_flag="--prerelease" ;;
+          esac
+
+          # Idempotent: if the workflow re-runs on the same tag, replace assets.
+          # Re-runs only refresh assets — title and release notes are preserved
+          # from the first run so any human edits aren't clobbered. If you need
+          # to regenerate notes from scratch, delete the release first and
+          # re-push the tag.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" install.sh install.ps1 --clobber
+          else
+            gh release create "$tag" \
+              --title "$tag" \
+              --generate-notes \
+              $prerelease_flag \
+              install.sh install.ps1
+          fi
