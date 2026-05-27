@@ -5,10 +5,19 @@
 # Usage:
 #   sqrbx-learn            Start or continue learning
 #   sqrbx-learn --progress Show your progress
-#   sqrbx-learn --reset    Reset all progress
+#   sqrbx-learn --reset    Reset all progress AND skill level
 #   sqrbx-learn --help     Show this help
 
 set -euo pipefail
+
+# ── Required tool guard ──────────────────────────────────────────────────────
+# gum drives the whole UI. Without it, `set -e` would just abort silently on
+# the first call. Fail loudly with an actionable message instead.
+if ! command -v gum >/dev/null 2>&1; then
+	echo "sqrbx-learn: gum is required but not installed." >&2
+	echo "  Try: sqrbx-update            (re-installs Dockerfile-tier tools)" >&2
+	exit 1
+fi
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -22,6 +31,17 @@ hdr()    { gum style --foreground 212 --bold "$1"; }
 orange() { gum style --foreground 208 "$1"; }
 dim()    { gum style --foreground 245 "$1"; }
 green()  { gum style --foreground 2 "$1"; }
+
+# Lesson bodies are markdown. Render through glow when available so headings,
+# bold, lists, and inline code render properly; fall back to gum's plain-text
+# pager otherwise.
+lesson_pager() {
+	if command -v glow >/dev/null 2>&1; then
+		glow -p -
+	else
+		gum pager
+	fi
+}
 
 # ── Progress helpers ─────────────────────────────────────────────────────────
 # Flat key=value file, one entry per line.
@@ -43,7 +63,7 @@ progress_set() {
 	fi
 }
 
-skill_level()   { progress_get "skill_level" || echo "beginner"; }
+skill_level()   { local v; v=$(progress_get "skill_level"); echo "${v:-beginner}"; }
 is_complete()   { [ "$(progress_get "$1")" = "complete" ]; }
 mark_complete() { progress_set "$1" "complete"; }
 
@@ -63,28 +83,28 @@ has_tool() {
 }
 
 # ── Lesson catalog ───────────────────────────────────────────────────────────
-# Format: "Category|id|display title|tool_to_check|always_available"
-# always_available: "yes" = always show, "optional" = only if tool is installed
+# Format: "Category|id|display title|tool_to_check|availability"
+# availability: "always" = always show, "optional" = only if tool is installed
 
 ALL_LESSONS=(
-	"Foundation|unix_philosophy|Unix philosophy — why the terminal|none|yes"
-	"Foundation|unix_pipes|Pipes — the Unix toolkit model|none|yes"
-	"Modern Replacements|bat_vs_cat|bat — a better cat|bat|yes"
-	"Modern Replacements|eza_vs_ls|eza — a better ls|eza|yes"
-	"Modern Replacements|rg_vs_grep|ripgrep — a better grep|rg|yes"
-	"Modern Replacements|fd_vs_find|fd — a better find|fd|yes"
-	"Modern Replacements|zoxide_cd|zoxide — a smarter cd|zoxide|yes"
-	"Terminal Productivity|fzf_productivity|fzf — fuzzy everything|fzf|yes"
-	"Terminal Productivity|starship_prompt|starship — your prompt is a dashboard|starship|yes"
-	"Terminal Productivity|gum_scripting|gum — beautiful shell scripts|gum|yes"
-	"Terminal Productivity|glow_markdown|glow — markdown in the terminal|glow|yes"
-	"Terminal Productivity|just_taskrunner|just — a modern make|just|yes"
-	"Git & Diffs|git_delta|delta — better git diffs|delta|yes"
-	"Git & Diffs|difftastic|difftastic — structural diffs|difft|yes"
-	"Git & Diffs|gh_cli|gh — GitHub from the terminal|gh|yes"
+	"Foundation|unix_philosophy|Unix philosophy — why the terminal|none|always"
+	"Foundation|unix_pipes|Pipes — the Unix toolkit model|none|always"
+	"Modern Replacements|bat_vs_cat|bat — a better cat|bat|always"
+	"Modern Replacements|eza_vs_ls|eza — a better ls|eza|always"
+	"Modern Replacements|rg_vs_grep|ripgrep — a better grep|rg|always"
+	"Modern Replacements|fd_vs_find|fd — a better find|fd|always"
+	"Modern Replacements|zoxide_cd|zoxide — a smarter cd|zoxide|always"
+	"Terminal Productivity|fzf_productivity|fzf — fuzzy everything|fzf|always"
+	"Terminal Productivity|starship_prompt|starship — your prompt is a dashboard|starship|always"
+	"Terminal Productivity|gum_scripting|gum — beautiful shell scripts|gum|always"
+	"Terminal Productivity|glow_markdown|glow — markdown in the terminal|glow|always"
+	"Terminal Productivity|just_taskrunner|just — a modern make|just|always"
+	"Git & Diffs|git_delta|delta — better git diffs|delta|always"
+	"Git & Diffs|difftastic|difftastic — structural diffs|difft|always"
+	"Git & Diffs|gh_cli|gh — GitHub from the terminal|gh|always"
 	"Git & Diffs|lazygit_tui|lazygit — git TUI|lazygit|optional"
-	"Data & HTTP|yq_yaml|yq — YAML/JSON on the command line|yq|yes"
-	"Data & HTTP|xh_http|xh — a friendlier curl|xh|yes"
+	"Data & HTTP|yq_yaml|yq — YAML/JSON on the command line|yq|always"
+	"Data & HTTP|xh_http|xh — a friendlier curl|xh|always"
 	"File Management|yazi_files|yazi — terminal file manager|yazi|optional"
 )
 
@@ -115,11 +135,10 @@ build_menu() {
 		fi
 	done
 
-	_out=(
-		${incomplete[@]+"${incomplete[@]}"}
-		${complete[@]+"${complete[@]}"}
-		${unavailable[@]+"${unavailable[@]}"}
-	)
+	_out=()
+	[ ${#incomplete[@]}  -gt 0 ] && _out+=("${incomplete[@]}")
+	[ ${#complete[@]}    -gt 0 ] && _out+=("${complete[@]}")
+	[ ${#unavailable[@]} -gt 0 ] && _out+=("${unavailable[@]}")
 }
 
 # ── Skill level assessment ───────────────────────────────────────────────────
@@ -152,7 +171,7 @@ lesson_unix_philosophy() {
 	local id="unix_philosophy"
 	local title="Unix philosophy — why the terminal"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## Unix philosophy — why the terminal  (Bell Labs, 1969)
 
 In 1969, Ken Thompson and Dennis Ritchie built Unix at Bell Labs on a single
@@ -213,7 +232,7 @@ lesson_unix_pipes() {
 	local id="unix_pipes"
 	local title="Pipes — the Unix toolkit model"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## Pipes — the Unix toolkit model  (Unix v3, 1973)
 
 The pipe operator `|` was added to Unix in 1973 by Doug McIlroy. He had been
@@ -273,7 +292,7 @@ lesson_bat_vs_cat() {
 	local id="bat_vs_cat"
 	local title="bat — a better cat"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## bat — a better cat  (2018, David Peter, Rust)
 
 `cat` was written in 1971 as part of Unix Version 1. Its job: concatenate
@@ -331,7 +350,7 @@ lesson_eza_vs_ls() {
 	local id="eza_vs_ls"
 	local title="eza — a better ls"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## eza — a better ls  (2023, Christina Sørensen — fork of exa by ogham)
 
 `ls` dates to Unix Version 1 (1971). It lists files. That's all it has ever
@@ -384,7 +403,7 @@ lesson_rg_vs_grep() {
 	local id="rg_vs_grep"
 	local title="ripgrep — a better grep"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## ripgrep — a better grep  (2016, Andrew Gallant / BurntSushi, Rust)
 
 `grep` was written by Ken Thompson in one night in 1973. He was inspired by
@@ -443,7 +462,7 @@ lesson_fd_vs_find() {
 	local id="fd_vs_find"
 	local title="fd — a better find"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## fd — a better find  (2017, David Peter, Rust)
 
 `find` was written in the early 1970s. Its flag syntax is famously strange:
@@ -494,7 +513,7 @@ lesson_zoxide_cd() {
 	local id="zoxide_cd"
 	local title="zoxide — a smarter cd"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## zoxide — a smarter cd  (2020, Ajeet D'Souza, Rust)
 
 `cd` is as old as Unix. It moves you to a directory. That's it.
@@ -550,7 +569,7 @@ lesson_fzf_productivity() {
 	local id="fzf_productivity"
 	local title="fzf — fuzzy everything"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## fzf — fuzzy everything  (2013, Junegunn Choi, Go)
 
 Junegunn Choi wrote fzf in 2013 as a Vim plugin to fuzzy-search file paths.
@@ -609,7 +628,7 @@ lesson_starship_prompt() {
 	local id="starship_prompt"
 	local title="starship — your prompt is a dashboard"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## starship — your prompt is a dashboard  (2019, starship-rs, Rust)
 
 The default bash prompt (`\u@\h:\w\$`) shows your username, hostname, and
@@ -670,7 +689,7 @@ lesson_gum_scripting() {
 	local id="gum_scripting"
 	local title="gum — beautiful shell scripts"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## gum — beautiful shell scripts  (2022, Charmbracelet, Go)
 
 Shell scripts have always been functional but ugly. Adding a menu, a spinner,
@@ -729,7 +748,7 @@ lesson_glow_markdown() {
 	local id="glow_markdown"
 	local title="glow — markdown in the terminal"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## glow — markdown in the terminal  (2019, Charmbracelet, Go)
 
 Markdown is ubiquitous — READMEs, documentation, notes, changelogs. Reading
@@ -783,7 +802,7 @@ lesson_just_taskrunner() {
 	local id="just_taskrunner"
 	local title="just — a modern make"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## just — a modern make  (2016, Casey Rodarmor, Rust)
 
 `make` was written by Stuart Feldman at Bell Labs in 1976. It was designed
@@ -842,7 +861,7 @@ lesson_git_delta() {
 	local id="git_delta"
 	local title="delta — better git diffs"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## delta — better git diffs  (2019, Dan Davison, Rust)
 
 Git's built-in diff output was designed for patch files — plain text with `+`
@@ -899,7 +918,7 @@ lesson_difftastic() {
 	local id="difftastic"
 	local title="difftastic — structural diffs"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## difftastic — structural diffs  (2021, Wilfred Hughes, Rust)
 
 delta makes diffs more readable by adding color. But it still diffs text
@@ -955,7 +974,7 @@ lesson_gh_cli() {
 	local id="gh_cli"
 	local title="gh — GitHub from the terminal"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## gh — GitHub from the terminal  (2020, GitHub, Go)
 
 For decades, interacting with GitHub meant opening a browser. Pull requests,
@@ -1009,7 +1028,7 @@ lesson_lazygit_tui() {
 	local id="lazygit_tui"
 	local title="lazygit — git TUI"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## lazygit — git TUI  (2018, Jesse Duffield, Go)
 
 The git CLI is powerful but not intuitive. Staging individual hunks requires
@@ -1060,7 +1079,7 @@ lesson_yq_yaml() {
 	local id="yq_yaml"
 	local title="yq — YAML/JSON on the command line"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## yq — YAML/JSON on the command line  (2015+, Mike Farah, Go)
 
 `jq` (2012, Stephen Dolan) transformed how developers work with JSON on the
@@ -1114,7 +1133,7 @@ lesson_xh_http() {
 	local id="xh_http"
 	local title="xh — a friendlier curl"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## xh — a friendlier curl  (2021, ducaale, Rust)
 
 `curl` (1997, Daniel Stenberg) is the universal HTTP client. It runs on
@@ -1168,7 +1187,7 @@ lesson_yazi_files() {
 	local id="yazi_files"
 	local title="yazi — terminal file manager"
 
-	gum pager << 'EOF'
+	lesson_pager << 'EOF'
 ## yazi — terminal file manager  (2023, sxyazi, Rust)
 
 Terminal file managers have existed since the 1980s (Midnight Commander, 1994
@@ -1231,8 +1250,10 @@ main() {
 		exit 1
 	fi
 
-	# First-launch: run skill assessment if no level set
-	if [ -z "$(skill_level)" ] || [ "$(skill_level)" = "" ]; then
+	# First-launch: run skill assessment if no level has been recorded.
+	# skill_level() always returns at least "beginner" thanks to its
+	# fallback, so check the raw progress file directly.
+	if [ -z "$(progress_get skill_level)" ]; then
 		show_banner
 		skill_assessment
 	fi
@@ -1280,11 +1301,8 @@ main() {
 					sleep 2
 				else
 					echo
-					SKILL_LEVEL=$(skill_level)
-					export SKILL_LEVEL
 					"lesson_${id}"
 					echo
-					gum confirm "Return to menu?" --default=true || break 2
 				fi
 				break
 			fi
@@ -1305,7 +1323,7 @@ usage() {
 	Usage:
 	  sqrbx-learn            Start or continue learning
 	  sqrbx-learn --progress Show your progress
-	  sqrbx-learn --reset    Reset all progress
+	  sqrbx-learn --reset    Reset all progress AND skill level (re-prompts on next launch)
 	  sqrbx-learn --help     Show this help
 
 	Inside the guide:

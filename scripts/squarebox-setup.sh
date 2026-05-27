@@ -86,7 +86,11 @@ show_list() {
 		if [ -f "/workspace/.squarebox/$file" ]; then
 			value=$(cat "/workspace/.squarebox/$file")
 		fi
-		if [ -n "$value" ]; then
+		# `learn` is a scalar enabled/empty, not a comma-list — render the
+		# empty case as "disabled" so it's clear the toggle is just off.
+		if [ "$file" = "learn" ] && [ -z "$value" ]; then
+			printf "  ${CYAN}%-18s${RESET}${DIM}disabled${RESET}\n" "${label}:"
+		elif [ -n "$value" ]; then
 			printf "  ${CYAN}%-18s${RESET}%s\n" "${label}:" "$value"
 		else
 			printf "  ${CYAN}%-18s${RESET}${DIM}(none)${RESET}\n" "${label}:"

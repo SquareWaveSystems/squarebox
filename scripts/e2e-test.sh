@@ -181,6 +181,7 @@ suite_setup_editors() {
 	# install (apt zsh + Oh My Zsh + two plugin clones) is network-heavy and
 	# would significantly slow the CI suite, so it's not pre-seeded by default.
 	echo "bash" > /workspace/.squarebox/shell
+	echo "enabled" > /workspace/.squarebox/learn
 	# Ensure stale markers from a previous run are cleared so the assertion
 	# below reflects the current selection, not leftover state.
 	rm -f ~/.squarebox-use-zsh ~/.squarebox-use-fish
@@ -257,6 +258,13 @@ suite_setup_editors() {
 
 	# 4.5 c alias points to first AI tool (opencode)
 	run_test_grep "4.5 c alias set to opencode" "opencode" cat ~/.squarebox-ai-aliases
+
+	# 3.13 learn mode: image binary present, config persists, --help works,
+	# motd surfaces the hint when enabled
+	run_test "3.13a sqrbx-learn installed" command -v sqrbx-learn
+	run_test_grep "3.13b learn config persists" "enabled" cat /workspace/.squarebox/learn
+	run_test "3.13c sqrbx-learn --help exits 0" sqrbx-learn --help
+	run_test_grep "3.13d motd shows learn hint when enabled" "sqrbx-learn" bash /usr/local/lib/squarebox/motd.sh
 }
 
 # ── Suite: update ────────────────────────────────────────────────────────

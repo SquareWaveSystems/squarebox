@@ -1565,13 +1565,6 @@ fi
 mkdir -p "$(dirname "$LEARN_CONFIG")"
 echo "$learn_choice" > "$LEARN_CONFIG"
 
-{
-	if [ "$learn_choice" = "enabled" ]; then
-		echo "# Added by squarebox setup — learn mode"
-		echo "alias sqrbx-learn='sqrbx-learn'"
-	fi
-} > ~/.squarebox-learn-aliases
-
 fi # should_run learn
 
 echo
