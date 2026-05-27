@@ -181,6 +181,17 @@ Write-Host "Creating container..."
 $homeVolume = if ($env:SQUAREBOX_HOME_VOLUME) { $env:SQUAREBOX_HOME_VOLUME } else { 'squarebox-home' }
 $bashrcPath = Join-Path $InstallDir 'dotfiles\bashrc'
 
+# Guard the bashrc bind-mount source: if dotfiles\bashrc is missing (e.g. an
+# upgrader whose git pull silently failed), Docker would create an empty
+# directory at /home/dev/.bashrc on first start, leaving the container with
+# no shell init (no starship, no aliases, no first-run setup hand-off).
+if (-not (Test-Path -LiteralPath $bashrcPath -PathType Leaf)) {
+    Write-Host "Error: $bashrcPath not found." -ForegroundColor Red
+    Write-Host "       Your squarebox checkout is out of date or incomplete." -ForegroundColor Red
+    Write-Host "       Run: (cd '$InstallDir'; git pull) and retry." -ForegroundColor Red
+    exit 1
+}
+
 $rtVolumes = @(
     '-v', "$workspaceDir`:/workspace"
     '-v', "$homeVolume`:/home/dev"

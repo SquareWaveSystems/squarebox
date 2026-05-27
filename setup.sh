@@ -176,17 +176,22 @@ fi
 # GitHub CLI config lives at ~/.config/gh (the gh default) and is preserved
 # by the squarebox-home named volume. The legacy persistence path
 # (/workspace/.squarebox/gh) is migrated once for users upgrading from a
-# pre-named-volume install; new installs never touch it.
+# pre-named-volume install; new installs never touch it. The legacy paths
+# are removed after a successful copy so the migration is self-healing and
+# we don't leave stale credentials sitting in /workspace.
 GH_PERSIST_LEGACY="/workspace/.squarebox/gh"
 GH_SKIP_MARKER="$HOME/.squarebox-gh-skip"
 GH_SKIP_MARKER_LEGACY="/workspace/.squarebox/gh-skip"
 if [ -d "$GH_PERSIST_LEGACY" ] && [ ! -d ~/.config/gh ]; then
 	mkdir -p ~/.config
-	cp -r "$GH_PERSIST_LEGACY" ~/.config/gh
+	if cp -r "$GH_PERSIST_LEGACY" ~/.config/gh; then
+		rm -rf "$GH_PERSIST_LEGACY"
+	fi
 fi
 # Migrate legacy skip marker into $HOME so it persists with the rest of state.
 if [ -f "$GH_SKIP_MARKER_LEGACY" ] && [ ! -f "$GH_SKIP_MARKER" ]; then
 	touch "$GH_SKIP_MARKER"
+	rm -f "$GH_SKIP_MARKER_LEGACY"
 fi
 
 # GitHub CLI (optional — users who don't use GitHub can skip this)

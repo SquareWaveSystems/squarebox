@@ -28,6 +28,10 @@ jobs:
           esac
 
           # Idempotent: if the workflow re-runs on the same tag, replace assets.
+          # Re-runs only refresh assets — title and release notes are preserved
+          # from the first run so any human edits aren't clobbered. If you need
+          # to regenerate notes from scratch, delete the release first and
+          # re-push the tag.
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" install.sh install.ps1 --clobber
           else

@@ -141,7 +141,7 @@ opencode_current() { opencode --version 2>/dev/null | grep -oP '[\d.]+' | head -
 zellij_current() { zellij --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
 just_current() { just --version 2>/dev/null | awk '{print $2}' || echo "not installed"; }
 difftastic_current() { difft --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
-mise_current() { mise --version 2>/dev/null | awk '{print $1}' || echo "not installed"; }
+mise_current() { mise --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "not installed"; }
 
 # ── Latest version fetching ────────────────────────────────────────────
 # Uses repo from tools.yaml via sb_get; strips v prefix where needed.
