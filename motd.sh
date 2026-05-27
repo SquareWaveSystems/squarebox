@@ -38,4 +38,9 @@ if [ ${#sdks[@]} -gt 0 ]; then
 	done
 	[ -n "$sdk_str" ] && printf '\e[38;5;245m  %s\e[0m\n' "$sdk_str"
 fi
+
+# Learn mode hint
+if [ -f "/workspace/.squarebox/learn" ] && grep -qx "enabled" /workspace/.squarebox/learn 2>/dev/null; then
+	printf '\e[38;5;208m  ✦ sqrbx-learn\e[0m\e[38;5;245m — type to start learning\e[0m\n'
+fi
 echo

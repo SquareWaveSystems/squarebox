@@ -233,6 +233,20 @@ and fish.
 | .NET    | `dotnet` |
 | Rust    | `rust` |
 
+### Learning mode
+
+Optional. When enabled during first-run setup (or via `sqrbx-setup learn`),
+the container ships an interactive tutorial covering every tool in the
+toolkit — history, why-it-exists, and skill-level-adapted "try it" examples.
+
+    sqrbx-learn               # start or continue lessons
+    sqrbx-learn --progress    # show what you've completed
+    sqrbx-learn --reset       # wipe progress AND skill level
+
+The first launch asks for a skill level (beginner / intermediate / expert)
+to scale the examples; you can change it later from the menu. Lessons render
+through `glow` when available so the markdown bodies display properly.
+
 Aliases
 -------
 

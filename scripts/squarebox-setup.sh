@@ -16,7 +16,7 @@ GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 RESET='\033[0m'
 
-VALID_SECTIONS=(git github ai editors tuis multiplexers sdks shell)
+VALID_SECTIONS=(git github ai editors tuis multiplexers sdks shell learn)
 
 usage() {
 	cat <<-EOF
@@ -37,6 +37,7 @@ usage() {
 	  multiplexers   Terminal multiplexers (tmux, zellij)
 	  sdks           SDKs (node, python, go, dotnet, rust)
 	  shell          Default shell (bash, zsh/fish — experimental)
+	  learn          Interactive terminal learning guide (sqrbx-learn)
 
 	${BOLD}Examples:${RESET}
 	  sqrbx-setup ai editors       Re-run AI assistant and editor selection
@@ -76,6 +77,7 @@ show_list() {
 		"multiplexer:Multiplexers"
 		"sdks:SDKs"
 		"shell:Shell"
+		"learn:Learn mode"
 	)
 	for entry in "${configs[@]}"; do
 		local file="${entry%%:*}"
@@ -84,7 +86,11 @@ show_list() {
 		if [ -f "/workspace/.squarebox/$file" ]; then
 			value=$(cat "/workspace/.squarebox/$file")
 		fi
-		if [ -n "$value" ]; then
+		# `learn` is a scalar enabled/empty, not a comma-list — render the
+		# empty case as "disabled" so it's clear the toggle is just off.
+		if [ "$file" = "learn" ] && [ -z "$value" ]; then
+			printf "  ${CYAN}%-18s${RESET}${DIM}disabled${RESET}\n" "${label}:"
+		elif [ -n "$value" ]; then
 			printf "  ${CYAN}%-18s${RESET}%s\n" "${label}:" "$value"
 		else
 			printf "  ${CYAN}%-18s${RESET}${DIM}(none)${RESET}\n" "${label}:"
