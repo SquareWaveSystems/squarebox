@@ -10,20 +10,21 @@
 
 set -euo pipefail
 
-# ── Required tool guard ──────────────────────────────────────────────────────
-# gum drives the whole UI. Without it, `set -e` would just abort silently on
-# the first call. Fail loudly with an actionable message instead.
-if ! command -v gum >/dev/null 2>&1; then
-	echo "sqrbx-learn: gum is required but not installed." >&2
-	echo "  Try: sqrbx-update            (re-installs Dockerfile-tier tools)" >&2
-	exit 1
-fi
-
 # ── Paths ────────────────────────────────────────────────────────────────────
 
-LEARN_CONFIG="/workspace/.squarebox/learn"
 PROGRESS_FILE="/workspace/.squarebox/learn-progress"
 SQUAREBOX_DIR="/workspace/.squarebox"
+
+# ── Required tool guard ──────────────────────────────────────────────────────
+# gum drives the interactive UI. Most invocations need it, but --help and
+# --progress are deliberately gum-free so they still work in degraded
+# environments. Each gum-using entry point calls require_gum() first.
+require_gum() {
+	command -v gum >/dev/null 2>&1 && return 0
+	echo "sqrbx-learn: gum is required for this mode but not installed." >&2
+	echo "  Try: sqrbx-update            (re-installs Dockerfile-tier tools)" >&2
+	exit 1
+}
 
 # ── gum color helpers ────────────────────────────────────────────────────────
 
@@ -1244,6 +1245,7 @@ show_banner() {
 }
 
 main() {
+	require_gum
 	# Guard: requires an interactive terminal
 	if ! [ -t 0 ] || ! [ -t 1 ]; then
 		echo "sqrbx-learn requires an interactive terminal." >&2
@@ -1349,6 +1351,7 @@ case "${1:-}" in
 		exit 0
 		;;
 	--reset)
+		require_gum
 		gum confirm "Reset all learn progress?" --default=false \
 			&& rm -f "$PROGRESS_FILE" \
 			&& green "✓ Progress reset." \
