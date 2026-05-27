@@ -1,0 +1,1348 @@
+#!/usr/bin/env bash
+# sqrbx-learn — Interactive, adaptive terminal learning guide for squarebox.
+# Teaches the history and usage of each tool in the squarebox toolkit.
+#
+# Usage:
+#   sqrbx-learn            Start or continue learning
+#   sqrbx-learn --progress Show your progress
+#   sqrbx-learn --reset    Reset all progress
+#   sqrbx-learn --help     Show this help
+
+set -euo pipefail
+
+# ── Paths ────────────────────────────────────────────────────────────────────
+
+LEARN_CONFIG="/workspace/.squarebox/learn"
+PROGRESS_FILE="/workspace/.squarebox/learn-progress"
+SQUAREBOX_DIR="/workspace/.squarebox"
+
+# ── gum color helpers ────────────────────────────────────────────────────────
+
+hdr()    { gum style --foreground 212 --bold "$1"; }
+orange() { gum style --foreground 208 "$1"; }
+dim()    { gum style --foreground 245 "$1"; }
+green()  { gum style --foreground 2 "$1"; }
+
+# ── Progress helpers ─────────────────────────────────────────────────────────
+# Flat key=value file, one entry per line.
+
+progress_get() {
+	local key="$1"
+	[ -f "$PROGRESS_FILE" ] || { echo ""; return 0; }
+	grep -m1 "^${key}=" "$PROGRESS_FILE" 2>/dev/null | cut -d= -f2- || echo ""
+}
+
+progress_set() {
+	local key="$1" val="$2"
+	mkdir -p "$SQUAREBOX_DIR"
+	touch "$PROGRESS_FILE"
+	if grep -q "^${key}=" "$PROGRESS_FILE" 2>/dev/null; then
+		sed -i "s|^${key}=.*|${key}=${val}|" "$PROGRESS_FILE"
+	else
+		printf '%s=%s\n' "$key" "$val" >> "$PROGRESS_FILE"
+	fi
+}
+
+skill_level()   { progress_get "skill_level" || echo "beginner"; }
+is_complete()   { [ "$(progress_get "$1")" = "complete" ]; }
+mark_complete() { progress_set "$1" "complete"; }
+
+# ── Tool availability helpers ────────────────────────────────────────────────
+# Reads the same /workspace/.squarebox/ config files as the rest of squarebox.
+
+has_tool() {
+	local tool="$1"
+	case "$tool" in
+		lazygit|gh-dash|yazi)
+			grep -qw "$tool" "$SQUAREBOX_DIR/tuis" 2>/dev/null ;;
+		tmux|zellij)
+			grep -qw "$tool" "$SQUAREBOX_DIR/multiplexer" 2>/dev/null ;;
+		*)
+			command -v "$tool" &>/dev/null ;;
+	esac
+}
+
+# ── Lesson catalog ───────────────────────────────────────────────────────────
+# Format: "Category|id|display title|tool_to_check|always_available"
+# always_available: "yes" = always show, "optional" = only if tool is installed
+
+ALL_LESSONS=(
+	"Foundation|unix_philosophy|Unix philosophy — why the terminal|none|yes"
+	"Foundation|unix_pipes|Pipes — the Unix toolkit model|none|yes"
+	"Modern Replacements|bat_vs_cat|bat — a better cat|bat|yes"
+	"Modern Replacements|eza_vs_ls|eza — a better ls|eza|yes"
+	"Modern Replacements|rg_vs_grep|ripgrep — a better grep|rg|yes"
+	"Modern Replacements|fd_vs_find|fd — a better find|fd|yes"
+	"Modern Replacements|zoxide_cd|zoxide — a smarter cd|zoxide|yes"
+	"Terminal Productivity|fzf_productivity|fzf — fuzzy everything|fzf|yes"
+	"Terminal Productivity|starship_prompt|starship — your prompt is a dashboard|starship|yes"
+	"Terminal Productivity|gum_scripting|gum — beautiful shell scripts|gum|yes"
+	"Terminal Productivity|glow_markdown|glow — markdown in the terminal|glow|yes"
+	"Terminal Productivity|just_taskrunner|just — a modern make|just|yes"
+	"Git & Diffs|git_delta|delta — better git diffs|delta|yes"
+	"Git & Diffs|difftastic|difftastic — structural diffs|difft|yes"
+	"Git & Diffs|gh_cli|gh — GitHub from the terminal|gh|yes"
+	"Git & Diffs|lazygit_tui|lazygit — git TUI|lazygit|optional"
+	"Data & HTTP|yq_yaml|yq — YAML/JSON on the command line|yq|yes"
+	"Data & HTTP|xh_http|xh — a friendlier curl|xh|yes"
+	"File Management|yazi_files|yazi — terminal file manager|yazi|optional"
+)
+
+# ── Adaptive menu builder ────────────────────────────────────────────────────
+# Builds a prioritized list: incomplete first, complete (✓), unavailable last.
+
+build_menu() {
+	local -n _out=$1
+	_out=()
+
+	local -a incomplete=() complete=() unavailable=()
+
+	for entry in "${ALL_LESSONS[@]}"; do
+		local cat id title tool always
+		IFS='|' read -r cat id title tool always <<< "$entry"
+
+		local available=true
+		if [ "$always" = "optional" ] && ! has_tool "$tool"; then
+			available=false
+		fi
+
+		if ! $available; then
+			unavailable+=("${cat}: ${title} (install ${tool} via sqrbx-setup tuis)|${id}|unavailable")
+		elif is_complete "$id"; then
+			complete+=("✓ ${cat}: ${title}|${id}|complete")
+		else
+			incomplete+=("${cat}: ${title}|${id}|incomplete")
+		fi
+	done
+
+	_out=(
+		${incomplete[@]+"${incomplete[@]}"}
+		${complete[@]+"${complete[@]}"}
+		${unavailable[@]+"${unavailable[@]}"}
+	)
+}
+
+# ── Skill level assessment ───────────────────────────────────────────────────
+
+skill_assessment() {
+	echo
+	hdr "Quick skill check"
+	dim "This adapts the 'Try it' examples in each lesson. You can change it anytime."
+	echo
+
+	local level
+	level=$(gum choose \
+		--header "How comfortable are you with the terminal?" \
+		"New to terminal — I want to understand what's happening" \
+		"Some experience — I know the basics, want to go deeper" \
+		"Daily terminal user — show me the advanced tricks") || level=""
+
+	case "$level" in
+		"New to terminal"*)  progress_set "skill_level" "beginner"     ;;
+		"Some experience"*)  progress_set "skill_level" "intermediate"  ;;
+		"Daily terminal"*)   progress_set "skill_level" "expert"        ;;
+		*)                   progress_set "skill_level" "beginner"     ;;
+	esac
+	green "✓ Skill level set to: $(skill_level)"
+}
+
+# ── Lessons ──────────────────────────────────────────────────────────────────
+
+lesson_unix_philosophy() {
+	local id="unix_philosophy"
+	local title="Unix philosophy — why the terminal"
+
+	gum pager << 'EOF'
+## Unix philosophy — why the terminal  (Bell Labs, 1969)
+
+In 1969, Ken Thompson and Dennis Ritchie built Unix at Bell Labs on a single
+machine — a PDP-7 with 8KB of memory. Everything they wrote had to be small.
+That constraint shaped a design philosophy that still governs the terminal today.
+
+Doug McIlroy, the head of the Bell Labs Computing Science Research Center,
+later distilled the rules:
+
+  "Write programs that do one thing and do it well.
+   Write programs to work together.
+   Write programs to handle text streams, because that is a universal interface."
+
+The first rule explains why `ls` only lists files, `sort` only sorts, and
+`wc` only counts. Each tool has one job. The second rule explains pipes.
+The third rule explains why every command reads from stdin and writes to
+stdout — text is the glue.
+
+This wasn't an aesthetic choice. It was an engineering survival strategy for
+a world with almost no memory and no GUI. The payoff: those same programs,
+unchanged, still run on every Linux and macOS machine today.
+
+**Key concepts:**
+• Do one thing well — composability beats monoliths
+• Text streams as universal interface — everything speaks the same language
+• Programs cooperate through pipes, not shared memory
+• Simplicity is a feature — simple tools survive decades
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  # Count the files in your current directory:"
+			echo "  ls | wc -l"
+			echo
+			echo "  # Find all .sh files and count them:"
+			echo "  find . -name '*.sh' | wc -l"
+			;;
+		intermediate)
+			echo "  # Count unique file extensions in this directory tree:"
+			echo "  find . -type f | sed 's/.*\.//' | sort | uniq -c | sort -rn"
+			;;
+		expert)
+			echo "  # Pipeline that shows the most-changed files in this repo:"
+			echo "  git log --name-only --pretty=format: | grep -v '^$' | sort | uniq -c | sort -rn | head -10"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_unix_pipes() {
+	local id="unix_pipes"
+	local title="Pipes — the Unix toolkit model"
+
+	gum pager << 'EOF'
+## Pipes — the Unix toolkit model  (Unix v3, 1973)
+
+The pipe operator `|` was added to Unix in 1973 by Doug McIlroy. He had been
+lobbying for it since the beginning, scrawling "join" diagrams on whiteboards.
+Ken Thompson implemented it in one night.
+
+A pipe connects the stdout of one process directly to the stdin of the next.
+No files. No shared memory. No coordination. The two processes run
+simultaneously — the left side produces output as fast as the right side
+can consume it.
+
+This is why you can pipe infinite streams:
+
+  yes | head -5     # 'yes' produces infinite output; 'head' stops after 5
+
+The kernel handles the synchronization. You just connect programs with `|`.
+
+**Key concepts:**
+• `|` connects stdout → stdin between processes
+• Processes run concurrently — it's streaming, not buffered
+• stdin/stdout/stderr are file descriptors 0, 1, 2
+• `>` redirects stdout to a file; `2>` redirects stderr; `2>&1` merges them
+• `/dev/null` is the black hole — discard output you don't want
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  # See only the first 5 lines of a long command:"
+			echo "  ls -la | head -5"
+			echo
+			echo "  # Search for a word in your shell history:"
+			echo "  history | grep git"
+			;;
+		intermediate)
+			echo "  # Find the 5 largest files in the current directory tree:"
+			echo "  find . -type f -exec du -sh {} + | sort -rh | head -5"
+			;;
+		expert)
+			echo "  # Real-time log filtering (Ctrl+C to stop):"
+			echo "  tail -f /var/log/syslog 2>/dev/null | grep --line-buffered ERROR || echo 'try: journalctl -f | grep ERROR'"
+			echo
+			echo "  # Use process substitution to diff two command outputs:"
+			echo "  diff <(ls /usr/bin | sort) <(ls /usr/local/bin | sort)"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_bat_vs_cat() {
+	local id="bat_vs_cat"
+	local title="bat — a better cat"
+
+	gum pager << 'EOF'
+## bat — a better cat  (2018, David Peter, Rust)
+
+`cat` was written in 1971 as part of Unix Version 1. Its job: concatenate
+files to stdout. Nothing more. For 47 years, that was enough.
+
+In 2018, David Peter wrote `bat` to answer a question the terminal world had
+been quietly asking: what if `cat` knew what it was looking at?
+
+bat adds syntax highlighting (using the same grammar files as Sublime Text),
+automatic git diff markers in the gutter, line numbers, and smart paging. It
+respects your terminal's color scheme and supports 200+ languages out of the
+box.
+
+In squarebox, `cat` is aliased to `bat --paging=never`. You get colors
+everywhere without the pager interrupting short files. For long files, bat
+automatically invokes the pager.
+
+**Key concepts:**
+• Syntax highlighting via Sublime Text-compatible grammars
+• Git integration — shows changed lines in the left gutter (A/M/D)
+• `--paging=never` for scripting; `--paging=always` forces the pager
+• `bat --style=plain` hides line numbers and headers (pure output)
+• `bat --language=yaml file.conf` forces a specific language
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  bat ~/.bashrc"
+			echo "  bat --style=plain ~/.bashrc    # no line numbers or headers"
+			;;
+		intermediate)
+			echo "  bat ~/.bashrc"
+			echo "  bat --language=yaml /usr/local/lib/squarebox/tools.yaml"
+			echo "  bat --list-themes | head -10   # see available themes"
+			;;
+		expert)
+			echo "  bat --diff ~/.bashrc            # show only git-changed lines"
+			echo "  bat -A ~/.bashrc                # show non-printable characters"
+			echo "  bat --theme=TwoDark ~/.bashrc   # try a different theme"
+			echo "  # Use bat as a colorizing pager for man pages:"
+			echo "  export MANPAGER=\"sh -c 'col -bx | bat -l man -p'\""
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_eza_vs_ls() {
+	local id="eza_vs_ls"
+	local title="eza — a better ls"
+
+	gum pager << 'EOF'
+## eza — a better ls  (2023, Christina Sørensen — fork of exa by ogham)
+
+`ls` dates to Unix Version 1 (1971). It lists files. That's all it has ever
+done, and it hasn't changed much since.
+
+The modern terminal can show icons, color-code by file type, display git
+status inline, and render directory trees. `ls` can't do any of that.
+
+`exa` (by Ben "ogham" Atkinson, 2014) was the first popular Rust rewrite of
+`ls`. When maintenance stalled, Christina Sørensen forked it as `eza` in 2023.
+squarebox ships `eza` and aliases `ls` to `eza --icons`.
+
+**Key concepts:**
+• `--icons` — file-type icons (requires a Nerd Font in your terminal)
+• `--git` — show git status (M, N, I) next to each file
+• `--tree` — recursive directory tree view
+• `--long` / `-l` — long listing with permissions, size, date
+• `--all` / `-a` — show hidden files
+• `--sort=size` / `--sort=modified` — sort by any field
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  ls                      # aliased to eza --icons"
+			echo "  ll                      # aliased to eza -la --icons"
+			echo "  lt                      # aliased to eza --tree --level=2 --long --icons --git"
+			;;
+		intermediate)
+			echo "  eza --long --git        # long listing with git status"
+			echo "  eza --tree --level=3    # directory tree, 3 levels deep"
+			echo "  eza --sort=size -la     # sort by file size"
+			;;
+		expert)
+			echo "  eza -la --git --octal-permissions   # show octal perms"
+			echo "  eza --tree --level=2 --git-ignore   # hide .gitignored files"
+			echo "  eza -la --sort=modified --reverse   # newest files last"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_rg_vs_grep() {
+	local id="rg_vs_grep"
+	local title="ripgrep — a better grep"
+
+	gum pager << 'EOF'
+## ripgrep — a better grep  (2016, Andrew Gallant / BurntSushi, Rust)
+
+`grep` was written by Ken Thompson in one night in 1973. He was inspired by
+the `g/re/p` command in the `ed` editor (global / regular expression / print).
+It has been the standard for searching text ever since.
+
+ripgrep was created by Andrew Gallant in 2016 because even the best
+alternatives (`ag`, `ack`) were too slow on very large codebases. ripgrep uses
+Rust's regex engine and searches files in parallel. It is typically 5-10x
+faster than `grep` on large repos.
+
+What makes it genuinely different:
+• Respects `.gitignore` and `.ignore` files by default — won't search `node_modules`
+• Unicode-correct by default
+• Automatically searches binary files differently
+• Smart case: lowercase patterns are case-insensitive; uppercase forces case-sensitivity
+
+In squarebox, `rg` is available directly. No alias — it's fast enough to
+always reach for first.
+
+**Key concepts:**
+• `rg pattern` — search current directory recursively
+• `rg -l pattern` — list filenames only (not matching lines)
+• `rg -i pattern` — case-insensitive (smart case handles this automatically)
+• `rg -t py pattern` — search only Python files
+• `rg --no-ignore pattern` — override .gitignore
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  rg TODO                          # find TODOs in this directory"
+			echo "  rg 'function' --type sh          # find shell functions"
+			;;
+		intermediate)
+			echo "  rg -l 'gum' .                    # list files containing 'gum'"
+			echo "  rg 'alias' ~/.bashrc             # search a specific file"
+			echo "  rg --stats 'TODO' .              # show match stats"
+			;;
+		expert)
+			echo "  rg -e 'TODO' -e 'FIXME' .        # multiple patterns"
+			echo "  rg -U 'function.*\\n.*{' --type sh  # multiline pattern"
+			echo "  rg --type-add 'conf:*.toml' -t conf 'key'"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_fd_vs_find() {
+	local id="fd_vs_find"
+	local title="fd — a better find"
+
+	gum pager << 'EOF'
+## fd — a better find  (2017, David Peter, Rust)
+
+`find` was written in the early 1970s. Its flag syntax is famously strange:
+`-name` instead of `--name`, positional arguments that must appear in a
+specific order, and behavior that varies between GNU and BSD versions.
+
+David Peter (the same author who wrote `bat`) wrote `fd` in 2017 because he
+was tired of looking up `find` syntax. `fd` has sane defaults: colorized
+output, smart case, respects `.gitignore`, faster parallel search, and a
+simple syntax.
+
+**Key concepts:**
+• `fd pattern` — find files matching pattern (regex by default)
+• `fd -e sh` — find by extension
+• `fd -t d` — find directories only (`-t f` for files, `-t l` for symlinks)
+• `fd -H` — include hidden files (`.gitignore` is still respected)
+• `fd --no-ignore` — override `.gitignore`
+• `fd pattern -x cmd` — run a command on each result (like `find -exec`)
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  fd .sh                          # find all .sh files"
+			echo "  fd -t d src                     # find directories named 'src'"
+			;;
+		intermediate)
+			echo "  fd -e yaml -e yml               # find YAML files"
+			echo "  fd -H .env                      # find hidden .env files"
+			echo "  fd . --max-depth 2              # limit search depth"
+			;;
+		expert)
+			echo "  fd -e sh -x chmod +x {}         # make all .sh files executable"
+			echo "  fd -t f -S +1M                  # find files larger than 1MB"
+			echo "  fd '^setup' --full-path /        # match full path"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_zoxide_cd() {
+	local id="zoxide_cd"
+	local title="zoxide — a smarter cd"
+
+	gum pager << 'EOF'
+## zoxide — a smarter cd  (2020, Ajeet D'Souza, Rust)
+
+`cd` is as old as Unix. It moves you to a directory. That's it.
+
+The problem: most of your time is spent moving between a small number of
+frequently-used directories. Typing the full path every time is friction.
+
+`z` (by Rupa, 2009) introduced frecency — a blend of frequency and recency.
+Directories you visit often and recently rise to the top. Type `z foo` and it
+jumps to the most frecent directory that matches "foo". `autojump` (2009) had
+a similar idea but was slower.
+
+Ajeet D'Souza wrote `zoxide` in 2020 as a faster, cross-shell implementation.
+squarebox initialises zoxide in your shell and aliases it to `cd` — so every
+`cd` you run is also training it.
+
+**Key concepts:**
+• Every directory you `cd` into is added to the frecency database
+• `cd foo` — jump to the highest-frecency match for "foo"
+• `cd foo bar` — match a path containing both "foo" and "bar"
+• `zi` — interactive picker (uses fzf) — browse the database
+• `zoxide query --list` — see your full frecency database
+• It gets smarter the more you use it
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  cd /workspace          # normal cd also trains zoxide"
+			echo "  cd workspace           # jump to any frecent dir matching 'workspace'"
+			;;
+		intermediate)
+			echo "  zi                     # interactive picker (needs fzf)"
+			echo "  zoxide query --list    # see your frecency database"
+			;;
+		expert)
+			echo "  zoxide query --list --score   # show with frecency scores"
+			echo "  zoxide remove /old/path       # remove a stale entry"
+			echo "  # zoxide also works with z and zi as aliases if preferred:"
+			echo "  # eval \"\$(zoxide init bash --cmd z)\""
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_fzf_productivity() {
+	local id="fzf_productivity"
+	local title="fzf — fuzzy everything"
+
+	gum pager << 'EOF'
+## fzf — fuzzy everything  (2013, Junegunn Choi, Go)
+
+Junegunn Choi wrote fzf in 2013 as a Vim plugin to fuzzy-search file paths.
+It quickly grew beyond Vim — today it's one of the most-installed terminal
+tools in the world.
+
+The core idea: pipe any list of text into fzf, type to filter, press enter
+to select. That's it. The genius is in what you pipe into it.
+
+squarebox configures three shell key bindings out of the box:
+• Ctrl+T — fuzzy-search files in the current directory
+• Ctrl+R — fuzzy-search your shell history (replaces the default history search)
+• Alt+C  — fuzzy-search directories and cd into one
+
+**Key concepts:**
+• `fzf` — pipe any list in, get one selection out
+• `**<Tab>` — trigger fzf completion on any command (try: `vim **<Tab>`)
+• `--preview 'cmd {}'` — show a preview pane (squarebox uses bat for this)
+• `--multi` / `-m` — select multiple items
+• `-q "initial query"` — pre-fill the search
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  # Press Ctrl+R to fuzzy-search your command history"
+			echo "  # Press Ctrl+T to fuzzy-search files"
+			echo "  ff                             # aliased: fzf with bat preview"
+			;;
+		intermediate)
+			echo "  ls | fzf                       # filter any list"
+			echo "  rg --files | fzf               # fuzzy-select from ripgrep results"
+			echo "  vim \"\$(fzf)\"                   # fuzzy-select a file to edit"
+			;;
+		expert)
+			echo "  # Select multiple files and open all in vim:"
+			echo "  vim \$(fzf -m)"
+			echo
+			echo "  # Kill a process interactively:"
+			echo "  kill \$(ps aux | fzf | awk '{print \$2}')"
+			echo
+			echo "  # Git checkout a branch interactively:"
+			echo "  git checkout \$(git branch | fzf | tr -d ' *')"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_starship_prompt() {
+	local id="starship_prompt"
+	local title="starship — your prompt is a dashboard"
+
+	gum pager << 'EOF'
+## starship — your prompt is a dashboard  (2019, starship-rs, Rust)
+
+The default bash prompt (`\u@\h:\w\$`) shows your username, hostname, and
+current directory. That's all. For decades, customising it required learning
+arcane shell escape codes and writing fragile bash.
+
+Spaceship Prompt (2016) changed this for zsh users — a prompt that showed
+git status, language versions, and more, context-aware. starship was born in
+2019 to bring that idea to every shell (bash, zsh, fish, and more) using a
+single TOML config file and a Rust binary fast enough not to slow down each
+keypress.
+
+squarebox configures starship with the default config at
+`~/.config/starship.toml`. Every segment is optional and context-aware: git
+info only appears in a git repo, Python version only in a Python project.
+
+**Key concepts:**
+• Configured via `~/.config/starship.toml`
+• Context-aware: only shows relevant info for current directory
+• Git segment: branch, dirty state, ahead/behind tracking
+• Language detection: shows Node/Python/Go/Rust version automatically
+• `starship explain` — shows which segments are active right now
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  starship explain               # see what each prompt part means"
+			echo "  cat ~/.config/starship.toml    # view the config"
+			;;
+		intermediate)
+			echo "  starship explain               # active modules right now"
+			echo "  starship timings               # how long each module takes"
+			echo "  # Edit ~/.config/starship.toml to customise — e.g.:"
+			echo "  # [directory]"
+			echo "  # truncation_length = 3"
+			;;
+		expert)
+			echo "  starship timings               # identify slow modules"
+			echo "  starship preset no-nerd-font -o ~/.config/starship.toml  # switch preset"
+			echo "  # Custom module example (add to starship.toml):"
+			echo "  # [custom.docker]"
+			echo "  # command = 'docker ps -q | wc -l'"
+			echo "  # when = 'command -v docker'"
+			echo "  # symbol = '🐳 '"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_gum_scripting() {
+	local id="gum_scripting"
+	local title="gum — beautiful shell scripts"
+
+	gum pager << 'EOF'
+## gum — beautiful shell scripts  (2022, Charmbracelet, Go)
+
+Shell scripts have always been functional but ugly. Adding a menu, a spinner,
+or styled output has traditionally meant writing raw ANSI escape codes or
+depending on `dialog` — a tool from 1994.
+
+Charmbracelet built gum in 2022 as part of an ecosystem for terminal UIs (also:
+bubbletea, lip gloss, wish). gum gives shell scripts access to polished TUI
+components with a single command.
+
+squarebox's own `setup.sh` is built almost entirely with gum — every menu,
+spinner, input prompt, and styled header you see during setup is gum. This
+very script uses `gum pager` to show you this text.
+
+**Key concepts:**
+• `gum choose` — interactive single or multi-select menu
+• `gum confirm` — yes/no prompt with a default
+• `gum input` — text input with a prompt
+• `gum spin --spinner dot --title "..." -- cmd` — spinner while a command runs
+• `gum style --foreground 212 --bold "text"` — styled output
+• `gum pager` — scrollable text pager (you're using it now)
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  gum choose apple banana cherry"
+			echo "  gum confirm 'Do you like terminals?' && echo 'Great!'"
+			;;
+		intermediate)
+			echo "  gum choose --no-limit --header 'Pick tools:' bat rg fd fzf"
+			echo "  name=\$(gum input --placeholder 'Your name')"
+			echo "  echo \"Hello, \$name\""
+			;;
+		expert)
+			echo "  # Spinner around a slow command:"
+			echo "  gum spin --spinner dot --title 'Fetching...' -- sleep 3"
+			echo
+			echo "  # Styled box:"
+			echo "  gum style --border double --padding '1 2' --border-foreground 208 'Done! 📦'"
+			echo
+			echo "  # Full interactive script pattern:"
+			echo "  choice=\$(gum choose --header 'What to do?' Deploy Rollback Quit)"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_glow_markdown() {
+	local id="glow_markdown"
+	local title="glow — markdown in the terminal"
+
+	gum pager << 'EOF'
+## glow — markdown in the terminal  (2019, Charmbracelet, Go)
+
+Markdown is ubiquitous — READMEs, documentation, notes, changelogs. Reading
+it as raw text works, but the asterisks and hashes clutter the content.
+Opening a browser just to read a README is friction.
+
+Charmbracelet built glow to render markdown beautifully inside the terminal,
+with proper headings, bold/italic, code blocks with syntax highlighting, and
+a scrollable pager. It also has a TUI for browsing a directory of markdown
+files.
+
+In squarebox, `glow` is always available. It's useful for reading any
+markdown documentation without leaving the terminal.
+
+**Key concepts:**
+• `glow file.md` — render a markdown file
+• `glow -p file.md` — open in pager (scrollable, press q to quit)
+• `glow .` — browse all markdown files in the current directory (TUI)
+• `glow https://...` — render a remote URL (if network available)
+• Works well with READMEs, changelogs, docs
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  glow /home/dev/README.md 2>/dev/null || glow /usr/local/lib/squarebox/tools.yaml 2>/dev/null || echo 'try: glow <any .md file>'"
+			;;
+		intermediate)
+			echo "  glow -p /home/dev/README.md 2>/dev/null || echo 'try: glow -p <file.md>'"
+			echo "  # Or browse all markdown in current directory:"
+			echo "  glow ."
+			;;
+		expert)
+			echo "  # Render stdin as markdown:"
+			echo "  echo '# Hello\n**bold** and _italic_' | glow -"
+			echo
+			echo "  # Combine with bat for non-markdown:"
+			echo "  glow CHANGELOG.md 2>/dev/null || bat CHANGELOG.md 2>/dev/null"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_just_taskrunner() {
+	local id="just_taskrunner"
+	local title="just — a modern make"
+
+	gum pager << 'EOF'
+## just — a modern make  (2016, Casey Rodarmor, Rust)
+
+`make` was written by Stuart Feldman at Bell Labs in 1976. It was designed
+to automate compilation — tracking which files changed and rebuilding only
+what was necessary. Developers have been misusing it as a task runner ever
+since, enduring its whitespace rules (tabs only, never spaces) and its
+tendency to silently fail.
+
+Casey Rodarmor wrote `just` in 2016 as a pure task runner — no dependency
+tracking, no compilation model. Just a list of named recipes with commands.
+Clean syntax, useful defaults, and proper error messages.
+
+**Key concepts:**
+• `just` — list available recipes (runs the first recipe if only one exists)
+• `just --list` — always list all recipes with descriptions
+• `just <recipe>` — run a specific recipe
+• `just <recipe> arg=value` — pass arguments to a recipe
+• Recipes are defined in `justfile` (case-insensitive)
+• `@` prefix silences command echoing; `#!/usr/bin/env python3` for non-bash
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  just --list                    # see if a justfile exists here"
+			echo "  # Create a simple justfile:"
+			echo "  echo 'hello:\\n    echo Hello, world!' > /tmp/test-justfile"
+			echo "  just --justfile /tmp/test-justfile hello"
+			;;
+		intermediate)
+			echo "  just --list                    # list recipes with descriptions"
+			echo "  # justfile with variables:"
+			echo "  # name := 'world'"
+			echo "  # hello:"
+			echo "  #     echo Hello, {{name}}!"
+			;;
+		expert)
+			echo "  # justfile with dependencies and args:"
+			echo "  # build target='debug':"
+			echo "  #     cargo build --{{target}}"
+			echo "  # test: build"
+			echo "  #     cargo test"
+			echo "  just --dry-run <recipe>        # preview commands without running"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_git_delta() {
+	local id="git_delta"
+	local title="delta — better git diffs"
+
+	gum pager << 'EOF'
+## delta — better git diffs  (2019, Dan Davison, Rust)
+
+Git's built-in diff output was designed for patch files — plain text with `+`
+and `-` markers. It works, but reading large diffs is exhausting: no syntax
+highlighting, no word-level diff, no line numbers.
+
+Dan Davison wrote `delta` in 2019. It reads git's diff output and renders it
+with syntax highlighting (via bat's grammars), word-level change highlighting,
+line numbers, and an optional side-by-side view.
+
+squarebox configures `delta` as git's default pager in `~/.config/git/config`.
+Every `git diff`, `git log -p`, and `git show` is routed through it
+automatically.
+
+**Key concepts:**
+• Configured in `~/.config/git/config` — automatic, no flags needed
+• `git diff` — now syntax-highlighted with word-level diffs
+• Side-by-side mode: add `side-by-side = true` under `[delta]` in gitconfig
+• `n` / `N` — navigate between changed files (in navigate mode)
+• `delta file1 file2` — diff two arbitrary files
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  git diff HEAD                  # see delta in action"
+			echo "  git log -p --follow -1 HEAD    # see last commit with delta"
+			;;
+		intermediate)
+			echo "  git diff HEAD                  # syntax-highlighted diff"
+			echo "  delta file1 file2              # diff two files directly"
+			echo "  git show HEAD                  # see a commit diff"
+			;;
+		expert)
+			echo "  # Enable side-by-side in ~/.config/git/config:"
+			echo "  # [delta]"
+			echo "  #   side-by-side = true"
+			echo "  #   navigate = true"
+			echo
+			echo "  # Use delta as a standalone differ:"
+			echo "  diff -u old.py new.py | delta"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_difftastic() {
+	local id="difftastic"
+	local title="difftastic — structural diffs"
+
+	gum pager << 'EOF'
+## difftastic — structural diffs  (2021, Wilfred Hughes, Rust)
+
+delta makes diffs more readable by adding color. But it still diffs text
+line-by-line. Move a function in your code, and delta shows the entire
+function as deleted in one place and added in another — even if you only
+changed one line inside it.
+
+Wilfred Hughes wrote difftastic in 2021. It uses tree-sitter (the same parser
+library used in Neovim and GitHub's code view) to understand the syntax of
+your code. It diffs the syntax tree, not the text. Moving a function is shown
+as a move, not a delete-and-add.
+
+difftastic supports 50+ languages and falls back to a line-based diff for
+unsupported files.
+
+**Key concepts:**
+• `difft file1 file2` — diff two files with syntax awareness
+• `GIT_EXTERNAL_DIFF=difft git diff` — use as git differ for one command
+• `git difftool --tool=difftastic` — use via difftool
+• Best for: refactored code, moved functions, formatting-only changes
+• Falls back gracefully to line-based diff for unsupported file types
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  difft --version               # confirm it's available"
+			echo "  difft ~/.bashrc ~/.bashrc      # diff a file with itself (shows nothing)"
+			;;
+		intermediate)
+			echo "  difft file1 file2             # compare two files"
+			echo "  GIT_EXTERNAL_DIFF=difft git diff HEAD  # use with git"
+			;;
+		expert)
+			echo "  GIT_EXTERNAL_DIFF=difft git diff HEAD"
+			echo "  # Add to ~/.config/git/config as a difftool:"
+			echo "  # [difftool \"difftastic\"]"
+			echo "  #   cmd = difft \"\$LOCAL\" \"\$REMOTE\""
+			echo "  # [diff]"
+			echo "  #   tool = difftastic"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_gh_cli() {
+	local id="gh_cli"
+	local title="gh — GitHub from the terminal"
+
+	gum pager << 'EOF'
+## gh — GitHub from the terminal  (2020, GitHub, Go)
+
+For decades, interacting with GitHub meant opening a browser. Pull requests,
+issues, reviews — all web-only. The git CLI only knew about commits and
+branches, not the GitHub layer on top.
+
+GitHub released the `gh` CLI in 2020 to close that gap. Every major GitHub
+operation is available from the terminal: creating PRs, reviewing code,
+watching CI, managing issues, cloning repos.
+
+squarebox's setup wizard authenticates `gh` for you and persists the
+credentials across rebuilds in `/workspace/.squarebox/gh`.
+
+**Key concepts:**
+• `gh auth status` — check if authenticated
+• `gh pr list` — list open pull requests
+• `gh pr create` — open a PR for the current branch (prompts for details)
+• `gh pr view --web` — open current PR in browser
+• `gh issue list` / `gh issue create`
+• `gh run list` — list recent CI runs
+• `gh repo clone owner/repo` — clone without fiddling with URLs
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  gh auth status                 # are you logged in?"
+			echo "  gh --help                      # explore available commands"
+			;;
+		intermediate)
+			echo "  gh pr list                     # list open PRs in current repo"
+			echo "  gh issue list --assignee @me   # issues assigned to you"
+			echo "  gh run list                    # recent CI runs"
+			;;
+		expert)
+			echo "  gh pr create --draft --title 'WIP: ...' --body '...' --base main"
+			echo "  gh api /repos/:owner/:repo/commits | jq '.[].commit.message'"
+			echo "  gh extension install <user/repo>  # install a gh extension"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_lazygit_tui() {
+	local id="lazygit_tui"
+	local title="lazygit — git TUI"
+
+	gum pager << 'EOF'
+## lazygit — git TUI  (2018, Jesse Duffield, Go)
+
+The git CLI is powerful but not intuitive. Staging individual hunks requires
+`git add -p`. Rebasing interactively requires `git rebase -i`. Viewing the
+commit graph requires `git log --graph --oneline --all`. Each is its own
+incantation.
+
+Jesse Duffield wrote lazygit in 2018 as a full-screen TUI for git — panels
+for status, commits, branches, stash, and files, all navigable with vim-style
+keys and with context-sensitive commands available via a single keypress.
+
+**Key concepts:**
+• `lazygit` — launch (or use `lg` alias in squarebox)
+• Arrow keys or `hjkl` — navigate panels
+• Space — stage/unstage a file or hunk
+• `c` — commit; `C` — commit with a verbose message
+• `P` — push; `p` — pull
+• `m` — merge; `r` — rebase
+• `?` — show help for the current panel
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  lg                             # launch lazygit (aliased)"
+			echo "  # Inside lazygit: press ? to see help, q to quit"
+			;;
+		intermediate)
+			echo "  lg                             # navigate panels with arrow keys"
+			echo "  # Space to stage, c to commit, P to push"
+			;;
+		expert)
+			echo "  lg                             # try 'e' to open a file in your editor"
+			echo "  # In commits panel: 'g' to reset, 'r' to rebase interactively"
+			echo "  # Custom keybindings: ~/.config/lazygit/config.yml"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_yq_yaml() {
+	local id="yq_yaml"
+	local title="yq — YAML/JSON on the command line"
+
+	gum pager << 'EOF'
+## yq — YAML/JSON on the command line  (2015+, Mike Farah, Go)
+
+`jq` (2012, Stephen Dolan) transformed how developers work with JSON on the
+command line — a small, powerful query language for JSON streams. But modern
+infrastructure is full of YAML: Kubernetes manifests, GitHub Actions, Docker
+Compose files, Helm charts.
+
+Mike Farah wrote `yq` as `jq` for YAML. It reads YAML (and JSON, TOML, XML,
+CSV), applies jq-compatible queries, and can write back in place. squarebox
+uses `yq` internally to parse `tools.yaml` at build time.
+
+**Key concepts:**
+• `yq '.key' file.yaml` — extract a value (jq-compatible syntax)
+• `yq -i '.key = "value"' file.yaml` — edit in place
+• `yq -o=json file.yaml` — convert YAML to JSON
+• `yq -o=yaml file.json` — convert JSON to YAML
+• `yq '.items[].name' file.yaml` — array traversal
+• `yq 'keys' file.yaml` — list top-level keys
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  yq --version"
+			echo "  # View tools.yaml:"
+			echo "  yq '.tools | keys' /usr/local/lib/squarebox/tools.yaml 2>/dev/null || echo 'try: yq .key file.yaml'"
+			;;
+		intermediate)
+			echo "  yq '.tools.gum.repo' /usr/local/lib/squarebox/tools.yaml 2>/dev/null"
+			echo "  echo 'name: world' | yq '.name'"
+			echo "  echo '{\"x\": 1}' | yq -o=yaml ."
+			;;
+		expert)
+			echo "  # Edit a file in place:"
+			echo "  yq -i '.version = \"2.0\"' /tmp/test.yaml"
+			echo
+			echo "  # Merge two YAML files:"
+			echo "  yq '. * load(\"overrides.yaml\")' base.yaml"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_xh_http() {
+	local id="xh_http"
+	local title="xh — a friendlier curl"
+
+	gum pager << 'EOF'
+## xh — a friendlier curl  (2021, ducaale, Rust)
+
+`curl` (1997, Daniel Stenberg) is the universal HTTP client. It runs on
+everything, supports every protocol, and is indispensable. It's also verbose
+to use: `curl -X POST -H 'Content-Type: application/json' -d '...'`.
+
+`httpie` (2012, Jakub Roztočil, Python) simplified this with a clean syntax
+— `http POST api.example.com/items name=Widget` — but its Python startup time
+made it sluggish.
+
+`xh` (2021) implements the httpie interface in Rust. Fast startup. Same
+clean syntax. Compatible with httpie aliases and habits. squarebox includes
+`xh` as the go-to HTTP client for quick API calls.
+
+**Key concepts:**
+• `xh get https://api.github.com` — simple GET
+• `xh post example.com/api key=value key2=value2` — JSON body (key=value)
+• `xh get example.com 'X-Header:value'` — custom header
+• `xh --download url` — download a file
+• `xh --follow url` — follow redirects
+• `xh --print=b url` — print only the response body (default: headers + body)
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  xh get https://api.github.com  # GitHub API root (no auth needed)"
+			;;
+		intermediate)
+			echo "  xh get https://api.github.com/repos/charmbracelet/gum/releases/latest | head -30"
+			echo "  xh --print=b https://api.github.com/zen   # GitHub's 'wisdom'"
+			;;
+		expert)
+			echo "  # POST JSON body:"
+			echo "  xh post httpbin.org/post name=test value:=42 active:=true"
+			echo
+			echo "  # Download a file:"
+			echo "  xh --download --output /tmp/test.json https://api.github.com/zen"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+lesson_yazi_files() {
+	local id="yazi_files"
+	local title="yazi — terminal file manager"
+
+	gum pager << 'EOF'
+## yazi — terminal file manager  (2023, sxyazi, Rust)
+
+Terminal file managers have existed since the 1980s (Midnight Commander, 1994
+is still maintained). But most either look dated or require heavy configuration.
+
+sxyazi wrote yazi in 2023 — a modern, async file manager in Rust with
+vim-keybindings, a preview pane that uses bat for text files and can render
+images (in supporting terminals), bulk rename, a plugin system, and
+sub-shell integration that changes your terminal's directory when you quit.
+
+**Key concepts:**
+• `yazi` — launch (or `y` if aliased)
+• `hjkl` or arrow keys — navigate
+• Enter — open file; `o` — open with a specific app
+• Space — select files; `y` — yank (copy); `p` — paste; `d` — delete
+• `r` — rename; `a` — create new file/directory
+• `/` — search; `z` — jump with zoxide
+• `q` — quit (stays in current directory); `Q` — quit to shell
+
+(press q to return)
+EOF
+
+	echo
+	hdr "Try it:"
+	local sl; sl=$(skill_level)
+	case "$sl" in
+		beginner)
+			echo "  yazi                           # launch the file manager"
+			echo "  # Arrow keys to navigate, q to quit"
+			;;
+		intermediate)
+			echo "  yazi                           # try hjkl navigation"
+			echo "  # Inside: press / to search, z to jump with zoxide"
+			;;
+		expert)
+			echo "  yazi                           # try 'y' to yank, 'p' to paste"
+			echo "  # Shell integration (cwd tracking):"
+			echo "  # function y() { local tmp=\$(mktemp); yazi \"\$@\" --cwd-file=\"\$tmp\"; cd \"\$(cat \"\$tmp\")\"; }"
+			;;
+	esac
+	echo
+
+	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
+}
+
+# ── Main menu ────────────────────────────────────────────────────────────────
+
+show_banner() {
+	gum style \
+		--border double \
+		--padding "0 2" \
+		--border-foreground 208 \
+		"🟧📦 sqrbx-learn  (skill: $(skill_level))"
+}
+
+main() {
+	# Guard: requires an interactive terminal
+	if ! [ -t 0 ] || ! [ -t 1 ]; then
+		echo "sqrbx-learn requires an interactive terminal." >&2
+		exit 1
+	fi
+
+	# First-launch: run skill assessment if no level set
+	if [ -z "$(skill_level)" ] || [ "$(skill_level)" = "" ]; then
+		show_banner
+		skill_assessment
+	fi
+
+	while true; do
+		echo
+		show_banner
+		echo
+
+		local -a menu_entries
+		build_menu menu_entries
+
+		# Extract display labels for gum choose
+		local -a labels=()
+		for entry in "${menu_entries[@]+"${menu_entries[@]}"}"; do
+			labels+=("${entry%%|*}")
+		done
+		labels+=("── Change skill level" "── Exit")
+
+		local choice
+		choice=$(gum choose \
+			--height 24 \
+			--header "Select a lesson (↑↓ or jk to navigate, enter to select):" \
+			"${labels[@]}") || break
+
+		case "$choice" in
+			"── Exit") break ;;
+			"── Change skill level")
+				skill_assessment
+				continue
+				;;
+		esac
+
+		# Find the lesson ID for the chosen label
+		local found=false
+		for entry in "${menu_entries[@]+"${menu_entries[@]}"}"; do
+			local label id state
+			IFS='|' read -r label id state <<< "$entry"
+			if [ "$label" = "$choice" ]; then
+				found=true
+				if [ "$state" = "unavailable" ]; then
+					echo
+					gum style --foreground 214 "This lesson requires a tool not in your setup."
+					dim "Run: sqrbx-setup tuis"
+					sleep 2
+				else
+					echo
+					SKILL_LEVEL=$(skill_level)
+					export SKILL_LEVEL
+					"lesson_${id}"
+					echo
+					gum confirm "Return to menu?" --default=true || break 2
+				fi
+				break
+			fi
+		done
+		$found || break
+	done
+
+	echo
+	dim "Progress saved to: $PROGRESS_FILE"
+}
+
+# ── CLI flags ────────────────────────────────────────────────────────────────
+
+usage() {
+	cat <<-EOF
+	sqrbx-learn — interactive terminal learning guide
+
+	Usage:
+	  sqrbx-learn            Start or continue learning
+	  sqrbx-learn --progress Show your progress
+	  sqrbx-learn --reset    Reset all progress
+	  sqrbx-learn --help     Show this help
+
+	Inside the guide:
+	  ↑↓ / jk    Navigate lessons
+	  Enter       Select a lesson
+	  q           Quit a pager, return to menu
+
+	Progress is stored in: $PROGRESS_FILE
+	EOF
+}
+
+case "${1:-}" in
+	--help|-h)
+		usage
+		exit 0
+		;;
+	--progress)
+		if [ -f "$PROGRESS_FILE" ]; then
+			bat --style=plain "$PROGRESS_FILE" 2>/dev/null || cat "$PROGRESS_FILE"
+		else
+			echo "No progress recorded yet. Run sqrbx-learn to get started."
+		fi
+		exit 0
+		;;
+	--reset)
+		gum confirm "Reset all learn progress?" --default=false \
+			&& rm -f "$PROGRESS_FILE" \
+			&& green "✓ Progress reset." \
+			|| dim "Cancelled."
+		exit 0
+		;;
+	"")
+		main
+		;;
+	*)
+		echo "Unknown option: $1" >&2
+		usage >&2
+		exit 1
+		;;
+esac

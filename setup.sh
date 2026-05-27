@@ -17,7 +17,7 @@ done
 
 # If --rerun with no specific sections, run all sections
 if $SB_RERUN && [ ${#SB_SECTIONS[@]} -eq 0 ]; then
-	SB_SECTIONS=(git github ai editors tuis multiplexers sdks shell)
+	SB_SECTIONS=(git github ai editors tuis multiplexers sdks shell learn)
 fi
 
 should_run() {
@@ -1515,6 +1515,64 @@ case "$shell_choice" in
 		;;
 esac
 fi # should_run shell
+
+# ── Learn mode ───────────────────────────────────────────────────────────────
+if should_run learn; then
+
+LEARN_CONFIG="/workspace/.squarebox/learn"
+
+learn_prev=""
+if [ -f "$LEARN_CONFIG" ]; then
+	learn_prev=$(cat "$LEARN_CONFIG")
+fi
+
+if $INTERACTIVE; then
+	echo
+	if $HAS_GUM; then
+		gum style --foreground 212 --bold "Learn Mode"
+	else
+		echo "── Learn Mode ──────────────────────────────────────────────────────────────"
+	fi
+	echo "sqrbx-learn is an interactive guide to the tools in your squarebox,"
+	echo "covering their history and how to use them effectively."
+	echo
+
+	if $HAS_GUM; then
+		gum_selected=""
+		[ "$learn_prev" = "enabled" ] && gum_selected="Enable learn mode (sqrbx-learn)"
+		gum_args=(--header "Enable learn mode?")
+		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
+		learn_pick=$(gum choose "${gum_args[@]}" \
+			"Enable learn mode (sqrbx-learn)" \
+			"Skip") || learn_pick=""
+		case "$learn_pick" in
+			"Enable"*) learn_choice="enabled" ;;
+			*)         learn_choice="" ;;
+		esac
+	else
+		if [ "$learn_prev" = "enabled" ]; then
+			read -rp "Keep learn mode enabled? [Y/n]: " _lr
+			case "${_lr:-Y}" in [Nn]*) learn_choice="" ;; *) learn_choice="enabled" ;; esac
+		else
+			read -rp "Enable learn mode (sqrbx-learn)? [y/N]: " _lr
+			case "${_lr:-N}" in [Yy]*) learn_choice="enabled" ;; *) learn_choice="" ;; esac
+		fi
+	fi
+else
+	learn_choice="$learn_prev"
+fi
+
+mkdir -p "$(dirname "$LEARN_CONFIG")"
+echo "$learn_choice" > "$LEARN_CONFIG"
+
+{
+	if [ "$learn_choice" = "enabled" ]; then
+		echo "# Added by squarebox setup — learn mode"
+		echo "alias sqrbx-learn='sqrbx-learn'"
+	fi
+} > ~/.squarebox-learn-aliases
+
+fi # should_run learn
 
 echo
 

@@ -16,7 +16,7 @@ GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 RESET='\033[0m'
 
-VALID_SECTIONS=(git github ai editors tuis multiplexers sdks shell)
+VALID_SECTIONS=(git github ai editors tuis multiplexers sdks shell learn)
 
 usage() {
 	cat <<-EOF
@@ -37,6 +37,7 @@ usage() {
 	  multiplexers   Terminal multiplexers (tmux, zellij)
 	  sdks           SDKs (node, python, go, dotnet, rust)
 	  shell          Default shell (bash, zsh/fish — experimental)
+	  learn          Interactive terminal learning guide (sqrbx-learn)
 
 	${BOLD}Examples:${RESET}
 	  sqrbx-setup ai editors       Re-run AI assistant and editor selection
@@ -76,6 +77,7 @@ show_list() {
 		"multiplexer:Multiplexers"
 		"sdks:SDKs"
 		"shell:Shell"
+		"learn:Learn mode"
 	)
 	for entry in "${configs[@]}"; do
 		local file="${entry%%:*}"
