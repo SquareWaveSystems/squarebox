@@ -236,16 +236,26 @@ and fish.
 ### Learning mode (beta)
 
 Optional. When enabled during first-run setup (or via `sqrbx-setup learn`),
-the container ships an interactive tutorial covering every tool in the
-toolkit — history, why-it-exists, and skill-level-adapted "try it" examples.
+the container ships an interactive guide to every tool in the toolkit —
+history, why-it-exists, and skill-level-adapted "try it" examples.
 
-    sqrbx-learn               # start or continue lessons
+    sqrbx-learn               # open the menu
+    sqrbx-learn rg            # jump straight to a tool's lesson
     sqrbx-learn --progress    # show what you've completed
     sqrbx-learn --reset       # wipe progress AND skill level
 
+The top menu entry, **Learn hands-on with your AI agent**, launches Claude
+Code in a coaching mode for the session: instead of doing the work for you,
+it explains each step, hands you the exact command and the reason for the
+tool choice, and asks you to run it yourself. Say "just do it" at any point
+to let it take over. It's injected via `--append-system-prompt`, so it's
+session-scoped and never touches your workspace's own `CLAUDE.md`. (Requires
+Claude Code; add it with `sqrbx-setup ai`.)
+
 The first launch asks for a skill level (beginner / intermediate / expert)
-to scale the examples; you can change it later from the menu. Lessons render
-through `glow` when available so the markdown bodies display properly.
+to scale both the examples and the agent's coaching; you can change it later
+from the menu. Lessons render through `glow` when available so the markdown
+bodies display properly.
 
 Aliases
 -------

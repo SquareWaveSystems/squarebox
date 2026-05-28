@@ -265,6 +265,8 @@ suite_setup_editors() {
 	run_test_grep "3.13b learn config persists" "enabled" cat /workspace/.squarebox/learn
 	run_test "3.13c sqrbx-learn --help exits 0" sqrbx-learn --help
 	run_test_grep "3.13d motd shows learn hint when enabled" "sqrbx-learn" bash /usr/local/lib/squarebox/motd.sh
+	run_test_grep "3.13e help documents hands-on agent mode" "hands-on" sqrbx-learn --help
+	run_test "3.13f unknown lesson arg errors" bash -c '! sqrbx-learn __no_such_tool__ 2>/dev/null'
 }
 
 # ── Suite: update ────────────────────────────────────────────────────────
