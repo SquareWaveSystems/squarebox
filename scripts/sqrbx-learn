@@ -140,6 +140,7 @@ build_menu() {
 	[ ${#incomplete[@]}  -gt 0 ] && _out+=("${incomplete[@]}")
 	[ ${#complete[@]}    -gt 0 ] && _out+=("${complete[@]}")
 	[ ${#unavailable[@]} -gt 0 ] && _out+=("${unavailable[@]}")
+	return 0
 }
 
 # ── Skill level assessment ───────────────────────────────────────────────────
@@ -1303,7 +1304,7 @@ main() {
 					sleep 2
 				else
 					echo
-					"lesson_${id}"
+					"lesson_${id}" || true
 					echo
 				fi
 				break
