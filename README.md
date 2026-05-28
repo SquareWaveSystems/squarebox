@@ -167,6 +167,8 @@ Nano is always available as the default editor.
 | [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
 
+Selecting **nvim** offers to install the [LazyVim](https://www.lazyvim.org/) starter config to `~/.config/nvim`, turning Neovim into a preconfigured IDE. Plugins sync on first launch and persist in the `squarebox-home` volume. A Nerd Font in your terminal is recommended for icons; the starter is skipped if `~/.config/nvim` already exists, so your own config is never overwritten.
+
 ### TUI Tools
 
 Installed during first-run setup. Choose any combination:

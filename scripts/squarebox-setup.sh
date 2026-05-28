@@ -90,6 +90,18 @@ show_list() {
 			printf "  ${CYAN}%-18s${RESET}${DIM}(none)${RESET}\n" "${label}:"
 		fi
 	done
+
+	# LazyVim starter (sub-option of the nvim editor)
+	local editors_val="" lazyvim_val=""
+	[ -f /workspace/.squarebox/editors ] && editors_val=$(cat /workspace/.squarebox/editors)
+	if [[ ",$editors_val," == *",nvim,"* ]]; then
+		[ -f /workspace/.squarebox/nvim-lazyvim ] && lazyvim_val=$(cat /workspace/.squarebox/nvim-lazyvim)
+		if [ "$lazyvim_val" = "true" ]; then
+			printf "  ${CYAN}%-18s${RESET}%s\n" "LazyVim:" "enabled"
+		else
+			printf "  ${CYAN}%-18s${RESET}${DIM}disabled${RESET}\n" "LazyVim:"
+		fi
+	fi
 	echo
 }
 
