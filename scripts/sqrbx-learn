@@ -1348,8 +1348,9 @@ run_lesson_by_arg() {
 		echo "sqrbx-learn: lessons need an interactive terminal." >&2
 		return 1
 	fi
-	# Try-it examples need a skill level; default rather than forcing the wizard.
-	[ -z "$(progress_get skill_level)" ] && progress_set "skill_level" "beginner"
+	# skill_level() defaults to "beginner" when unset, so a deep-linked lesson
+	# scales correctly without persisting a level — that keeps the first-run
+	# skill assessment intact for when the operator opens the full menu.
 	"lesson_${id}" || true
 }
 
