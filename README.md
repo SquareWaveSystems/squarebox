@@ -233,7 +233,7 @@ and fish.
 | .NET    | `dotnet` |
 | Rust    | `rust` |
 
-### Learning mode
+### Learning mode (beta)
 
 Optional. When enabled during first-run setup (or via `sqrbx-setup learn`),
 the container ships an interactive tutorial covering every tool in the
