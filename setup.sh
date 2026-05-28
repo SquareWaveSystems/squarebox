@@ -569,6 +569,34 @@ else
 	echo "$editor_list" > "$EDITOR_CONFIG"
 fi
 
+# LazyVim starter — offered when Neovim is among the selected editors
+LAZYVIM_CONFIG="/workspace/.squarebox/nvim-lazyvim"
+lazyvim_prev=""
+[ -f "$LAZYVIM_CONFIG" ] && lazyvim_prev=$(cat "$LAZYVIM_CONFIG")
+lazyvim_choice=false
+if [[ ",$editor_list," == *",nvim,"* ]]; then
+	if $INTERACTIVE; then
+		lv_default=true
+		[ "$lazyvim_prev" = "false" ] && lv_default=false
+		echo
+		echo "LazyVim turns Neovim into a preconfigured IDE (needs a Nerd Font in your terminal for icons)."
+		if $HAS_GUM; then
+			gum confirm "Install the LazyVim starter config for Neovim?" --default="$lv_default" && lazyvim_choice=true || lazyvim_choice=false
+		else
+			if $lv_default; then _lv_hint="Y/n"; else _lv_hint="y/N"; fi
+			read -rp "Install the LazyVim starter config for Neovim? [$_lv_hint]: " _lv_reply
+			if [ -z "$_lv_reply" ]; then
+				lazyvim_choice=$lv_default
+			else
+				case "$_lv_reply" in [Yy]*) lazyvim_choice=true ;; *) lazyvim_choice=false ;; esac
+			fi
+		fi
+		echo "$lazyvim_choice" > "$LAZYVIM_CONFIG"
+	elif [ -n "$lazyvim_prev" ]; then
+		lazyvim_choice="$lazyvim_prev"
+	fi
+fi
+
 install_micro() {
 	if command -v micro &>/dev/null; then echo "Micro already installed, skipping."; return 0; fi
 	run_with_spinner "Installing Micro..." sb_install micro latest
@@ -589,6 +617,23 @@ install_nvim() {
 	run_with_spinner "Installing Neovim..." sb_install nvim latest
 }
 
+install_lazyvim() {
+	if [ -e ~/.config/nvim ]; then
+		echo "~/.config/nvim already exists, skipping LazyVim starter clone."
+		return 0
+	fi
+	run_with_spinner "Installing LazyVim starter..." _install_lazyvim_inner
+}
+
+_install_lazyvim_inner() {
+	# nvim-treesitter compiles parsers on first launch, which needs a C compiler
+	if ! command -v cc &>/dev/null && ! command -v gcc &>/dev/null; then
+		sudo apt-get update -qq && sudo apt-get install -y -qq build-essential >/dev/null 2>&1 || return 1
+	fi
+	git clone --depth 1 https://github.com/LazyVim/starter ~/.config/nvim >/dev/null 2>&1 || return 1
+	rm -rf ~/.config/nvim/.git
+}
+
 installed_editors=()
 for editor in $(echo "$editor_list" | tr ',' ' '); do
 	case "$editor" in
@@ -598,6 +643,11 @@ for editor in $(echo "$editor_list" | tr ',' ' '); do
 		nvim) install_nvim && installed_editors+=("nvim") || echo "Warning: Neovim installation failed." ;;
 	esac
 done
+
+# Bootstrap LazyVim starter config when chosen and Neovim is available
+if [ "$lazyvim_choice" = "true" ] && command -v nvim &>/dev/null; then
+	install_lazyvim || echo "Warning: LazyVim starter setup failed."
+fi
 
 # Prompt for default editor if multiple were installed
 editor_cmd=""
