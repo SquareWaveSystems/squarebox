@@ -388,10 +388,22 @@ Open this repo in VS Code with the
 [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers),
 or launch it in [GitHub Codespaces](https://github.com/features/codespaces).
 The included `.devcontainer/devcontainer.json` builds the full **squarebox** image
-automatically.
+automatically and opens the cloned repo at `/workspaces/<repo>`.
 
-The interactive first-run setup is skipped in devcontainer mode. To configure
-AI tools or SDKs, run `sqrbx-setup` from the integrated terminal.
+The interactive first-run wizard can't run in devcontainer mode (no TTY at
+create time), so a default toolset — **Claude Code + Node.js** — is installed
+non-interactively by `postCreateCommand`. Override the defaults with these
+container environment variables (set to an empty string to opt out of a tier):
+
+| Variable | Default | Selects |
+|----------|---------|---------|
+| `SQUAREBOX_DC_AI` | `claude` | AI assistants (`claude,copilot,gemini,codex,opencode,pi`) |
+| `SQUAREBOX_DC_SDKS` | `node` | SDKs (`node,python,go,dotnet,rust`) |
+| `SQUAREBOX_DC_EDITORS` | _(none)_ | Editors (`micro,edit,fresh,nvim`) |
+| `SQUAREBOX_DC_TUIS` | _(none)_ | TUI tools (`lazygit,gh-dash,yazi`) |
+
+To add or change tools after the fact, run `sqrbx-setup` from the integrated
+terminal.
 
 You can also attach to a running codespace directly from your local terminal
 using `gh codespace ssh`.

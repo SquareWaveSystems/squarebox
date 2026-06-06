@@ -318,14 +318,21 @@ suite_devcontainer() {
 	# 8.1 valid JSON
 	run_test "8.1 devcontainer.json is valid JSON" jq empty "$dc"
 
-	# 8.3 workspace folder
-	run_test_grep "8.3 workspaceFolder is /workspace" "/workspace" jq -r '.workspaceFolder' "$dc"
+	# 8.3 workspace folder — must resolve to the cloned repo under /workspaces,
+	# not the image's empty /workspace dir (Codespaces/Dev Containers convention)
+	run_test_grep "8.3 workspaceFolder is the cloned repo" "/workspaces/" jq -r '.workspaceFolder' "$dc"
 
 	# 8.4 user is dev
 	run_test_grep "8.4 remoteUser is dev" "dev" jq -r '.remoteUser' "$dc"
 
 	# 8.5 DEVCONTAINER=1
 	run_test_grep "8.5 DEVCONTAINER env var set" "1" jq -r '.containerEnv.DEVCONTAINER' "$dc"
+
+	# 8.6 postCreateCommand installs a default toolset non-interactively
+	run_test_grep "8.6 postCreateCommand is set" "devcontainer-postcreate" jq -r '.postCreateCommand' "$dc"
+
+	# 8.7 post-create script exists and is syntactically valid bash
+	run_test "8.7 devcontainer-postcreate.sh parses" bash -n scripts/devcontainer-postcreate.sh
 }
 
 # ── Suite: setup-rerun ───────────────────────────────────────────────────
