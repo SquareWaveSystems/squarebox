@@ -4,12 +4,13 @@
     "context": "..",
     "dockerfile": "../Dockerfile"
   },
-  "workspaceFolder": "/workspace",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "remoteUser": "dev",
   "containerEnv": {
     "DEVCONTAINER": "1"
   },
   "mounts": [
     "source=/etc/localtime,target=/etc/localtime,type=bind,readonly"
-  ]
+  ],
+  "postCreateCommand": ["bash", "${containerWorkspaceFolder}/scripts/devcontainer-postcreate.sh"]
 }
