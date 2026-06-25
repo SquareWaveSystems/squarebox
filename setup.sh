@@ -1584,7 +1584,8 @@ if $INTERACTIVE; then
 		echo "── Learn Mode ──────────────────────────────────────────────────────────────"
 	fi
 	echo "sqrbx-learn is an interactive guide to the tools in your squarebox,"
-	echo "covering their history and how to use them effectively."
+	echo "covering their history and how to use them effectively. It can also"
+	echo "launch your AI agent in a hands-on coach mode that teaches as you work."
 	echo
 
 	if $HAS_GUM; then

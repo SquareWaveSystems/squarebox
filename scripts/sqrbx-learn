@@ -3,7 +3,8 @@
 # Teaches the history and usage of each tool in the squarebox toolkit.
 #
 # Usage:
-#   sqrbx-learn            Start or continue learning
+#   sqrbx-learn            Open the menu (hands-on AI agent mode, or browse lessons)
+#   sqrbx-learn <tool>     Jump straight to a tool's lesson (e.g. sqrbx-learn rg)
 #   sqrbx-learn --progress Show your progress
 #   sqrbx-learn --reset    Reset all progress AND skill level
 #   sqrbx-learn --help     Show this help
@@ -1235,6 +1236,124 @@ EOF
 	gum confirm "Mark '${title}' as complete?" --default=true && mark_complete "$id" && green "✓ Marked complete"
 }
 
+# ── Hands-on AI agent (coach mode) ────────────────────────────────────────────
+# Launches the AI coding agent with a "teach me while we work" instruction
+# appended for this session only. The teaching itself is a portable prompt
+# (tutor_prompt) — only the injection is harness-specific. Claude Code's
+# --append-system-prompt lets us inject the coaching persona without touching
+# the workspace's own CLAUDE.md, so it stays session-scoped and opt-in.
+
+tutor_prompt() {
+	local sl; sl=$(skill_level)
+	printf 'You are pairing inside squarebox with someone whose self-described terminal skill level is: %s. Calibrate every explanation to that level.\n\n' "$sl"
+	cat <<'EOF'
+# squarebox hands-on learning session
+
+You are not just here to finish the task. Your job is to help the operator
+LEARN the modern terminal toolkit by doing the work themselves. Treat this as
+pair programming where they hold the keyboard.
+
+## How to behave
+
+- Default to coaching, not autopiloting. For each step: explain the plan in one
+  or two sentences, then give the EXACT command to run plus a one-line reason for
+  the tool choice, and ask the operator to run it themselves and tell you what
+  they saw. Wait for their result before moving on.
+- Only run a command yourself when it is purely tedious, unsafe to get wrong, or
+  when the operator says something like "just do it" or "take over". When they
+  say that, comply for the rest of that task without arguing.
+- Teach one concept at a time. Keep asides short. Do not lecture.
+- When a step touches a tool the operator may not know, name the modern tool,
+  what it replaces, and the single reason it is better — then point them at the
+  matching lesson with `sqrbx-learn <tool>` (e.g. `sqrbx-learn rg`) for depth.
+
+## The squarebox toolkit (prefer these and explain why)
+
+- rg (ripgrep) over grep — faster, respects .gitignore
+- fd over find — simpler syntax, sane defaults
+- bat over cat — syntax highlighting (already aliased to `cat`)
+- eza over ls — icons and git status (already aliased to `ls`)
+- zoxide over cd — frecency jumps (already aliased to `cd`)
+- fzf — fuzzy-pick anything (Ctrl-T files, Ctrl-R history, Alt-C dirs)
+- delta — syntax-highlighted git diffs (git's default pager here)
+- difft (difftastic) — structural, syntax-aware diffs
+- yq — jq for YAML/JSON; xh — a friendlier curl; just — a modern make
+- glow — render markdown; gum — build interactive shell scripts
+- gh — GitHub from the terminal; lazygit — a git TUI; yazi — a file manager
+
+## Boundaries
+
+- The task still has to end up correct — never trade a working result for a
+  teaching moment. If the operator's command is wrong, explain why and let them
+  retry before you correct it for them.
+- This is a real workspace, not a sandbox. Be careful with destructive commands
+  and always explain the risk before suggesting one.
+EOF
+}
+
+launch_agent_tutor() {
+	if ! command -v claude >/dev/null 2>&1; then
+		echo
+		gum style --foreground 214 "Hands-on agent mode currently supports Claude Code, which isn't installed."
+		dim "Add it with: sqrbx-setup ai"
+		sleep 2
+		return 0
+	fi
+	echo
+	green "Launching Claude in hands-on coach mode (skill: $(skill_level))…"
+	dim "It hands you commands to run yourself. Say \"just do it\" to let it take over."
+	dim "Exit Claude to return to this menu."
+	echo
+	claude --append-system-prompt "$(tutor_prompt)" || true
+}
+
+# ── Lesson deep-linking ───────────────────────────────────────────────────────
+# Resolve a friendly argument (tool name or lesson id) to a lesson id so the
+# menu's lessons can be opened directly, e.g. `sqrbx-learn rg`.
+
+resolve_lesson_id() {
+	local arg; arg=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+	local cat id title tool always
+	for entry in "${ALL_LESSONS[@]}"; do
+		IFS='|' read -r cat id title tool always <<< "$entry"
+		if [ "$arg" = "$id" ] || [ "$arg" = "$tool" ]; then
+			echo "$id"; return 0
+		fi
+	done
+	case "$arg" in
+		ripgrep)          echo "rg_vs_grep"      ;;
+		find)             echo "fd_vs_find"      ;;
+		cat)              echo "bat_vs_cat"      ;;
+		ls)               echo "eza_vs_ls"       ;;
+		cd)               echo "zoxide_cd"       ;;
+		difftastic)       echo "difftastic"      ;;
+		curl|http|httpie) echo "xh_http"         ;;
+		make)             echo "just_taskrunner" ;;
+		pipe|pipes)       echo "unix_pipes"      ;;
+		unix|philosophy)  echo "unix_philosophy" ;;
+		*)                return 1               ;;
+	esac
+	return 0
+}
+
+run_lesson_by_arg() {
+	local arg="$1" id
+	if ! id=$(resolve_lesson_id "$arg"); then
+		echo "sqrbx-learn: no lesson matches '$arg'." >&2
+		echo "Run 'sqrbx-learn' with no arguments to see the full list." >&2
+		return 1
+	fi
+	require_gum
+	if ! [ -t 0 ] || ! [ -t 1 ]; then
+		echo "sqrbx-learn: lessons need an interactive terminal." >&2
+		return 1
+	fi
+	# skill_level() defaults to "beginner" when unset, so a deep-linked lesson
+	# scales correctly without persisting a level — that keeps the first-run
+	# skill assessment intact for when the operator opens the full menu.
+	"lesson_${id}" || true
+}
+
 # ── Main menu ────────────────────────────────────────────────────────────────
 
 show_banner() {
@@ -1269,8 +1388,11 @@ main() {
 		local -a menu_entries
 		build_menu menu_entries
 
+		# Agent coach mode is the headline entry; lessons follow.
+		local agent_label="🤖 Learn hands-on with your AI agent"
+
 		# Extract display labels for gum choose
-		local -a labels=()
+		local -a labels=("$agent_label")
 		for entry in "${menu_entries[@]+"${menu_entries[@]}"}"; do
 			labels+=("${entry%%|*}")
 		done
@@ -1279,10 +1401,14 @@ main() {
 		local choice
 		choice=$(gum choose \
 			--height 24 \
-			--header "Select a lesson (↑↓ or jk to navigate, enter to select):" \
+			--header "Pick how to learn (↑↓ or jk to navigate, enter to select):" \
 			"${labels[@]}") || break
 
 		case "$choice" in
+			"$agent_label")
+				launch_agent_tutor
+				continue
+				;;
 			"── Exit") break ;;
 			"── Change skill level")
 				skill_assessment
@@ -1324,10 +1450,15 @@ usage() {
 	sqrbx-learn — interactive terminal learning guide
 
 	Usage:
-	  sqrbx-learn            Start or continue learning
+	  sqrbx-learn            Open the menu (hands-on AI agent mode, or browse lessons)
+	  sqrbx-learn <tool>     Jump straight to a tool's lesson (e.g. sqrbx-learn rg)
 	  sqrbx-learn --progress Show your progress
 	  sqrbx-learn --reset    Reset all progress AND skill level (re-prompts on next launch)
 	  sqrbx-learn --help     Show this help
+
+	Hands-on agent mode (the top menu entry) launches Claude Code as a coach for
+	the session: instead of doing the work for you, it hands you each command to
+	run yourself and explains why. Say "just do it" to let it take over.
 
 	Inside the guide:
 	  ↑↓ / jk    Navigate lessons
@@ -1362,9 +1493,12 @@ case "${1:-}" in
 	"")
 		main
 		;;
-	*)
+	-*)
 		echo "Unknown option: $1" >&2
 		usage >&2
 		exit 1
+		;;
+	*)
+		run_lesson_by_arg "$1" || exit 1
 		;;
 esac
