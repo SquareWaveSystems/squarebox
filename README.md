@@ -56,11 +56,13 @@ running before you continue.
 Install
 -------
 
-These commands clone the repo, build the container image, and drop you into the
-container (if possible). On first login, a setup script runs automatically to
-configure git (pulling your name and email from the host's global git config
-if available), optionally sign in to GitHub CLI, your choice of AI coding
-assistant, and language SDKs.
+These commands install squarebox and drop you into the container (if possible).
+By default they **pull a prebuilt image** from GHCR — no local Docker build, no
+build toolchain — then clone the repo into `~/squarebox` for the config files
+and the `sqrbx` helper commands. On first login, a setup script runs
+automatically to configure git (pulling your name and email from the host's
+global git config if available), optionally sign in to GitHub CLI, your choice
+of AI coding assistant, and language SDKs.
 
 **Stable**
 
@@ -70,9 +72,51 @@ assistant, and language SDKs.
 
     curl -fsSL https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.sh | bash -s -- --edge
 
-Stable installs the latest tagged release (pre-release tags like `-rc` are skipped). Edge uses the latest commit on main. The install script itself is published as a release asset, so the URL is pinned to a tagged version of the script — pushes to `main` won't break new installs until a release is cut.
+Stable pulls the prebuilt image for the latest tagged release (pre-release tags
+like `-rc` are skipped). Edge builds from the latest commit on `main` — no image
+is published for unreleased commits, so edge always builds from source. To build
+the released version from source instead of pulling, pass `--build`. The install
+script itself is published as a release asset, so the URL is pinned to a tagged
+version of the script — pushes to `main` won't break new installs until a
+release is cut.
 
-If the install fails or you want to see the full docker build and git output, re-run with `--verbose`.
+If the install fails or you want to see the full build/pull and git output,
+re-run with `--verbose`.
+
+<details>
+<summary><strong>Advanced install options (flags &amp; environment variables)</strong></summary>
+
+Flags: `--build` (build from source instead of pulling), `--edge` (latest
+`main`), `--verbose`.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SQUAREBOX_DIR` | `~/squarebox` | Install location (repo + workspace). Point at durable storage on hosts where `$HOME` is volatile — e.g. Unraid `/mnt/user/appdata/squarebox`. |
+| `SQUAREBOX_WORKSPACE` | `$SQUAREBOX_DIR/workspace` | Host path mounted as `/workspace`. |
+| `SQUAREBOX_TAG` | matched release / `latest` | Image tag to pull (e.g. `v1.0.0-rc1` to test a pre-release). |
+| `SQUAREBOX_IMAGE` | `ghcr.io/squarewavesystems/squarebox` | Image repository to pull from. |
+| `SQUAREBOX_BUILD` | `0` | `1` is equivalent to `--build`. |
+| `PUID` / `PGID` | `1000` / `1000` | Host uid/gid that should own bind-mounted files. Unraid/NAS: `99` / `100`. |
+| `SQUAREBOX_RUNTIME` | auto | Force `docker` or `podman`. |
+| `SQUAREBOX_HOME_VOLUME` | `squarebox-home` | Name of the named volume backing `/home/dev`. |
+| `SQUAREBOX_EDGE` | `0` | `1` is equivalent to `--edge`. |
+
+**Non-interactive provisioning** — set any of these to a comma-separated list to
+pre-select a toolset and install it without prompts (handy for servers and
+scripted installs). Values use the same keys as `sqrbx-setup`:
+
+| Variable | Selects |
+|----------|---------|
+| `SQUAREBOX_AI` | AI assistants (`claude,copilot,gemini,codex,opencode,pi`) |
+| `SQUAREBOX_SDKS` | language SDKs (`node,python,go,dotnet,rust`) |
+| `SQUAREBOX_EDITORS` | editors (`micro,edit,fresh,nvim`) |
+| `SQUAREBOX_TUIS` | TUI tools (`lazygit,gh-dash,yazi`) |
+| `SQUAREBOX_MULTIPLEXERS` | multiplexers (`tmux,zellij`) |
+| `SQUAREBOX_GIT_NAME` / `SQUAREBOX_GIT_EMAIL` | git identity (when no host gitconfig) |
+
+Example: `SQUAREBOX_AI=claude SQUAREBOX_SDKS=node,python curl -fsSL …/install.sh | bash`
+
+</details>
 
 **Windows (PowerShell 7+)**
 
@@ -109,6 +153,35 @@ lives in a named Docker volume (`squarebox-home`) that survives container
 recreation. Image-managed config like `.bashrc` is bind-mounted from the repo
 so updates flow through to the running container.
 
+Run as a long-lived server (Unraid / NAS / VPS)
+-----------------------------------------------
+
+The `curl | bash` installer is built around an interactive desktop shell. To run
+squarebox as a persistent server container you attach into on demand — on
+Unraid, a NAS, or a VPS — use the prebuilt image directly with the bundled
+`docker-compose.yml`:
+
+    cp .env.example .env        # set PUID/PGID, the workspace path, and a tag
+    docker compose up -d
+    docker compose exec -u dev squarebox bash
+
+Set `PUID`/`PGID` in `.env` to match your host so files squarebox writes to the
+workspace mount are owned correctly — on Unraid that's `99` / `100`. The `-u dev`
+on `exec` is needed because the container starts as root (to apply PUID/PGID)
+then drops to the `dev` user; `exec` bypasses that, so `-u dev` lands you where
+you want to be.
+
+Per-user state (shell history, gh auth, mise toolchains, AI-assistant state)
+lives in the `squarebox-home` named volume and survives image updates; your code
+lives on the host at the workspace path. To update, pull a newer tag and
+`docker compose up -d`. The published image is multi-arch (amd64 + arm64), so it
+also runs on ARM NAS/VPS hosts.
+
+> **Unraid note:** the host's `/root` is tmpfs and wiped on reboot, so a raw
+> `curl | bash` install there won't persist. Either use compose (above) with the
+> workspace path under `/mnt/user/appdata`, or run the installer with
+> `SQUAREBOX_DIR` and `SQUAREBOX_WORKSPACE` pointed at appdata.
+
 What's included
 ---------------
 
@@ -139,8 +212,10 @@ What's optional
 ----------------
 
 Selected during first-run setup. Choose any combination, all, or none.
-Selections are saved to the workspace volume and reused automatically on
-container rebuilds.
+Selections are saved under `/workspace/.squarebox` (on the host workspace bind
+mount) and reused automatically on container rebuilds. They can also be
+pre-selected non-interactively via the `SQUAREBOX_AI`/`SQUAREBOX_SDKS`/… env vars
+(see *Advanced install options* above).
 
 ### AI Coding Assistants
 
@@ -258,6 +333,15 @@ The first launch asks for a skill level (beginner / intermediate / expert)
 to scale both the examples and the agent's coaching; you can change it later
 from the menu. Lessons render through `glow` when available so the markdown
 bodies display properly.
+
+Reconfiguring
+-------------
+
+Re-run the first-run wizard at any time from inside the container with
+`sqrbx-setup`. With no arguments it walks every section; pass one or more
+section names to reconfigure just those: `git`, `github`, `ai`, `editors`,
+`tuis`, `multiplexers`, `sdks`, `shell`, `learn`. `sqrbx-setup --list` shows your
+current selections and `sqrbx-setup --help` the usage.
 
 Aliases
 -------
