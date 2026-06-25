@@ -365,3 +365,92 @@ jobs:
           name: e2e-report
           path: e2e-report.md
           retention-days: 90
+
+  # ── Publish (gated) ──────────────────────────────────────────────────────
+  # Pushes the multi-arch image to GHCR and cuts the GitHub release ONLY after
+  # every test job above has passed, and ONLY for version tags. `needs` without
+  # `if: always()` means a single failed test job skips this job — so a tag can
+  # never publish a broken image or advertise a release for one. Runs of the
+  # E2E suite via workflow_dispatch (no tag) skip it via the ref guard.
+  publish:
+    needs:
+      - build-amd64
+      - build-arm64
+      - host-install
+      - tools-verification
+      - shell-environment
+      - setup-noninteractive
+      - setup-editors-sdks
+      - container-lifecycle
+      - sqrbx-update
+      - devcontainer
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the GitHub release
+      packages: write   # push to GHCR
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Resolve image ref and tags
+        id: meta
+        run: |
+          set -euo pipefail
+          # GHCR requires a lowercase path; the org is mixed-case.
+          image="ghcr.io/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          ref="${GITHUB_REF_NAME}"     # e.g. v1.0.0-rc1
+          ver="${ref#v}"               # e.g. 1.0.0-rc1
+          tags="${image}:${ref},${image}:${ver}"
+          # Prerelease tags (-rc, -beta, …) must not move the :latest pointer —
+          # `latest` always tracks the newest stable release.
+          case "$ref" in
+            *-*) prerelease=true ;;
+            *)   prerelease=false; tags="${tags},${image}:latest" ;;
+          esac
+          {
+            echo "tags=${tags}"
+            echo "prerelease=${prerelease}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          # Reuse the layer caches the build-amd64 / build-arm64 jobs populated.
+          cache-from: |
+            type=gha
+            type=gha,scope=arm64
+          cache-to: type=gha,mode=max
+
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          prerelease_flag=""
+          [ "$PRERELEASE" = "true" ] && prerelease_flag="--prerelease"
+          # Idempotent: re-running the tag refreshes assets but preserves any
+          # human-edited title/notes from the first run.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" install.sh install.ps1 uninstall.sh --clobber
+          else
+            gh release create "$tag" \
+              --title "$tag" \
+              --generate-notes \
+              $prerelease_flag \
+              install.sh install.ps1 uninstall.sh
+          fi

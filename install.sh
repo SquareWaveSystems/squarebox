@@ -49,15 +49,34 @@ if [ -n "${USERPROFILE:-}" ]; then
 else
 	USER_HOME="${HOME}"
 fi
-INSTALL_DIR="${USER_HOME}/squarebox"
+# Install dir + workspace are overridable so the install can live somewhere
+# durable. On Unraid `$HOME` (=/root) is tmpfs-backed and wiped on reboot — point
+# SQUAREBOX_DIR at /mnt/user/appdata/squarebox instead. SQUAREBOX_WORKSPACE
+# relocates just the code mount (defaults to a subdir of the install dir).
+INSTALL_DIR="${SQUAREBOX_DIR:-${USER_HOME}/squarebox}"
+WORKSPACE_DIR="${SQUAREBOX_WORKSPACE:-${INSTALL_DIR}/workspace}"
 IMAGE_NAME="squarebox"
 CONTAINER_NAME="squarebox"
+# Prebuilt multi-arch image published by the release pipeline (see
+# .github/workflows/e2e.yml → publish). SQUAREBOX_IMAGE/SQUAREBOX_TAG override.
+SQUAREBOX_IMAGE="${SQUAREBOX_IMAGE:-ghcr.io/squarewavesystems/squarebox}"
 EDGE="${SQUAREBOX_EDGE:-0}"
+# Default installs PULL the prebuilt image — no local Docker build, no build
+# toolchain. --build (or SQUAREBOX_BUILD=1) builds from the cloned source;
+# --edge implies a build from latest main (no image is published for unreleased
+# commits).
+BUILD="${SQUAREBOX_BUILD:-0}"
+# Container user mapping for bind-mount ownership parity (honoured by the image
+# entrypoint). Hosts that aren't uid 1000 — Unraid 99:100, root installs — set
+# these so files squarebox writes to the host are owned correctly.
+PUID="${PUID:-1000}"
+PGID="${PGID:-1000}"
 VERBOSE=0
 
 for arg in "$@"; do
 	case "$arg" in
 		--edge) EDGE=1 ;;
+		--build) BUILD=1 ;;
 		--verbose) VERBOSE=1 ;;
 	esac
 done
@@ -138,24 +157,49 @@ if ! rt_cmd info &>/dev/null; then
 	exit 1
 fi
 
-# Build
+# Acquire the image. Default: pull the prebuilt multi-arch image (fast, no build
+# toolchain). --build / --edge: build from the cloned source. Either path leaves
+# the image tagged locally as $IMAGE_NAME so the rest of the script is identical.
 _build_log="$(mktemp)"
 _rc_tmp=""
 _create_log=""
 trap 'rm -f "$_build_log" "$_rc_tmp" "$_create_log" 2>/dev/null || true' EXIT
-if [ "$VERBOSE" = 1 ]; then
-	echo "Building image..."
-	rt_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR"
-else
-	printf "Building image... "
-	if rt_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR" > "$_build_log" 2>&1; then
-		echo "done"
+if [ "$EDGE" = 1 ] || [ "$BUILD" = 1 ]; then
+	if [ "$VERBOSE" = 1 ]; then
+		echo "Building image..."
+		rt_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR"
 	else
-		echo "FAILED" >&2
-		echo "Build output:" >&2
-		cat "$_build_log" >&2
-		exit 1
+		printf "Building image... "
+		if rt_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR" > "$_build_log" 2>&1; then
+			echo "done"
+		else
+			echo "FAILED" >&2
+			echo "Build output:" >&2
+			cat "$_build_log" >&2
+			exit 1
+		fi
 	fi
+else
+	# Pull the image tag matching the checked-out release. SQUAREBOX_TAG overrides
+	# (e.g. test a pre-release with SQUAREBOX_TAG=v1.0.0-rc1); falls back to
+	# :latest when the checkout carries no release tag.
+	_pull_ref="${SQUAREBOX_IMAGE}:${SQUAREBOX_TAG:-${LATEST_TAG:-latest}}"
+	if [ "$VERBOSE" = 1 ]; then
+		echo "Pulling ${_pull_ref}..."
+		rt_cmd pull "$_pull_ref"
+	else
+		printf "Pulling %s... " "$_pull_ref"
+		if rt_cmd pull "$_pull_ref" > "$_build_log" 2>&1; then
+			echo "done"
+		else
+			echo "FAILED" >&2
+			cat "$_build_log" >&2
+			echo "" >&2
+			echo "Could not pull the prebuilt image. To build from source instead, re-run with --build." >&2
+			exit 1
+		fi
+	fi
+	rt_cmd tag "$_pull_ref" "$IMAGE_NAME"
 fi
 
 # Remove old container if it exists
@@ -298,7 +342,7 @@ if [ -n "${MSYSTEM:-}" ] || [ -n "${USERPROFILE:-}" ]; then
 fi
 
 # Prepare host directories
-mkdir -p "${USER_HOME}/.config/git" "${INSTALL_DIR}/workspace" "${INSTALL_DIR}/.config/lazygit"
+mkdir -p "${USER_HOME}/.config/git" "${WORKSPACE_DIR}" "${INSTALL_DIR}/.config/lazygit"
 
 # On Linux where host uid != 1000, a previous install may have chowned
 # ${USER_HOME}/.config/git to 1000:1000 (for the container's `dev` user), so
@@ -311,7 +355,7 @@ mkdir -p "${USER_HOME}/.config/git" "${INSTALL_DIR}/workspace" "${INSTALL_DIR}/.
 # Podman: rootless Podman maps UIDs via user namespaces, so this is unnecessary.
 # Rootful Podman behaves like Docker — chown is still needed.
 _needs_chown=0
-if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 1000 ]; then
+if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne "$PUID" ]; then
 	if [ "$RUNTIME" = "docker" ]; then
 		_needs_chown=1
 	elif [ "$RUNTIME" = "podman" ] && podman info --format '{{.Host.Security.Rootless}}' 2>/dev/null | grep -qi false; then
@@ -352,6 +396,11 @@ if [ -z "$_host_name" ] && [ -n "${USERPROFILE:-}" ]; then
 	fi
 fi
 
+# Explicit overrides win — lets a headless/server install set git identity
+# without a host gitconfig (SQUAREBOX_GIT_NAME / SQUAREBOX_GIT_EMAIL).
+[ -n "${SQUAREBOX_GIT_NAME:-}" ]  && _host_name="$SQUAREBOX_GIT_NAME"
+[ -n "${SQUAREBOX_GIT_EMAIL:-}" ] && _host_email="$SQUAREBOX_GIT_EMAIL"
+
 [ -n "$_host_name" ] && git config --file "$_git_cfg" user.name "$_host_name"
 [ -n "$_host_email" ] && git config --file "$_git_cfg" user.email "$_host_email"
 
@@ -362,6 +411,26 @@ fi
 if [ ! -f "${INSTALL_DIR}/.config/lazygit/config.yml" ]; then
 	printf 'git:\n  paging:\n    colorArg: always\n    pager: delta --dark --paging=never\n' > "${INSTALL_DIR}/.config/lazygit/config.yml"
 fi
+
+# Non-interactive provisioning: when SQUAREBOX_AI/_SDKS/_EDITORS/_TUIS are set,
+# pre-seed the selection files the container's first-run setup.sh reads (the same
+# /workspace/.squarebox/* contract that devcontainer-postcreate.sh uses). Only
+# seed a file that's absent, so a returning user's prior choices win. Sections
+# with a value are queued for a one-off provisioning run after create.
+_seed_dir="${WORKSPACE_DIR}/.squarebox"
+_seed_sections=""
+_seed() {
+	local file="$1" value="$2" section="$3"
+	[ -n "$value" ] || return 0
+	mkdir -p "$_seed_dir"
+	[ -f "${_seed_dir}/${file}" ] || printf '%s\n' "$value" > "${_seed_dir}/${file}"
+	_seed_sections="${_seed_sections:+$_seed_sections }$section"
+}
+_seed ai-tool     "${SQUAREBOX_AI:-}"           ai
+_seed sdks        "${SQUAREBOX_SDKS:-}"         sdks
+_seed editors     "${SQUAREBOX_EDITORS:-}"      editors
+_seed tuis        "${SQUAREBOX_TUIS:-}"         tuis
+_seed multiplexer "${SQUAREBOX_MULTIPLEXERS:-}" multiplexers
 
 # The container's `dev` user is uid 1000. On native Linux, bind mounts preserve
 # host ownership, so when the host user's uid differs (e.g. installing as root
@@ -376,22 +445,22 @@ fi
 if [ "$_needs_chown" = 1 ]; then
 	_chown_paths=(
 		"${USER_HOME}/.config/git"
-		"${INSTALL_DIR}/workspace"
+		"${WORKSPACE_DIR}"
 		"${INSTALL_DIR}/.config"
 	)
 	if [ "$(id -u)" -eq 0 ]; then
 		_chown=(chown)
 	elif command -v sudo &>/dev/null; then
-		echo "Host uid $(id -u) differs from container 'dev' uid (1000); using sudo to chown mount dirs..."
+		echo "Host uid $(id -u) differs from container 'dev' uid (${PUID}); using sudo to chown mount dirs..."
 		_chown=(sudo chown)
 	else
-		echo "Warning: host uid $(id -u) differs from container 'dev' uid (1000) and sudo is unavailable." >&2
+		echo "Warning: host uid $(id -u) differs from container 'dev' uid (${PUID}) and sudo is unavailable." >&2
 		echo "         You may see permission errors in the container. Manually run:" >&2
-		echo "         chown -R 1000:1000 ${_chown_paths[*]}" >&2
+		echo "         chown -R ${PUID}:${PGID} ${_chown_paths[*]}" >&2
 		_chown=()
 	fi
 	if [ ${#_chown[@]} -gt 0 ]; then
-		"${_chown[@]}" -R 1000:1000 "${_chown_paths[@]}"
+		"${_chown[@]}" -R "${PUID}:${PGID}" "${_chown_paths[@]}"
 	fi
 fi
 
@@ -416,7 +485,7 @@ if [ ! -f "${INSTALL_DIR}/dotfiles/bashrc" ]; then
 fi
 
 RT_VOLUMES=(
-	-v "${INSTALL_DIR}/workspace:/workspace"
+	-v "${WORKSPACE_DIR}:/workspace"
 	-v "${HOME_VOLUME}:/home/dev"
 	-v "${INSTALL_DIR}/dotfiles/bashrc:/home/dev/.bashrc:ro"
 	-v "${USER_HOME}/.config/git:/home/dev/.config/git"
@@ -438,8 +507,13 @@ elif [ -d "${USER_HOME}/.ssh" ]; then
 	RT_VOLUMES+=(-v "${USER_HOME}/.ssh:/home/dev/.ssh:ro")
 fi
 
-# Drop all Linux capabilities except those needed for scoped sudo
+# Drop all Linux capabilities except those needed for scoped sudo and the
+# entrypoint's PUID/PGID remap (CHOWN/FOWNER/DAC_OVERRIDE to chown + edit
+# /etc/passwd, SETUID/SETGID for setpriv to drop privileges).
 RT_OPTS+=(--cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --cap-add=KILL)
+
+# Container user mapping for bind-mount ownership parity (see image entrypoint).
+RT_OPTS+=(-e "PUID=${PUID}" -e "PGID=${PGID}")
 
 _create_log="$(mktemp)"
 if ! rt_cmd create -it --name "$CONTAINER_NAME" \
@@ -449,6 +523,19 @@ if ! rt_cmd create -it --name "$CONTAINER_NAME" \
 	echo "Error: failed to create container '$CONTAINER_NAME'." >&2
 	cat "$_create_log" >&2
 	exit 1
+fi
+
+# Provision any requested default toolset now, in a transient container sharing
+# the same home volume + workspace, so the tools are present before first use
+# (mirrors devcontainer-postcreate.sh for the CLI path). Best-effort: a failure
+# here never blocks the install — the seeds remain for a later sqrbx-setup.
+if [ -n "$_seed_sections" ]; then
+	echo "Provisioning default toolset (${_seed_sections})... (first run may take a few minutes)"
+	# shellcheck disable=SC2086 — $_seed_sections is an intentional word list
+	if ! rt_cmd run --rm "${RT_OPTS[@]}" "${RT_VOLUMES[@]}" "$IMAGE_NAME" \
+		/usr/local/lib/squarebox/setup.sh --rerun $_seed_sections; then
+		echo "Warning: toolset provisioning did not complete — run 'sqrbx-setup' inside the container to finish." >&2
+	fi
 fi
 
 if [ -t 0 ]; then

@@ -86,3 +86,20 @@ jobs:
         run: |
           docker rm -f squarebox-test 2>/dev/null || true
           docker rm -f sqrbx-persist 2>/dev/null || true
+
+  # arm64 build smoke — the published image is multi-arch, so catch arm64-only
+  # Dockerfile / tool-asset breakage at PR time (via QEMU) rather than only on
+  # the release tag. Build-only; behavioural arm64 tests run in e2e on tags.
+  build-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: false
+          cache-from: type=gha,scope=arm64
+          cache-to: type=gha,mode=max,scope=arm64

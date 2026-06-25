@@ -1,0 +1,59 @@
+# docker-compose.yml — run squarebox as a long-lived container on a server / NAS.
+#
+# Quick start:
+#   cp .env.example .env          # then edit PUID/PGID/paths/tag as needed
+#   docker compose up -d
+#   docker compose exec -u dev squarebox bash   # drop into your dev shell
+#
+# Why `-u dev`: the container starts as root so its entrypoint can apply
+# PUID/PGID, then drops to the `dev` user. `docker exec` bypasses the entrypoint
+# and would otherwise land you as root — `-u dev` puts you where you want to be.
+#
+# Unraid / NAS: set PUID/PGID in .env to match your shares (Unraid: 99 / 100) so
+# files squarebox writes to ./workspace are owned correctly on the host.
+
+services:
+  squarebox:
+    image: ghcr.io/squarewavesystems/squarebox:${SQUAREBOX_TAG:-latest}
+    # Bleeding edge / local source instead of the published image: comment the
+    # `image:` line above and uncomment the build block below.
+    # build:
+    #   context: .
+    container_name: squarebox
+    restart: unless-stopped
+
+    # squarebox's default command is an interactive shell. Allocate a TTY and
+    # keep stdin open so that shell stays alive as PID 1 (otherwise it exits
+    # immediately and the container stops); you then attach with `exec`.
+    stdin_open: true
+    tty: true
+
+    environment:
+      # Host uid/gid to own bind-mounted files. Unraid: 99 / 100.
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+
+    volumes:
+      # Persistent per-user state: shell history, gh auth, mise toolchains,
+      # AI-assistant state. Survives image updates and container recreation.
+      - squarebox-home:/home/dev
+      # Your code. Defaults to ./workspace beside this file; override in .env.
+      - ${SQUAREBOX_WORKSPACE:-./workspace}:/workspace
+      - /etc/localtime:/etc/localtime:ro
+
+    # Mirror install.sh's hardened capability set: drop everything, then re-add
+    # only what scoped sudo and the PUID/PGID entrypoint remap actually need
+    # (CHOWN/FOWNER/DAC_OVERRIDE to chown + edit /etc/passwd; SETUID/SETGID for
+    # setpriv to drop privileges to dev).
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+      - KILL
+
+volumes:
+  squarebox-home:

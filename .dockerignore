@@ -12,3 +12,6 @@ CONTRIBUTING.md
 *~
 .DS_Store
 .devcontainer
+docker-compose.yml
+.env
+.env.example

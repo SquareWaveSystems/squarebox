@@ -132,21 +132,27 @@ COPY setup.sh /usr/local/lib/squarebox/setup.sh
 COPY scripts/squarebox-update.sh /usr/local/bin/sqrbx-update
 COPY scripts/squarebox-setup.sh /usr/local/bin/sqrbx-setup
 COPY scripts/sqrbx-learn /usr/local/bin/sqrbx-learn
+COPY scripts/squarebox-entrypoint.sh /usr/local/bin/squarebox-entrypoint
 COPY scripts/lib/tools.yaml /usr/local/lib/squarebox/tools.yaml
 COPY scripts/lib/tool-lib.sh /usr/local/lib/squarebox/tool-lib.sh
 RUN chmod +x /usr/local/lib/squarebox/setup.sh \
 	/usr/local/lib/squarebox/motd.sh \
 	/usr/local/bin/sqrbx-update \
 	/usr/local/bin/sqrbx-setup \
-	/usr/local/bin/sqrbx-learn
+	/usr/local/bin/sqrbx-learn \
+	/usr/local/bin/squarebox-entrypoint
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 	&& mkdir -p /workspace && chown dev:dev /workspace
 
-USER dev
-
+# The container starts as root so the entrypoint can honour PUID/PGID, then
+# drops to `dev` via setpriv. With the default 1000:1000 this is a no-op and
+# the running process is `dev` — identical to a plain `USER dev` image. PUID/
+# PGID are declared here so docker-compose / Unraid template UIs surface them.
 ENV HOME=/home/dev
 ENV SQUAREBOX=1
+ENV PUID=1000
+ENV PGID=1000
 
 # 7. Shell Config
 # The .bashrc lives in dotfiles/ on the host so install.sh can bind-mount it
@@ -157,4 +163,5 @@ ENV SQUAREBOX=1
 COPY --chown=dev:dev dotfiles/bashrc /home/dev/.bashrc
 
 WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/squarebox-entrypoint"]
 CMD ["/bin/bash"]
