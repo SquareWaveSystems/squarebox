@@ -32,7 +32,7 @@ usage() {
 	  git            Git identity (name, email)
 	  github         GitHub CLI authentication
 	  ai             AI coding assistants (claude, copilot, gemini, codex, opencode, pi)
-	  editors        Text editors (micro, edit, fresh, nvim)
+	  editors        Text editors (micro, edit, fresh, ttt, nvim)
 	  tuis           TUI tools (lazygit, gh-dash, yazi)
 	  multiplexers   Terminal multiplexers (tmux, zellij)
 	  sdks           SDKs (node, python, go, dotnet, rust)

@@ -197,6 +197,15 @@ tools:
     dest: user
     group: setup
 
+  ttt:
+    repo: eugenioenko/ttt
+    version_prefix: v
+    artifact: ttt-linux-{goarch}
+    method: binary
+    binaries: ttt
+    dest: user
+    group: setup
+
   zellij:
     repo: zellij-org/zellij
     version_prefix: v

@@ -510,6 +510,7 @@ if $INTERACTIVE; then
 				micro) gum_selected="${gum_selected:+$gum_selected,}micro" ;;
 				edit)  gum_selected="${gum_selected:+$gum_selected,}edit" ;;
 				fresh) gum_selected="${gum_selected:+$gum_selected,}fresh" ;;
+				ttt)   gum_selected="${gum_selected:+$gum_selected,}ttt" ;;
 				nvim)  gum_selected="${gum_selected:+$gum_selected,}nvim" ;;
 			esac
 		done
@@ -517,7 +518,7 @@ if $INTERACTIVE; then
 		gum_args=(--no-limit --header "Select text editors to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		selected=$(gum choose "${gum_args[@]}" \
-			"micro" "edit" "fresh" "nvim") || true
+			"micro" "edit" "fresh" "ttt" "nvim") || true
 		editor_list=""
 		while IFS= read -r line; do
 			[ -z "$line" ] && continue
@@ -526,12 +527,13 @@ if $INTERACTIVE; then
 	else
 		echo "Select text editors to install (comma-separated, or 'all', or press Enter to skip):"
 		echo "  Nano is always available as the default editor."
-		for ed_item in "1:micro:micro" "2:edit:edit" "3:fresh:fresh" "4:nvim:nvim"; do
+		for ed_item in "1:micro:micro" "2:edit:edit" "3:fresh:fresh" "4:ttt:ttt" "5:nvim:nvim"; do
 			num="${ed_item%%:*}"; rest="${ed_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
 			case "$key" in
 				micro) desc="modern, intuitive terminal editor" ;;
 				edit)  desc="terminal text editor (Microsoft)" ;;
 				fresh) desc="modern terminal text editor" ;;
+				ttt)   desc="terminal text editor IDE, single binary" ;;
 				nvim)  desc="Neovim" ;;
 			esac
 			if [[ ",$editor_prev," == *",${key},"* ]]; then
@@ -540,20 +542,21 @@ if $INTERACTIVE; then
 				echo "  ${num}) ${label} — ${desc}"
 			fi
 		done
-		read -rp "Selection [1,2,3,4/all/skip]: " editor_selection
+		read -rp "Selection [1,2,3,4,5/all/skip]: " editor_selection
 		if [ -z "$editor_selection" ] && [ -n "$editor_prev" ]; then
 			editor_list="$editor_prev"
 		else
 			editor_list=""
 			if [ "$editor_selection" = "all" ]; then
-				editor_list="micro,edit,fresh,nvim"
+				editor_list="micro,edit,fresh,ttt,nvim"
 			elif [ -n "$editor_selection" ]; then
 				for item in $(echo "$editor_selection" | tr ',' ' '); do
 					case "$item" in
 						1) editor_list="${editor_list:+$editor_list,}micro" ;;
 						2) editor_list="${editor_list:+$editor_list,}edit" ;;
 						3) editor_list="${editor_list:+$editor_list,}fresh" ;;
-						4) editor_list="${editor_list:+$editor_list,}nvim" ;;
+						4) editor_list="${editor_list:+$editor_list,}ttt" ;;
+						5) editor_list="${editor_list:+$editor_list,}nvim" ;;
 					esac
 				done
 			fi
@@ -584,6 +587,11 @@ install_fresh() {
 	run_with_spinner "Installing Fresh..." sb_install fresh latest
 }
 
+install_ttt() {
+	if command -v ttt &>/dev/null; then echo "TTT already installed, skipping."; return 0; fi
+	run_with_spinner "Installing TTT..." sb_install ttt latest
+}
+
 install_nvim() {
 	if command -v nvim &>/dev/null; then echo "Neovim already installed, skipping."; return 0; fi
 	run_with_spinner "Installing Neovim..." sb_install nvim latest
@@ -595,6 +603,7 @@ for editor in $(echo "$editor_list" | tr ',' ' '); do
 		micro) install_micro && installed_editors+=("micro") || echo "Warning: Micro installation failed." ;;
 		edit) install_edit && installed_editors+=("edit") || echo "Warning: Edit installation failed." ;;
 		fresh) install_fresh && installed_editors+=("fresh") || echo "Warning: Fresh installation failed." ;;
+		ttt) install_ttt && installed_editors+=("ttt") || echo "Warning: TTT installation failed." ;;
 		nvim) install_nvim && installed_editors+=("nvim") || echo "Warning: Neovim installation failed." ;;
 	esac
 done

@@ -134,6 +134,7 @@ glow_current() { glow --version 2>/dev/null | head -1 | grep -oP '[\d.]+' | head
 gum_current() { gum --version 2>/dev/null | head -1 | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
 micro_current() { micro --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
 fresh_current() { fresh --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
+ttt_current() { ttt --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
 edit_current() { edit --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "not installed"; }
 helix_current() { hx --version 2>/dev/null | head -1 | awk '{print $2}' || echo "not installed"; }
 nvim_current() { nvim --version 2>/dev/null | head -1 | awk '{print $2}' | sed 's/^v//' || echo "not installed"; }
@@ -161,8 +162,8 @@ tool_latest() {
 
 # ── Tool registry ──────────────────────────────────────────────────────
 
-TOOLS=(delta yq lazygit xh yazi starship ghdash glow gum just difftastic mise micro fresh edit helix nvim opencode zellij)
-TOOL_DISPLAY_NAMES=(delta yq lazygit xh yazi starship gh-dash glow gum just difftastic mise micro fresh edit helix nvim opencode zellij)
+TOOLS=(delta yq lazygit xh yazi starship ghdash glow gum just difftastic mise micro fresh edit helix nvim ttt opencode zellij)
+TOOL_DISPLAY_NAMES=(delta yq lazygit xh yazi starship gh-dash glow gum just difftastic mise micro fresh edit helix nvim ttt opencode zellij)
 
 # Map display names to tools.yaml names (ghdash → gh-dash)
 yaml_name() {
@@ -186,7 +187,7 @@ usage() {
 	  sqrbx-update --help       Show this help
 
 	${BOLD}Tools:${RESET}
-	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, gum, just, difftastic, mise, micro, fresh, edit, helix, nvim, opencode, zellij
+	  delta, yq, lazygit, xh, yazi, starship, gh-dash, glow, gum, just, difftastic, mise, micro, fresh, edit, helix, nvim, ttt, opencode, zellij
 
 	EOF
 }

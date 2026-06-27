@@ -173,7 +173,7 @@ suite_setup_editors() {
 	# Pre-seed selections in /workspace/.squarebox/
 	mkdir -p /workspace/.squarebox
 	echo "opencode,pi" > /workspace/.squarebox/ai-tool
-	echo "micro,edit,fresh,nvim" > /workspace/.squarebox/editors
+	echo "micro,edit,fresh,ttt,nvim" > /workspace/.squarebox/editors
 	echo "lazygit,gh-dash,yazi" > /workspace/.squarebox/tuis
 	echo "tmux,zellij" > /workspace/.squarebox/multiplexer
 	echo "node,go" > /workspace/.squarebox/sdks
@@ -207,7 +207,8 @@ suite_setup_editors() {
 	run_test "3.7b micro installed" command -v micro
 	run_test "3.7c edit installed" command -v edit
 	run_test "3.7d fresh installed" command -v fresh
-	run_test "3.7e nvim installed" command -v nvim
+	run_test "3.7e ttt installed" command -v ttt
+	run_test "3.7f nvim installed" command -v nvim
 
 	# 3.7f-h TUI tools installed
 	run_test "3.7f lazygit installed" command -v lazygit

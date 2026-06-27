@@ -164,6 +164,7 @@ Nano is always available as the default editor.
 | [micro](https://github.com/micro-editor/micro) | Go | Modern, intuitive terminal editor |
 | [edit](https://github.com/microsoft/edit) | Rust | Terminal text editor (Microsoft) |
 | [fresh](https://github.com/sinelaw/fresh) | Rust | Modern terminal text editor |
+| [ttt](https://github.com/eugenioenko/ttt) | Go | Terminal text editor IDE, single binary, zero config |
 | [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
 
@@ -350,7 +351,7 @@ First-run selections add to that:
 | Pi Coding Agent | ~50 MB |
 | lazygit / gh-dash / yazi | ~10 / ~10 / ~10 MB |
 | micro / edit | ~12 / ~7 MB |
-| fresh / nvim | ~10 / ~45 MB |
+| fresh / ttt / nvim | ~10 / ~8 / ~45 MB |
 | Node.js | ~90 MB |
 | Python | ~50 MB |
 | Go | ~500 MB |
