@@ -376,11 +376,46 @@ suite_setup_rerun() {
 	run_test "9.6 setup.sh --rerun parses cleanly" bash -c '/usr/local/lib/squarebox/setup.sh --rerun git </dev/null'
 }
 
+# ── Suite: dotfiles ──────────────────────────────────────────────────────
+# Covers: entrypoint dotfile refresh that defeats the named-volume shadow (#89)
+
+suite_dotfiles() {
+	local src="/usr/local/lib/squarebox/dotfiles/bashrc"
+	local refresh="/usr/local/lib/squarebox/refresh-dotfiles.sh"
+
+	# 10.1 the non-volume managed source ships in the image
+	run_test "10.1 managed bashrc source present" test -f "$src"
+	run_test "10.2 refresh-dotfiles.sh installed and executable" test -x "$refresh"
+
+	# 10.3 the live (volume) bashrc matches the image source — proves the
+	# start-time refresh already ran and the volume copy is not stale
+	run_test "10.3 live ~/.bashrc matches image source" cmp -s "$HOME/.bashrc" "$src"
+
+	# 10.4 staling the volume copy and re-running the refresh restores it.
+	# This is the actual #89 regression: an upgraded volume holds an old bashrc.
+	TEST_NUM=$((TEST_NUM + 1))
+	if cp -f "$HOME/.bashrc" /tmp/bashrc.e2e.bak 2>/dev/null \
+		&& printf '\n# __e2e_stale_marker__\n' >> "$HOME/.bashrc" \
+		&& "$refresh" \
+		&& ! grep -q '__e2e_stale_marker__' "$HOME/.bashrc" \
+		&& cmp -s "$HOME/.bashrc" "$src"; then
+		PASS_COUNT=$((PASS_COUNT + 1))
+		echo "ok ${TEST_NUM} - 10.4 refresh restores a staled bashrc"
+	else
+		FAIL_COUNT=$((FAIL_COUNT + 1))
+		echo "not ok ${TEST_NUM} - 10.4 refresh restores a staled bashrc"
+		cp -f /tmp/bashrc.e2e.bak "$HOME/.bashrc" 2>/dev/null || true
+	fi
+
+	# 10.5 the refresh never exits non-zero (must not be able to abort boot)
+	run_test "10.5 refresh-dotfiles.sh exits 0" "$refresh"
+}
+
 # ── Main ─────────────────────────────────────────────────────────────────
 
 usage() {
 	echo "Usage: $0 <suite|all>"
-	echo "Suites: tools, shell, setup, setup-editors, update, devcontainer, setup-rerun"
+	echo "Suites: tools, shell, setup, setup-editors, update, devcontainer, setup-rerun, dotfiles"
 	exit 1
 }
 
@@ -398,6 +433,7 @@ main() {
 		update)          suite_update ;;
 		devcontainer)    suite_devcontainer ;;
 		setup-rerun)     suite_setup_rerun ;;
+		dotfiles)        suite_dotfiles ;;
 		all)
 			suite_tools
 			suite_shell
@@ -405,6 +441,7 @@ main() {
 			suite_update
 			suite_devcontainer
 			suite_setup_rerun
+			suite_dotfiles
 			;;
 		*) usage ;;
 	esac

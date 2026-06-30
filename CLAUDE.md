@@ -35,6 +35,8 @@ docker start -ai squarebox
 
 The `squarebox-home` named volume holds per-user state. Bind mounts at sub-paths inside `/home/dev` (`.bashrc`, `.config/starship.toml`, `.config/lazygit`, `.config/git`) override the volume so repo-managed files stay in lockstep with the image.
 
+**Pull/compose path (no bind mounts):** the `docker-compose.yml` / GHCR install mounts only `squarebox-home:/home/dev`, so the named volume would otherwise shadow the image-baked dotfiles and they'd go stale on upgrade (issue #89). To prevent this, the managed dotfiles also ship to a non-volume path (`/usr/local/lib/squarebox/dotfiles/`), and `squarebox-entrypoint` runs `refresh-dotfiles.sh` on every start to re-seed `.bashrc`/`starship.toml` from there over the volume copy. The refresh skips any path the operator bind-mounted (the desktop path above), so it never clobbers host-managed files.
+
 Replace `docker` with `podman` above if using Podman. The `install.sh` script auto-detects the runtime; override with `SQUAREBOX_RUNTIME=docker|podman`.
 
 The `install.sh` script automates initial setup (clone, build, create container, add `sqrbx` shell alias). A `.devcontainer/devcontainer.json` is also provided for VS Code Dev Containers / Codespaces.

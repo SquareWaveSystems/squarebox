@@ -299,6 +299,12 @@ jobs:
             -v "$PWD/scripts:/workspace/scripts:ro" \
             squarebox:test bash -c 'scripts/e2e-test.sh update'
 
+      - name: "Section 10: dotfile refresh (#89)"
+        run: |
+          docker run --rm \
+            -v "$PWD/scripts:/workspace/scripts:ro" \
+            squarebox:test bash -c 'scripts/e2e-test.sh dotfiles'
+
   # ── Dev Container ──────────────────────────────────────────────────────
   devcontainer:
     needs: build-amd64
