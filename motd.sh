@@ -5,7 +5,15 @@
 printf '\e[1;38;5;208m'
 toilet -f smblock --metal "squarebox"
 printf '\e[0m'
-printf '\e[38;5;208m  🟧📦 You'\''re in the box.\e[0m\n'
+
+# squarebox version, baked into the image at build time (Dockerfile VERSION file).
+sqbx_ver=""
+[ -r /usr/local/lib/squarebox/VERSION ] && sqbx_ver=$(tr -d '[:space:]' < /usr/local/lib/squarebox/VERSION)
+if [ -n "$sqbx_ver" ]; then
+	printf '\e[38;5;208m  🟧📦 You'\''re in the box.\e[0m\e[38;5;245m  (%s)\e[0m\n' "$sqbx_ver"
+else
+	printf '\e[38;5;208m  🟧📦 You'\''re in the box.\e[0m\n'
+fi
 
 # Detect installed SDKs from config
 sdks=()

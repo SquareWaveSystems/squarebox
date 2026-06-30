@@ -99,6 +99,12 @@ suite_shell() {
 	# 4.3 MOTD runs without error
 	run_test "4.3 motd.sh runs" /usr/local/lib/squarebox/motd.sh
 
+	# 4.4 squarebox version is baked in and surfaced by the MOTD
+	run_test "4.4 VERSION file present and non-empty" test -s /usr/local/lib/squarebox/VERSION
+	run_test_grep "4.5 motd shows the baked version" \
+		"$(cat /usr/local/lib/squarebox/VERSION)" \
+		bash /usr/local/lib/squarebox/motd.sh
+
 	# 4.4 image-managed scripts not seeded into /home/dev/ (named volume would
 	# pin them stale across rebuilds — keep this assertion to prevent regression).
 	run_test "4.4 setup.sh not in /home/dev" bash -c '! test -e /home/dev/setup.sh'
