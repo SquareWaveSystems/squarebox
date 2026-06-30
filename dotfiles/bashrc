@@ -1,7 +1,8 @@
-# squarebox /home/dev/.bashrc — managed by the repo, bind-mounted read-only
-# from $INSTALL_DIR/dotfiles/bashrc by install.sh / install.ps1. Edits to this
-# file inside the container will not persist across rebuilds; edit the copy in
-# ~/squarebox/dotfiles/bashrc on the host instead.
+# squarebox /home/dev/.bashrc — managed by the repo. On the desktop install path
+# it is bind-mounted read-only from $INSTALL_DIR/dotfiles/bashrc by install.sh /
+# install.ps1; on the pull/compose path the entrypoint re-seeds it from the image
+# on every start (refresh-dotfiles.sh, issue #89). Either way, edits made inside
+# the container do not persist — edit ~/squarebox/dotfiles/bashrc on the host.
 
 # Bail out if not running interactively.
 case $- in

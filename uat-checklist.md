@@ -28,6 +28,15 @@
 - [ ] After rebuild: `/workspace/.squarebox/` selections reused (no re-prompts)
 - [ ] After rebuild: GH CLI stays authenticated
 
+## Pull/Compose Upgrade (cross-version, #89)
+> Real cross-version test: start a container on an **older** image so the
+> `squarebox-home` volume is seeded with that image's dotfiles, then upgrade the
+> image and restart. The e2e `dotfiles` suite only simulates this within one
+> image; this verifies it across an actual version bump.
+- [ ] Start old image → stop → `docker compose pull` newer image → up: `~/.bashrc` matches the new image (entrypoint refresh defeated the volume shadow)
+- [ ] fzf keybindings (Ctrl+R / Ctrl+T / Alt+C) and git tab-completion work in the upgraded container
+- [ ] Desktop install path: host-edited `~/squarebox/dotfiles/bashrc` (bind-mounted) is NOT clobbered by the refresh
+
 ## Dev Container
 - [ ] VS Code "Reopen in Container" builds and connects
 - [ ] Manual `sqrbx-setup` works in VS Code integrated terminal

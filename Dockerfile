@@ -142,10 +142,21 @@ COPY scripts/squarebox-setup.sh /usr/local/bin/sqrbx-setup
 COPY scripts/sqrbx-learn /usr/local/bin/sqrbx-learn
 COPY scripts/squarebox-help.sh /usr/local/bin/sqrbx-help
 COPY scripts/squarebox-entrypoint.sh /usr/local/bin/squarebox-entrypoint
+COPY scripts/squarebox-refresh-dotfiles.sh /usr/local/lib/squarebox/refresh-dotfiles.sh
 COPY scripts/lib/tools.yaml /usr/local/lib/squarebox/tools.yaml
 COPY scripts/lib/tool-lib.sh /usr/local/lib/squarebox/tool-lib.sh
+
+# Image-managed dotfiles also live under a non-volume path so the entrypoint can
+# refresh them into the squarebox-home volume on every start. Without this the
+# volume shadows the /home/dev image layer and dotfile updates never reach
+# upgraded containers (issue #89). The /home/dev copies below still seed a fresh
+# volume; these are the source of truth the refresh re-applies thereafter.
+COPY dotfiles/bashrc /usr/local/lib/squarebox/dotfiles/bashrc
+COPY starship.toml /usr/local/lib/squarebox/dotfiles/starship.toml
+
 RUN chmod +x /usr/local/lib/squarebox/setup.sh \
 	/usr/local/lib/squarebox/motd.sh \
+	/usr/local/lib/squarebox/refresh-dotfiles.sh \
 	/usr/local/bin/sqrbx-update \
 	/usr/local/bin/sqrbx-setup \
 	/usr/local/bin/sqrbx-learn \
@@ -168,7 +179,9 @@ ENV PGID=1000
 # The .bashrc lives in dotfiles/ on the host so install.sh can bind-mount it
 # into the container — keeping it in sync with the repo while shell history
 # and per-user state stay in the squarebox-home named volume. The COPY here
-# is what seeds a fresh volume; subsequent runs see the bind-mounted version.
+# seeds a fresh volume; the desktop install path then bind-mounts the host copy,
+# and the pull/compose path keeps it current via the entrypoint dotfile refresh
+# (issue #89) since there is no bind-mount in that path.
 
 COPY --chown=dev:dev dotfiles/bashrc /home/dev/.bashrc
 

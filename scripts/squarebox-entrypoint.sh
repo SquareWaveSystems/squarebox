@@ -46,10 +46,17 @@ if [ "$(id -u)" = "0" ]; then
 		chown "$PUID:$PGID" /workspace 2>/dev/null || true
 	fi
 
+	# Re-seed image-managed dotfiles over the (volume-shadowed) home so image
+	# updates reach upgraded containers — issue #89. Done as root, before the
+	# privilege drop, so refreshed files can be chowned to the resolved dev user.
+	/usr/local/lib/squarebox/refresh-dotfiles.sh "$PUID:$PGID" || true
+
 	# Drop to dev. --init-groups picks up dev's supplementary groups; numeric
 	# ids resolve back to the (now-remapped) dev passwd entry.
 	exec setpriv --reuid "$PUID" --regid "$PGID" --init-groups -- "$@"
 fi
 
-# Already unprivileged (rootless Podman, or --user override): run as-is.
+# Already unprivileged (rootless Podman, or --user override): run as-is, but
+# still refresh managed dotfiles (owned by the running user; no chown needed).
+/usr/local/lib/squarebox/refresh-dotfiles.sh || true
 exec "$@"
