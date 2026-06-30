@@ -71,6 +71,10 @@ Valid sections: `git`, `github`, `ai`, `editors`, `tuis`, `multiplexers`, `sdks`
 
 Run `source ~/.bashrc` after setup to pick up new aliases and PATH changes in the current shell.
 
+### Getting Help
+
+`sqrbx-help` prints a one-screen overview of the `sqrbx-*` commands plus the fzf (`Ctrl+R`/`Ctrl+T`/`Alt+C`/`**<Tab>`) and zoxide (`cd`/`cdi`) keyboard shortcuts. The script (`scripts/squarebox-help.sh`) guards each command row with `command -v`, so it only lists tools actually installed. The MOTD (`motd.sh`) points to it on every shell start.
+
 ## Updating Tool Versions
 
 ```bash

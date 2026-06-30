@@ -267,6 +267,14 @@ suite_setup_editors() {
 	run_test_grep "3.13d motd shows learn hint when enabled" "sqrbx-learn" bash /usr/local/lib/squarebox/motd.sh
 	run_test_grep "3.13e help documents hands-on agent mode" "hands-on" sqrbx-learn --help
 	run_test "3.13f unknown lesson arg errors" bash -c '! sqrbx-learn __no_such_tool__ 2>/dev/null'
+
+	# 3.14 sqrbx-help: installed, lists commands + fzf/zoxide shortcuts,
+	# and the motd surfaces the hint
+	run_test "3.14a sqrbx-help installed" command -v sqrbx-help
+	run_test_grep "3.14b sqrbx-help lists sqrbx-setup" "sqrbx-setup" sqrbx-help
+	run_test_grep "3.14c sqrbx-help documents fzf shortcuts" "Ctrl+R" sqrbx-help
+	run_test_grep "3.14d sqrbx-help documents zoxide cd" "zoxide" sqrbx-help
+	run_test_grep "3.14e motd shows help hint" "sqrbx-help" bash /usr/local/lib/squarebox/motd.sh
 }
 
 # ── Suite: update ────────────────────────────────────────────────────────

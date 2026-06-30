@@ -334,6 +334,14 @@ to scale both the examples and the agent's coaching; you can change it later
 from the menu. Lessons render through `glow` when available so the markdown
 bodies display properly.
 
+Getting help
+------------
+
+Run `sqrbx-help` inside the container for a one-screen overview of the
+`sqrbx-*` commands plus the fzf (`Ctrl+R`/`Ctrl+T`/`Alt+C`/`**<Tab>`) and
+zoxide (`cd`/`cdi`) keyboard shortcuts. The MOTD points to it on every shell
+start.
+
 Reconfiguring
 -------------
 

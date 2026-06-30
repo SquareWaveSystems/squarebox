@@ -43,4 +43,7 @@ fi
 if [ -f "/workspace/.squarebox/learn" ] && grep -qx "enabled" /workspace/.squarebox/learn 2>/dev/null; then
 	printf '\e[38;5;208m  ✦ sqrbx-learn\e[0m\e[38;5;245m — learn the toolkit hands-on with your AI agent\e[0m\n'
 fi
+
+# Help hint
+printf '\e[38;5;208m  ✦ sqrbx-help\e[0m\e[38;5;245m — commands and keyboard shortcuts\e[0m\n'
 echo
