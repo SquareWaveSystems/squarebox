@@ -140,6 +140,7 @@ COPY setup.sh /usr/local/lib/squarebox/setup.sh
 COPY scripts/squarebox-update.sh /usr/local/bin/sqrbx-update
 COPY scripts/squarebox-setup.sh /usr/local/bin/sqrbx-setup
 COPY scripts/sqrbx-learn /usr/local/bin/sqrbx-learn
+COPY scripts/squarebox-help.sh /usr/local/bin/sqrbx-help
 COPY scripts/squarebox-entrypoint.sh /usr/local/bin/squarebox-entrypoint
 COPY scripts/lib/tools.yaml /usr/local/lib/squarebox/tools.yaml
 COPY scripts/lib/tool-lib.sh /usr/local/lib/squarebox/tool-lib.sh
@@ -148,6 +149,7 @@ RUN chmod +x /usr/local/lib/squarebox/setup.sh \
 	/usr/local/bin/sqrbx-update \
 	/usr/local/bin/sqrbx-setup \
 	/usr/local/bin/sqrbx-learn \
+	/usr/local/bin/sqrbx-help \
 	/usr/local/bin/squarebox-entrypoint
 
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
