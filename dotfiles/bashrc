@@ -19,6 +19,14 @@ shopt -s checkwinsize
 # squarebox additions
 eval "$(starship init bash)"
 eval "$(zoxide init bash --cmd cd)"
+# bash-completion (git subcommands, flags, etc.)
+[ -f /usr/share/bash-completion/bash_completion ] && source /usr/share/bash-completion/bash_completion
+# fzf keybindings + completion (Ctrl+R history, Ctrl+T files, Alt+C cd, ** trigger).
+# Ubuntu's apt fzf ships the keybindings under doc/examples but does not auto-source
+# them; the ** completion lives in the bash-completion dir (lazy-loaded only on first
+# fzf<TAB>), so source it explicitly to wire the trigger up at shell startup.
+[ -f /usr/share/doc/fzf/examples/key-bindings.bash ] && source /usr/share/doc/fzf/examples/key-bindings.bash
+[ -f /usr/share/bash-completion/completions/fzf ] && source /usr/share/bash-completion/completions/fzf
 alias ls='eza --icons'
 alias ll='eza -la --icons'
 alias lsa='ls -a'

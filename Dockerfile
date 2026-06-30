@@ -2,7 +2,14 @@ FROM ubuntu:24.04
 
 # 1. Base Packages & Rust CLI Tools (consolidated, slimmed)
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# The Ubuntu base image strips /usr/share/doc/* (dpkg.cfg.d/excludes), but fzf
+# ships its shell keybindings ONLY under /usr/share/doc/fzf/examples/. Re-include
+# that one file (must be set BEFORE fzf is unpacked below) so the Ctrl+R/Ctrl+T/
+# Alt+C bindings sourced from bashrc actually exist. The ** completion lives under
+# /usr/share/bash-completion/ and is unaffected.
+RUN printf 'path-include=/usr/share/doc/fzf/examples/key-bindings.bash\n' \
+		> /etc/dpkg/dpkg.cfg.d/zz-squarebox-fzf \
+	&& apt-get update && apt-get install -y --no-install-recommends \
 	git \
 	curl \
 	unzip \
@@ -14,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	ripgrep \
 	bat \
 	fzf \
+	bash-completion \
 	nano \
 	zstd \
 	zoxide \
