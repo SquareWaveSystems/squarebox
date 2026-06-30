@@ -42,8 +42,8 @@ cat <<-EOF
 	  ${CYAN}**<Tab>${RESET}        Fuzzy-complete the current word, e.g. \`vim **<Tab>\` (fzf)
 
 	${BOLD}Navigation:${RESET}
-	  ${CYAN}cd <part>${RESET}      Jump to a frecent directory by partial name (zoxide)
-	  ${CYAN}cdi <part>${RESET}     Same, but pick interactively from matches (zoxide)
+	  ${CYAN}z <part>${RESET}       Jump to a frecent directory by partial name (zoxide)
+	  ${CYAN}zi <part>${RESET}      Same, but pick interactively from matches (zoxide)
 	  ${CYAN}.. ... ....${RESET}    Up one / two / three directories
 
 	${BOLD}Aliases:${RESET}

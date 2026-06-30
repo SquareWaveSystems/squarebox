@@ -339,7 +339,7 @@ Getting help
 
 Run `sqrbx-help` inside the container for a one-screen overview of the
 `sqrbx-*` commands plus the fzf (`Ctrl+R`/`Ctrl+T`/`Alt+C`/`**<Tab>`) and
-zoxide (`cd`/`cdi`) keyboard shortcuts. The MOTD points to it on every shell
+zoxide (`z`/`zi`) keyboard shortcuts. The MOTD points to it on every shell
 start.
 
 Reconfiguring
