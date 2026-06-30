@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	ripgrep \
 	bat \
 	fzf \
+	bash-completion \
 	nano \
 	zstd \
 	zoxide \
