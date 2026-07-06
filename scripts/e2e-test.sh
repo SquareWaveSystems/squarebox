@@ -84,6 +84,10 @@ suite_tools() {
 
 	# 5.14 difftastic version (binary is named `difft`)
 	run_test "5.14 difft --version" difft --version
+
+	# 5.15 ssh client present (openssh-client — git only Recommends it, so
+	# --no-install-recommends would drop it without an explicit install)
+	run_test "5.15 ssh installed" command -v ssh
 }
 
 # ── Suite: shell ─────────────────────────────────────────────────────────

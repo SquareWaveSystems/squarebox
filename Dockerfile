@@ -11,6 +11,10 @@ RUN printf 'path-include=/usr/share/doc/fzf/examples/key-bindings.bash\n' \
 		> /etc/dpkg/dpkg.cfg.d/zz-squarebox-fzf \
 	&& apt-get update && apt-get install -y --no-install-recommends \
 	git \
+	# openssh-client: git only Recommends it, so --no-install-recommends drops it.
+	# Needed for SSH git remotes and the agent-forwarding mounts (SSH_AUTH_SOCK,
+	# ~/.ssh/config, ~/.ssh/known_hosts) set up at run time.
+	openssh-client \
 	curl \
 	unzip \
 	jq \
