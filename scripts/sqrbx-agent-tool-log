@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# sqrbx-agent-tool-log — Claude Code PostToolUse hook for squarebox learn mode.
+# Records which squarebox toolkit commands the AI agent runs while it works,
+# so `sqrbx-learn recap` can turn the agent's real usage into lessons.
+#
+# Wire-up (managed by `sqrbx-learn recap --enable/--disable`): registered
+# under hooks.PostToolUse with matcher "Bash" in ~/.claude/settings.json.
+# Claude Code pipes the tool-call JSON to stdin.
+#
+# Log format: <epoch>|<tool>|<command>  (one line per toolkit tool spotted;
+# the command may itself contain "|", so parse fields 1-2 and treat the rest
+# as the command).
+#
+# This hook must never get in the agent's way: no set -e, and it always
+# exits 0 — a logging failure is not worth breaking a work session over.
+
+set -uo pipefail
+
+LOG_FILE="/workspace/.squarebox/agent-tool-log"
+MAX_LINES=1000
+
+# Keep in sync with the lesson catalog in sqrbx-learn.
+TOOLKIT="rg fd bat eza delta difft yq xh just glow gum fzf zoxide gh lazygit yazi"
+
+main() {
+	command -v jq >/dev/null 2>&1 || return 0
+
+	local input tool_name cmd
+	input=$(cat) || return 0
+	tool_name=$(jq -r '.tool_name // empty' <<<"$input" 2>/dev/null) || return 0
+	[ "$tool_name" = "Bash" ] || return 0
+	cmd=$(jq -r '.tool_input.command // empty' <<<"$input" 2>/dev/null) || return 0
+	[ -n "$cmd" ] || return 0
+
+	# Flatten to one line and cap the length so the log stays greppable.
+	cmd=$(printf '%s' "$cmd" | tr '\n\t' '  ' | cut -c1-200)
+
+	# Log one entry per toolkit tool that appears in command position —
+	# start of string, or right after a separator (; | & (), pipe, or $(.
+	local tool matched=""
+	for tool in $TOOLKIT; do
+		if printf '%s' "$cmd" | grep -Eq "(^|[;|&(])[[:space:]]*${tool}([[:space:]]|\$)"; then
+			matched="${matched}${tool} "
+		fi
+	done
+	[ -n "$matched" ] || return 0
+
+	mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || return 0
+	local now; now=$(date +%s)
+	for tool in $matched; do
+		printf '%s|%s|%s\n' "$now" "$tool" "$cmd" >> "$LOG_FILE"
+	done
+
+	# Trim so the log never grows unbounded.
+	if [ "$(wc -l < "$LOG_FILE")" -gt "$MAX_LINES" ]; then
+		tail -n "$MAX_LINES" "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
+	fi
+	return 0
+}
+
+main
+exit 0

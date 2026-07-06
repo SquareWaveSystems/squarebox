@@ -5,6 +5,9 @@
 # Usage:
 #   sqrbx-learn            Open the menu (hands-on AI agent mode, or browse lessons)
 #   sqrbx-learn <tool>     Jump straight to a tool's lesson (e.g. sqrbx-learn rg)
+#   sqrbx-learn ask "..."  Ask your configured AI CLI a toolkit question (one-shot)
+#   sqrbx-learn explain    Explain a command flag-by-flag (given, or your last one)
+#   sqrbx-learn recap      Review the toolkit commands your AI agent has been running
 #   sqrbx-learn --progress Show your progress
 #   sqrbx-learn --reset    Reset all progress AND skill level
 #   sqrbx-learn --help     Show this help
@@ -15,6 +18,9 @@ set -euo pipefail
 
 PROGRESS_FILE="/workspace/.squarebox/learn-progress"
 SQUAREBOX_DIR="/workspace/.squarebox"
+AGENT_LOG="/workspace/.squarebox/agent-tool-log"
+CLAUDE_SETTINGS="${HOME}/.claude/settings.json"
+AGENT_LOG_HOOK="/usr/local/bin/sqrbx-agent-tool-log"
 
 # ── Required tool guard ──────────────────────────────────────────────────────
 # gum drives the interactive UI. Most invocations need it, but --help and
@@ -82,6 +88,64 @@ has_tool() {
 		*)
 			command -v "$tool" &>/dev/null ;;
 	esac
+}
+
+# ── Configured AI agent detection ────────────────────────────────────────────
+# Coach mode and the one-shot commands (ask/explain/recap) work with whichever
+# AI CLIs setup.sh installed. Binary presence is the source of truth (same
+# rationale as has_tool): /workspace/.squarebox/ai can go stale across
+# rebuilds, but `command -v` never lies.
+#
+# Not listed: copilot (github-copilot-cli suggests one-liners; it has no agent
+# session or print mode to inject a tutor prompt into) and pi (no documented
+# system-prompt or initial-prompt injection yet).
+
+AGENT_ORDER=(claude opencode gemini codex)
+
+agent_label() {
+	case "$1" in
+		claude)   echo "Claude Code"       ;;
+		opencode) echo "OpenCode"          ;;
+		gemini)   echo "Google Gemini CLI" ;;
+		codex)    echo "OpenAI Codex CLI"  ;;
+	esac
+}
+
+available_agents() {
+	local a
+	for a in "${AGENT_ORDER[@]}"; do
+		command -v "$a" >/dev/null 2>&1 && echo "$a"
+	done
+	return 0
+}
+
+first_agent() { available_agents | head -1; }
+
+# Run a one-shot, non-interactive prompt against the first available agent.
+# $1 = tutor context, $2 = user prompt. Prints the agent's answer to stdout.
+# Only claude has a true system-prompt flag in print mode; the others get the
+# context prepended to the prompt, which works well enough for one-shots.
+agent_oneshot() {
+	local context="$1" prompt="$2" agent
+	agent=$(first_agent)
+	if [ -z "$agent" ]; then
+		echo "sqrbx-learn: no AI CLI found (claude, opencode, gemini, or codex)." >&2
+		echo "  Add one with: sqrbx-setup ai" >&2
+		return 1
+	fi
+	echo "Asking $(agent_label "$agent")…" >&2
+	case "$agent" in
+		claude)   claude -p --append-system-prompt "$context" "$prompt" ;;
+		opencode) opencode run "$context"$'\n\n'"$prompt"               ;;
+		gemini)   gemini -p "$context"$'\n\n'"$prompt"                  ;;
+		codex)    codex exec "$context"$'\n\n'"$prompt"                 ;;
+	esac
+}
+
+# Render one-shot markdown answers. Not lesson_pager: answers are short, so
+# inline rendering beats dropping into a pager the user has to quit.
+render_md() {
+	if command -v glow >/dev/null 2>&1; then glow -; else cat; fi
 }
 
 # ── Lesson catalog ───────────────────────────────────────────────────────────
@@ -1239,9 +1303,11 @@ EOF
 # ── Hands-on AI agent (coach mode) ────────────────────────────────────────────
 # Launches the AI coding agent with a "teach me while we work" instruction
 # appended for this session only. The teaching itself is a portable prompt
-# (tutor_prompt) — only the injection is harness-specific. Claude Code's
-# --append-system-prompt lets us inject the coaching persona without touching
-# the workspace's own CLAUDE.md, so it stays session-scoped and opt-in.
+# (tutor_prompt) — only the injection is harness-specific: Claude Code takes
+# it via --append-system-prompt, while OpenCode/Gemini/Codex receive it as a
+# session-opening message (tutor_first_message). Either way it never touches
+# the workspace's own CLAUDE.md/AGENTS.md, so it stays session-scoped and
+# opt-in.
 
 tutor_prompt() {
 	local sl; sl=$(skill_level)
@@ -1291,20 +1357,200 @@ pair programming where they hold the keyboard.
 EOF
 }
 
+# Agents without a session-scoped system-prompt flag get the tutor prompt as
+# the opening message instead, with a preamble asking them to adopt it for the
+# whole session. Weaker than a real system prompt, but portable.
+tutor_first_message() {
+	printf 'Adopt the following as your standing instructions for this ENTIRE session, then greet the operator and ask what task they want to work on.\n\n'
+	tutor_prompt
+}
+
 launch_agent_tutor() {
-	if ! command -v claude >/dev/null 2>&1; then
+	local -a agents=()
+	local a
+	while IFS= read -r a; do [ -n "$a" ] && agents+=("$a"); done < <(available_agents)
+
+	if [ ${#agents[@]} -eq 0 ]; then
 		echo
-		gum style --foreground 214 "Hands-on agent mode currently supports Claude Code, which isn't installed."
-		dim "Add it with: sqrbx-setup ai"
+		gum style --foreground 214 "Hands-on coach mode needs an AI CLI (Claude Code, OpenCode, Gemini CLI, or Codex CLI)."
+		dim "Add one with: sqrbx-setup ai"
 		sleep 2
 		return 0
 	fi
+
+	local agent="${agents[0]}"
+	if [ ${#agents[@]} -gt 1 ]; then
+		local -a labels=()
+		for a in "${agents[@]}"; do labels+=("$(agent_label "$a")"); done
+		local pick
+		pick=$(gum choose --header "Which agent should coach this session?" "${labels[@]}") || return 0
+		for a in "${agents[@]}"; do
+			if [ "$(agent_label "$a")" = "$pick" ]; then agent="$a"; break; fi
+		done
+	fi
+
 	echo
-	green "Launching Claude in hands-on coach mode (skill: $(skill_level))…"
+	green "Launching $(agent_label "$agent") in hands-on coach mode (skill: $(skill_level))…"
 	dim "It hands you commands to run yourself. Say \"just do it\" to let it take over."
-	dim "Exit Claude to return to this menu."
+	dim "Exit the agent to return to this menu."
 	echo
-	claude --append-system-prompt "$(tutor_prompt)" || true
+	case "$agent" in
+		claude)   claude --append-system-prompt "$(tutor_prompt)" || true ;;
+		opencode) opencode --prompt "$(tutor_first_message)"      || true ;;
+		gemini)   gemini -i "$(tutor_first_message)"              || true ;;
+		codex)    codex "$(tutor_first_message)"                  || true ;;
+	esac
+}
+
+# ── One-shot LLM commands: ask / explain ─────────────────────────────────────
+# Deliberately gum-free (like --help/--progress) so they work in pipes,
+# scripts, and degraded environments. Each call costs API tokens on the
+# operator's own agent auth, so both are strictly on-demand.
+
+oneshot_context() {
+	local sl; sl=$(skill_level)
+	cat <<EOF
+You are the squarebox terminal tutor. The operator's self-described terminal
+skill level is: ${sl} — calibrate your answer to that level. Answer in
+concise markdown (it renders in a terminal); no preamble. Prefer the modern
+squarebox toolkit and give the exact command to run: rg (not grep), fd (not
+find), bat (cat is aliased to it), eza (ls is aliased to it), zoxide (cd is
+aliased to it), fzf, delta, difft, yq, xh (not curl), just, glow, gum, gh,
+lazygit, yazi. When a tool deserves a deeper dive, point the operator at its
+lesson: sqrbx-learn <tool>.
+EOF
+}
+
+cmd_ask() {
+	if [ $# -eq 0 ]; then
+		echo "Usage: sqrbx-learn ask \"<question>\"" >&2
+		echo "Example: sqrbx-learn ask \"how do I find files changed in the last day?\"" >&2
+		return 1
+	fi
+	agent_oneshot "$(oneshot_context)" "$*" | render_md
+}
+
+cmd_explain() {
+	local cmdline="$*"
+	if [ -z "$cmdline" ]; then
+		# Best effort: the most recent command from the shell's history file.
+		# A parent shell's in-memory history isn't visible to this process,
+		# so this only sees what has been flushed to disk.
+		local histfile="${HISTFILE:-$HOME/.bash_history}"
+		if [ -f "$histfile" ]; then
+			cmdline=$(tail -n 1 "$histfile" 2>/dev/null || true)
+		fi
+	fi
+	if [ -z "$cmdline" ]; then
+		echo "Usage: sqrbx-learn explain '<command>'" >&2
+		echo "(no command given and no shell history found to fall back on)" >&2
+		return 1
+	fi
+	echo "Explaining: $cmdline" >&2
+	agent_oneshot "$(oneshot_context)" "Explain this shell command flag-by-flag, then summarize what it does overall in one sentence. If it uses a legacy tool that has a better squarebox alternative, show the modern equivalent command and name its lesson. Remember the squarebox aliases: cat=bat --paging=never, ls=eza --icons, cd=zoxide.
+
+Command: ${cmdline}" | render_md
+}
+
+# ── Recap: learn from your agent ─────────────────────────────────────────────
+# `recap --enable` registers a PostToolUse hook (sqrbx-agent-tool-log) in
+# ~/.claude/settings.json that records every squarebox toolkit command the
+# agent runs while it works. `recap` then turns that log into a debrief —
+# you learn the tools from real usage on your real tasks, not from synthetic
+# examples. Hook support is Claude Code-only for now; the recap itself reads
+# a plain log file, so other harnesses can feed it later.
+
+recap_hook_enabled() {
+	[ -f "$CLAUDE_SETTINGS" ] || return 1
+	command -v jq >/dev/null 2>&1 || return 1
+	jq -e --arg cmd "$AGENT_LOG_HOOK" \
+		'.hooks.PostToolUse[]?.hooks[]? | select(.command == $cmd)' \
+		"$CLAUDE_SETTINGS" >/dev/null 2>&1
+}
+
+recap_enable() {
+	if ! command -v jq >/dev/null 2>&1; then
+		echo "sqrbx-learn: jq is required to edit ~/.claude/settings.json." >&2
+		return 1
+	fi
+	if recap_hook_enabled; then
+		echo "Agent tool logging is already enabled."
+		return 0
+	fi
+	mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
+	[ -s "$CLAUDE_SETTINGS" ] || echo '{}' > "$CLAUDE_SETTINGS"
+	local tmp; tmp=$(mktemp)
+	jq --arg cmd "$AGENT_LOG_HOOK" \
+		'.hooks.PostToolUse = ((.hooks.PostToolUse // []) + [{matcher: "Bash", hooks: [{type: "command", command: $cmd}]}])' \
+		"$CLAUDE_SETTINGS" > "$tmp" && mv "$tmp" "$CLAUDE_SETTINGS"
+	echo "✓ Agent tool logging enabled (Claude Code PostToolUse hook)."
+	echo "  New Claude Code sessions will log toolkit commands to:"
+	echo "  $AGENT_LOG"
+	echo "  Review them anytime with: sqrbx-learn recap"
+}
+
+recap_disable() {
+	if ! command -v jq >/dev/null 2>&1; then
+		echo "sqrbx-learn: jq is required to edit ~/.claude/settings.json." >&2
+		return 1
+	fi
+	if ! recap_hook_enabled; then
+		echo "Agent tool logging is not enabled."
+		return 0
+	fi
+	local tmp; tmp=$(mktemp)
+	jq --arg cmd "$AGENT_LOG_HOOK" '
+		.hooks.PostToolUse = [
+			(.hooks.PostToolUse // [])[]
+			| .hooks = ((.hooks // []) | map(select(.command != $cmd)))
+			| select((.hooks | length) > 0)
+		]
+		| if (.hooks.PostToolUse | length) == 0 then del(.hooks.PostToolUse) else . end
+		| if (.hooks | length) == 0 then del(.hooks) else . end
+	' "$CLAUDE_SETTINGS" > "$tmp" && mv "$tmp" "$CLAUDE_SETTINGS"
+	echo "✓ Agent tool logging disabled."
+}
+
+cmd_recap() {
+	case "${1:-}" in
+		--enable)  recap_enable;  return 0 ;;
+		--disable) recap_disable; return 0 ;;
+	esac
+
+	if ! [ -s "$AGENT_LOG" ]; then
+		echo "No agent activity logged yet."
+		if recap_hook_enabled; then
+			echo "Logging is enabled — run some Claude Code sessions, then come back."
+		else
+			echo "Enable logging first:  sqrbx-learn recap --enable"
+			echo "It records the squarebox toolkit commands your Claude Code agent"
+			echo "runs while working, so you can learn the tools from its real usage."
+		fi
+		return 0
+	fi
+
+	echo "Toolkit commands your agent has run ($(wc -l < "$AGENT_LOG") logged):"
+	echo
+	local count tool example
+	cut -d'|' -f2 "$AGENT_LOG" | sort | uniq -c | sort -rn | while read -r count tool; do
+		example=$(awk -F'|' -v t="$tool" '$2 == t { sub(/^[^|]*\|[^|]*\|/, ""); last = $0 } END { print last }' "$AGENT_LOG")
+		printf '  %4d× %-8s %s\n' "$count" "$tool" "${example:0:60}"
+	done
+	echo
+	echo "Deep dive on any of these:  sqrbx-learn <tool>"
+
+	# Optional AI debrief — interactive terminals only, and only when an
+	# agent and gum are around, since it costs tokens and needs a confirm.
+	local agent; agent=$(first_agent)
+	if [ -n "$agent" ] && [ -t 0 ] && [ -t 1 ] && command -v gum >/dev/null 2>&1; then
+		echo
+		if gum confirm "Get an AI debrief of what these commands did?" --default=true; then
+			local recent; recent=$(tail -n 40 "$AGENT_LOG" | cut -d'|' -f2-)
+			agent_oneshot "$(oneshot_context)" "Here are squarebox toolkit commands my AI agent recently ran while working in my repo, one per line as tool|command. Pick the 3-5 most instructive, explain what each did and what its flags mean, and end with one takeaway trick I can use myself.
+
+${recent}" | render_md
+		fi
+	fi
 }
 
 # ── Lesson deep-linking ───────────────────────────────────────────────────────
@@ -1450,15 +1696,24 @@ usage() {
 	sqrbx-learn — interactive terminal learning guide
 
 	Usage:
-	  sqrbx-learn            Open the menu (hands-on AI agent mode, or browse lessons)
-	  sqrbx-learn <tool>     Jump straight to a tool's lesson (e.g. sqrbx-learn rg)
-	  sqrbx-learn --progress Show your progress
-	  sqrbx-learn --reset    Reset all progress AND skill level (re-prompts on next launch)
-	  sqrbx-learn --help     Show this help
+	  sqrbx-learn                  Open the menu (hands-on AI agent mode, or browse lessons)
+	  sqrbx-learn <tool>           Jump straight to a tool's lesson (e.g. sqrbx-learn rg)
+	  sqrbx-learn ask "<question>" Ask your configured AI CLI a toolkit question (one-shot)
+	  sqrbx-learn explain ['<cmd>'] Explain a command flag-by-flag (defaults to your last one)
+	  sqrbx-learn recap            Review the toolkit commands your AI agent has been running
+	  sqrbx-learn recap --enable   Start logging agent commands (Claude Code hook)
+	  sqrbx-learn recap --disable  Stop logging agent commands
+	  sqrbx-learn --progress       Show your progress
+	  sqrbx-learn --reset          Reset all progress AND skill level (re-prompts on next launch)
+	  sqrbx-learn --help           Show this help
 
-	Hands-on agent mode (the top menu entry) launches Claude Code as a coach for
-	the session: instead of doing the work for you, it hands you each command to
+	Hands-on agent mode (the top menu entry) launches your configured AI CLI
+	(Claude Code, OpenCode, Gemini CLI, or Codex CLI) as a coach for the
+	session: instead of doing the work for you, it hands you each command to
 	run yourself and explains why. Say "just do it" to let it take over.
+
+	ask/explain/recap use the same AI CLI non-interactively — each call runs
+	on your own agent auth and costs tokens, so they only fire on demand.
 
 	Inside the guide:
 	  ↑↓ / jk    Navigate lessons
@@ -1489,6 +1744,18 @@ case "${1:-}" in
 			&& green "✓ Progress reset." \
 			|| dim "Cancelled."
 		exit 0
+		;;
+	ask)
+		shift
+		cmd_ask "$@"
+		;;
+	explain)
+		shift
+		cmd_explain "$@"
+		;;
+	recap)
+		shift
+		cmd_recap "$@"
 		;;
 	"")
 		main

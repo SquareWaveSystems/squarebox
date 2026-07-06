@@ -30,7 +30,7 @@ EOF
 
 cmd_row sqrbx-setup  "Re-run the setup wizard to add/change tools (--list, --help)"
 cmd_row sqrbx-update "Update installed tool binaries in-place from upstream"
-cmd_row sqrbx-learn  "Learn the toolkit hands-on with your AI agent"
+cmd_row sqrbx-learn  "Learn the toolkit hands-on with your AI agent (ask, explain, recap)"
 cmd_row sqrbx-help   "Show this overview"
 
 cat <<-EOF
