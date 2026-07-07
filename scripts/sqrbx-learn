@@ -530,13 +530,14 @@ jumps to the most frecent directory that matches "foo". `autojump` (2009) had
 a similar idea but was slower.
 
 Ajeet D'Souza wrote `zoxide` in 2020 as a faster, cross-shell implementation.
-squarebox initialises zoxide in your shell and aliases it to `cd` — so every
-`cd` you run is also training it.
+squarebox initialises zoxide in your shell as `z` (with `zi` for the interactive
+picker), leaving the plain `cd` builtin untouched. Every `cd` you run still
+trains the database.
 
 **Key concepts:**
 • Every directory you `cd` into is added to the frecency database
-• `cd foo` — jump to the highest-frecency match for "foo"
-• `cd foo bar` — match a path containing both "foo" and "bar"
+• `z foo` — jump to the highest-frecency match for "foo"
+• `z foo bar` — match a path containing both "foo" and "bar"
 • `zi` — interactive picker (uses fzf) — browse the database
 • `zoxide query --list` — see your full frecency database
 • It gets smarter the more you use it
@@ -550,7 +551,7 @@ EOF
 	case "$sl" in
 		beginner)
 			echo "  cd /workspace          # normal cd also trains zoxide"
-			echo "  cd workspace           # jump to any frecent dir matching 'workspace'"
+			echo "  z workspace            # jump to any frecent dir matching 'workspace'"
 			;;
 		intermediate)
 			echo "  zi                     # interactive picker (needs fzf)"
@@ -559,8 +560,8 @@ EOF
 		expert)
 			echo "  zoxide query --list --score   # show with frecency scores"
 			echo "  zoxide remove /old/path       # remove a stale entry"
-			echo "  # zoxide also works with z and zi as aliases if preferred:"
-			echo "  # eval \"\$(zoxide init bash --cmd z)\""
+			echo "  # prefer to overload cd itself? re-init with --cmd cd:"
+			echo "  # eval \"\$(zoxide init bash --cmd cd)\""
 			;;
 	esac
 	echo
@@ -1273,7 +1274,7 @@ pair programming where they hold the keyboard.
 - fd over find — simpler syntax, sane defaults
 - bat over cat — syntax highlighting (already aliased to `cat`)
 - eza over ls — icons and git status (already aliased to `ls`)
-- zoxide over cd — frecency jumps (already aliased to `cd`)
+- zoxide over cd — frecency jumps (use `z <part>` / `zi` to pick)
 - fzf — fuzzy-pick anything (Ctrl-T files, Ctrl-R history, Alt-C dirs)
 - delta — syntax-highlighted git diffs (git's default pager here)
 - difft (difftastic) — structural, syntax-aware diffs
@@ -1325,7 +1326,7 @@ resolve_lesson_id() {
 		find)             echo "fd_vs_find"      ;;
 		cat)              echo "bat_vs_cat"      ;;
 		ls)               echo "eza_vs_ls"       ;;
-		cd)               echo "zoxide_cd"       ;;
+		cd|z)             echo "zoxide_cd"       ;;
 		difftastic)       echo "difftastic"      ;;
 		curl|http|httpie) echo "xh_http"         ;;
 		make)             echo "just_taskrunner" ;;

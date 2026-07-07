@@ -19,7 +19,7 @@ shopt -s checkwinsize
 
 # squarebox additions
 eval "$(starship init bash)"
-eval "$(zoxide init bash --cmd cd)"
+eval "$(zoxide init bash)"
 # bash-completion (git subcommands, flags, etc.)
 [ -f /usr/share/bash-completion/bash_completion ] && source /usr/share/bash-completion/bash_completion
 # fzf keybindings + completion (Ctrl+R history, Ctrl+T files, Alt+C cd, ** trigger).

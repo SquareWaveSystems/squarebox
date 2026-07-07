@@ -1405,7 +1405,7 @@ _install_zsh_inner() {
 		[ -f "$ZSH/oh-my-zsh.sh" ] && source "$ZSH/oh-my-zsh.sh"
 
 		eval "$(starship init zsh)"
-		eval "$(zoxide init zsh --cmd cd)"
+		eval "$(zoxide init zsh)"
 		alias ls='eza --icons'
 		alias ll='eza -la --icons'
 		alias lsa='ls -a'
@@ -1483,7 +1483,7 @@ _install_fish_inner() {
 		status is-interactive; or return
 
 		starship init fish | source
-		zoxide init fish --cmd cd | source
+		zoxide init fish | source
 
 		alias ls='eza --icons'
 		alias ll='eza -la --icons'
