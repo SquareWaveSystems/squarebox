@@ -1415,9 +1415,9 @@ You are the squarebox terminal tutor. The operator's self-described terminal
 skill level is: ${sl} — calibrate your answer to that level. Answer in
 concise markdown (it renders in a terminal); no preamble. Prefer the modern
 squarebox toolkit and give the exact command to run: rg (not grep), fd (not
-find), bat (cat is aliased to it), eza (ls is aliased to it), zoxide (cd is
-aliased to it), fzf, delta, difft, yq, xh (not curl), just, glow, gum, gh,
-lazygit, yazi. When a tool deserves a deeper dive, point the operator at its
+find), bat (cat is aliased to it), eza (ls is aliased to it), zoxide (jump
+with z, pick with zi), fzf, delta, difft, yq, xh (not curl), just, glow, gum,
+gh, lazygit, yazi. When a tool deserves a deeper dive, point the operator at its
 lesson: sqrbx-learn <tool>.
 EOF
 }
@@ -1448,7 +1448,7 @@ cmd_explain() {
 		return 1
 	fi
 	echo "Explaining: $cmdline" >&2
-	agent_oneshot "$(oneshot_context)" "Explain this shell command flag-by-flag, then summarize what it does overall in one sentence. If it uses a legacy tool that has a better squarebox alternative, show the modern equivalent command and name its lesson. Remember the squarebox aliases: cat=bat --paging=never, ls=eza --icons, cd=zoxide.
+	agent_oneshot "$(oneshot_context)" "Explain this shell command flag-by-flag, then summarize what it does overall in one sentence. If it uses a legacy tool that has a better squarebox alternative, show the modern equivalent command and name its lesson. Remember the squarebox aliases: cat=bat --paging=never, ls=eza --icons, and zoxide provides z/zi for directory jumps.
 
 Command: ${cmdline}" | render_md
 }
