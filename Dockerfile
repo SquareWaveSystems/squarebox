@@ -144,6 +144,7 @@ COPY setup.sh /usr/local/lib/squarebox/setup.sh
 COPY scripts/squarebox-update.sh /usr/local/bin/sqrbx-update
 COPY scripts/squarebox-setup.sh /usr/local/bin/sqrbx-setup
 COPY scripts/sqrbx-learn /usr/local/bin/sqrbx-learn
+COPY scripts/sqrbx-agent-tool-log /usr/local/bin/sqrbx-agent-tool-log
 COPY scripts/squarebox-help.sh /usr/local/bin/sqrbx-help
 COPY scripts/squarebox-entrypoint.sh /usr/local/bin/squarebox-entrypoint
 COPY scripts/squarebox-refresh-dotfiles.sh /usr/local/lib/squarebox/refresh-dotfiles.sh
@@ -164,6 +165,7 @@ RUN chmod +x /usr/local/lib/squarebox/setup.sh \
 	/usr/local/bin/sqrbx-update \
 	/usr/local/bin/sqrbx-setup \
 	/usr/local/bin/sqrbx-learn \
+	/usr/local/bin/sqrbx-agent-tool-log \
 	/usr/local/bin/sqrbx-help \
 	/usr/local/bin/squarebox-entrypoint
 

@@ -278,6 +278,22 @@ suite_setup_editors() {
 	run_test_grep "3.13e help documents hands-on agent mode" "hands-on" sqrbx-learn --help
 	run_test "3.13f unknown lesson arg errors" bash -c '! sqrbx-learn __no_such_tool__ 2>/dev/null'
 
+	# 3.13g-3.13m ask/explain/recap: the agent-tool-log hook is installed and
+	# records toolkit commands, recap summarizes them, and --enable/--disable
+	# manage the Claude Code PostToolUse hook. Nothing here invokes a real
+	# LLM: recap only offers its AI debrief on an interactive terminal.
+	run_test "3.13g sqrbx-agent-tool-log installed" command -v sqrbx-agent-tool-log
+	run_test "3.13h hook logs toolkit commands" bash -c \
+		'echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rg -l TODO src/\"}}" | sqrbx-agent-tool-log && grep -q "|rg|rg -l TODO" /workspace/.squarebox/agent-tool-log'
+	run_test "3.13i hook ignores non-toolkit commands" bash -c \
+		'echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo hello\"}}" | sqrbx-agent-tool-log && ! grep -q "echo hello" /workspace/.squarebox/agent-tool-log'
+	run_test_grep "3.13j recap summarizes the agent log" "rg -l TODO" sqrbx-learn recap
+	run_test "3.13k recap --enable registers claude hook" bash -c \
+		'sqrbx-learn recap --enable >/dev/null && jq -e --arg c /usr/local/bin/sqrbx-agent-tool-log ".hooks.PostToolUse[]?.hooks[]? | select(.command == \$c)" ~/.claude/settings.json'
+	run_test "3.13l recap --disable removes claude hook" bash -c \
+		'sqrbx-learn recap --disable >/dev/null && ! jq -e --arg c /usr/local/bin/sqrbx-agent-tool-log ".hooks.PostToolUse[]?.hooks[]? | select(.command == \$c)" ~/.claude/settings.json'
+	run_test_grep "3.13m help documents ask/explain/recap" "recap" sqrbx-learn --help
+
 	# 3.14 sqrbx-help: installed, lists commands + fzf/zoxide shortcuts,
 	# and the motd surfaces the hint
 	run_test "3.14a sqrbx-help installed" command -v sqrbx-help
