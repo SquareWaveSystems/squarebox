@@ -91,7 +91,7 @@ suite_tools() {
 }
 
 # ── Suite: shell ─────────────────────────────────────────────────────────
-# Covers: 4.1-4.7 (shell environment)
+# Covers: 4.1-4.8 (shell environment)
 
 suite_shell() {
 	# 4.1 starship prompt in bashrc
@@ -103,9 +103,9 @@ suite_shell() {
 	# 4.3 MOTD runs without error
 	run_test "4.3 motd.sh runs" /usr/local/lib/squarebox/motd.sh
 
-	# 4.4 squarebox version is baked in and surfaced by the MOTD
-	run_test "4.4 VERSION file present and non-empty" test -s /usr/local/lib/squarebox/VERSION
-	run_test_grep "4.5 motd shows the baked version" \
+	# 4.8 squarebox version is baked in and surfaced by the MOTD
+	run_test "4.8a VERSION file present and non-empty" test -s /usr/local/lib/squarebox/VERSION
+	run_test_grep "4.8b motd shows the baked version" \
 		"$(cat /usr/local/lib/squarebox/VERSION)" \
 		bash /usr/local/lib/squarebox/motd.sh
 
