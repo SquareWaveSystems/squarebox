@@ -113,13 +113,16 @@ if ($Edge) {
 }
 
 # --- Build ---
+# Stamp the image with the checked-out version so the MOTD can show it.
+$SquareboxVersion = (& git -C $InstallDir describe --tags --always --dirty 2>$null)
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($SquareboxVersion)) { $SquareboxVersion = "dev" }
 Write-Host "Building image... " -NoNewline
 if ($Verbose) {
     Write-Host ""
-    & $Runtime build -t $ImageName $InstallDir
+    & $Runtime build --build-arg "SQUAREBOX_VERSION=$SquareboxVersion" -t $ImageName $InstallDir
     if ($LASTEXITCODE -ne 0) { Abort "$Runtime build failed." }
 } else {
-    $buildLog = & $Runtime build -t $ImageName $InstallDir 2>&1
+    $buildLog = & $Runtime build --build-arg "SQUAREBOX_VERSION=$SquareboxVersion" -t $ImageName $InstallDir 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "FAILED" -ForegroundColor Red
         Write-Host ($buildLog -join "`n")

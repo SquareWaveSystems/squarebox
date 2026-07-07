@@ -418,6 +418,7 @@ jobs:
           {
             echo "tags=${tags}"
             echo "prerelease=${prerelease}"
+            echo "version=${ref}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
@@ -434,6 +435,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            SQUAREBOX_VERSION=${{ steps.meta.outputs.version }}
           # Reuse the layer caches the build-amd64 / build-arm64 jobs populated.
           cache-from: |
             type=gha

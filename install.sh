@@ -165,12 +165,16 @@ _rc_tmp=""
 _create_log=""
 trap 'rm -f "$_build_log" "$_rc_tmp" "$_create_log" 2>/dev/null || true' EXIT
 if [ "$EDGE" = 1 ] || [ "$BUILD" = 1 ]; then
+	# Stamp the image with the checked-out version so the MOTD can show it.
+	# git describe gives the tag for a release checkout (e.g. v0.6) or
+	# tag-distance-commit for edge/main (e.g. v0.6-12-gabc123); falls back to dev.
+	SQUAREBOX_VERSION=$(git -C "$INSTALL_DIR" describe --tags --always --dirty 2>/dev/null || echo dev)
 	if [ "$VERBOSE" = 1 ]; then
 		echo "Building image..."
-		rt_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR"
+		rt_cmd build --build-arg "SQUAREBOX_VERSION=$SQUAREBOX_VERSION" -t "$IMAGE_NAME" "$INSTALL_DIR"
 	else
 		printf "Building image... "
-		if rt_cmd build -t "$IMAGE_NAME" "$INSTALL_DIR" > "$_build_log" 2>&1; then
+		if rt_cmd build --build-arg "SQUAREBOX_VERSION=$SQUAREBOX_VERSION" -t "$IMAGE_NAME" "$INSTALL_DIR" > "$_build_log" 2>&1; then
 			echo "done"
 		else
 			echo "FAILED" >&2

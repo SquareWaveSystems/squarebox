@@ -170,6 +170,14 @@ RUN chmod +x /usr/local/lib/squarebox/setup.sh \
 RUN chown -R dev:dev /home/dev/.config /home/dev/.claude \
 	&& mkdir -p /workspace && chown dev:dev /workspace
 
+# squarebox release version, baked at build time so the MOTD can surface it.
+# Defaults to "dev" for local/untagged builds; install.sh passes `git describe`
+# and the GHCR publish workflow passes the release tag. Declared this late so a
+# version bump only invalidates the trailing layers, not the whole tool stack.
+ARG SQUAREBOX_VERSION=dev
+RUN printf '%s\n' "$SQUAREBOX_VERSION" > /usr/local/lib/squarebox/VERSION
+LABEL org.opencontainers.image.version="$SQUAREBOX_VERSION"
+
 # The container starts as root so the entrypoint can honour PUID/PGID, then
 # drops to `dev` via setpriv. With the default 1000:1000 this is a no-op and
 # the running process is `dev` — identical to a plain `USER dev` image. PUID/
