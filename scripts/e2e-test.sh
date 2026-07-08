@@ -182,7 +182,7 @@ suite_setup() {
 suite_setup_editors() {
 	# Pre-seed selections in /workspace/.squarebox/
 	mkdir -p /workspace/.squarebox
-	echo "opencode,pi" > /workspace/.squarebox/ai-tool
+	echo "opencode,pi,paseo" > /workspace/.squarebox/ai-tool
 	echo "micro,edit,fresh,nvim" > /workspace/.squarebox/editors
 	echo "lazygit,gh-dash,yazi" > /workspace/.squarebox/tuis
 	echo "tmux,zellij" > /workspace/.squarebox/multiplexer
@@ -214,6 +214,7 @@ suite_setup_editors() {
 	# 3.7 editors installed
 	run_test "3.7a opencode installed" command -v opencode
 	run_test "3.7a2 pi installed" command -v pi
+	run_test "3.7a3 paseo installed" command -v paseo
 	run_test "3.7b micro installed" command -v micro
 	run_test "3.7c edit installed" command -v edit
 	run_test "3.7d fresh installed" command -v fresh

@@ -107,7 +107,7 @@ scripted installs). Values use the same keys as `sqrbx-setup`:
 
 | Variable | Selects |
 |----------|---------|
-| `SQUAREBOX_AI` | AI assistants (`claude,copilot,gemini,codex,opencode,pi`) |
+| `SQUAREBOX_AI` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,paseo`) |
 | `SQUAREBOX_SDKS` | language SDKs (`node,python,go,dotnet,rust`) |
 | `SQUAREBOX_EDITORS` | editors (`micro,edit,fresh,nvim`) |
 | `SQUAREBOX_TUIS` | TUI tools (`lazygit,gh-dash,yazi`) |
@@ -227,6 +227,7 @@ pre-selected non-interactively via the `SQUAREBOX_AI`/`SQUAREBOX_SDKS`/… env v
 | [OpenAI Codex CLI](https://github.com/openai/codex) | TypeScript | OpenAI Codex in the terminal * |
 | [opencode](https://github.com/anomalyco/opencode) | Go | AI coding TUI |
 | [Pi Coding Agent](https://github.com/earendil-works/pi) | TypeScript | Minimal terminal coding harness (Earendil) * |
+| [Paseo](https://paseo.sh) | TypeScript | Remote control for AI CLI agents * |
 
 \* Requires Node.js (auto-installed if needed).
 
