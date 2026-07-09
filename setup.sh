@@ -17,7 +17,7 @@ done
 
 # If --rerun with no specific sections, run all sections
 if $SB_RERUN && [ ${#SB_SECTIONS[@]} -eq 0 ]; then
-	SB_SECTIONS=(git github ai editors tuis multiplexers sdks shell learn)
+	SB_SECTIONS=(git github ai editors tuis multiplexers sdks shell)
 fi
 
 should_run() {
@@ -1577,7 +1577,12 @@ esac
 fi # should_run shell
 
 # ── Learn mode ───────────────────────────────────────────────────────────────
-if should_run learn; then
+# Disabled: the learn feature is half-baked and not surfaced to users. To
+# re-enable, set SB_LEARN_ENABLED=true below and add `learn` back to the
+# SB_SECTIONS defaults above (and to sqrbx-setup's VALID_SECTIONS, motd.sh,
+# squarebox-help.sh, and the README).
+SB_LEARN_ENABLED=false
+if [ "$SB_LEARN_ENABLED" = true ] && should_run learn; then
 
 LEARN_CONFIG="/workspace/.squarebox/learn"
 
