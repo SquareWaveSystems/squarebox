@@ -91,6 +91,23 @@ run_with_spinner() {
 	fi
 }
 
+# Install Debian packages resiliently.
+#
+# `apt-get update` refreshes *every* configured source, including the
+# third-party repos wired up at build time (github-cli, gierens/eza). Those are
+# only needed to install gh/eza during the image build — but their source lists
+# linger in the image, so a transient outage of one of them (e.g. deb.gierens.de
+# briefly serving no Release file) makes `apt-get update` exit non-zero. With the
+# old `update && install` chaining that aborted the whole install of a base-repo
+# package like tmux, failing E2E and sinking the release build.
+#
+# So let update fail soft — the reachable indexes (incl. the Debian base repo)
+# still refresh — and gate on the install itself, which is the real requirement.
+apt_install() {
+	sudo apt-get update -qq || true
+	sudo apt-get install -y -qq "$@" >/dev/null 2>&1
+}
+
 if $SB_RERUN; then
 	_sb_banner="🟧📦 squarebox setup (reconfigure)"
 else
@@ -643,7 +660,7 @@ install_lazyvim() {
 _install_lazyvim_inner() {
 	# nvim-treesitter compiles parsers on first launch, which needs a C compiler
 	if ! command -v cc &>/dev/null && ! command -v gcc &>/dev/null; then
-		sudo apt-get update -qq && sudo apt-get install -y -qq build-essential >/dev/null 2>&1 || return 1
+		apt_install build-essential || return 1
 	fi
 	git clone --depth 1 https://github.com/LazyVim/starter ~/.config/nvim >/dev/null 2>&1 || return 1
 	rm -rf ~/.config/nvim/.git
@@ -871,7 +888,7 @@ else
 fi
 
 _install_tmux_inner() {
-	sudo apt-get update -qq && sudo apt-get install -y -qq tmux >/dev/null 2>&1
+	apt_install tmux || return 1
 	# Install default config (Omarchy-inspired defaults)
 	mkdir -p ~/.config/tmux
 	if [ ! -f ~/.config/tmux/tmux.conf ]; then
@@ -1382,7 +1399,7 @@ else
 fi
 
 _install_zsh_inner() {
-	sudo apt-get update -qq && sudo apt-get install -y -qq zsh >/dev/null 2>&1 || return 1
+	apt_install zsh || return 1
 	command -v zsh >/dev/null 2>&1 || return 1
 	# Trust boundary: the Oh My Zsh installer manages its own files via HTTPS.
 	# We resolve the latest release tag at setup time (matching the trust model
@@ -1485,7 +1502,7 @@ _squarebox_bash_line_to_fish() {
 }
 
 _install_fish_inner() {
-	sudo apt-get update -qq && sudo apt-get install -y -qq fish >/dev/null 2>&1 || return 1
+	apt_install fish || return 1
 	command -v fish >/dev/null 2>&1 || return 1
 	mkdir -p "$HOME/.config/fish/conf.d" || return 1
 	# Generate ~/.config/fish/config.fish mirroring the default bashrc in

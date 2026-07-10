@@ -258,15 +258,19 @@ update_tool() {
 
 	printf "  ${CYAN}Updating %s to %s...${RESET}" "$display" "$latest_clean"
 
-	# Ensure xz-utils is available for helix
+	# Ensure xz-utils is available for helix. Let `apt-get update` fail soft: a
+	# transient outage of a build-time third-party repo (github-cli, gierens/eza)
+	# must not block installing a base-repo package. Gate on the install itself.
 	if [ "$tool" = "helix" ] && ! command -v xz &>/dev/null; then
-		sudo apt-get update -qq && sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
+		sudo apt-get update -qq || true
+		sudo apt-get install -y -qq xz-utils >/dev/null 2>&1
 	fi
 
-	# Ensure zstd is available for edit
+	# Ensure zstd is available for edit (same fail-soft update rationale as above)
 	local cleanup_zstd=""
 	if [ "$tool" = "edit" ] && ! command -v zstd &>/dev/null; then
-		sudo apt-get update -qq && sudo apt-get install -y -qq zstd >/dev/null 2>&1
+		sudo apt-get update -qq || true
+		sudo apt-get install -y -qq zstd >/dev/null 2>&1
 		cleanup_zstd=1
 	fi
 
