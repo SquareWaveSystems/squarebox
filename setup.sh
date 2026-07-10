@@ -105,6 +105,11 @@ echo
 
 # Git identity
 if should_run git; then
+	# git config --file won't create parent dirs; ensure it exists before writing.
+	# In the compose/GHCR pull path ~/.config/git is not bind-mounted, so it may
+	# be absent inside the squarebox-home volume (issue: setup fails with
+	# "could not lock config file .../.config/git/config: No such file or directory").
+	mkdir -p ~/.config/git
 	_current_name=$(git config --global user.name 2>/dev/null || true)
 	_current_email=$(git config --global user.email 2>/dev/null || true)
 
