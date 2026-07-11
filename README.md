@@ -313,46 +313,8 @@ and fish.
 
 ### Learning mode (beta)
 
-Optional. When enabled during first-run setup (or via `sqrbx-setup learn`),
-the container ships an interactive guide to every tool in the toolkit —
-history, why-it-exists, and skill-level-adapted "try it" examples.
-
-    sqrbx-learn               # open the menu
-    sqrbx-learn rg            # jump straight to a tool's lesson
-    sqrbx-learn ask "..."     # one-shot toolkit question to your AI CLI
-    sqrbx-learn explain '...' # explain a command flag-by-flag
-    sqrbx-learn recap         # review the commands your agent has been running
-    sqrbx-learn --progress    # show what you've completed
-    sqrbx-learn --reset       # wipe progress AND skill level
-
-The top menu entry, **Learn hands-on with your AI agent**, launches your
-configured AI CLI — Claude Code, OpenCode, Gemini CLI, or Codex CLI — in a
-coaching mode for the session: instead of doing the work for you, it explains
-each step, hands you the exact command and the reason for the tool choice,
-and asks you to run it yourself. Say "just do it" at any point to let it take
-over. Claude Code gets the coaching persona via `--append-system-prompt`; the
-others receive it as a session-opening instruction. Either way it's
-session-scoped and never touches your workspace's own `CLAUDE.md`/`AGENTS.md`.
-(No AI CLI yet? Add one with `sqrbx-setup ai`.)
-
-`ask` and `explain` use the same AI CLI non-interactively: `ask` answers a
-toolkit question with the exact command to run, and `explain` breaks down a
-command flag-by-flag (defaulting to the last one in your shell history) and
-suggests the modern squarebox equivalent when you fed it a legacy tool. Both
-run on your own agent auth and cost tokens, so they only fire on demand.
-
-`recap` reverses the direction — learn from what your agent does. After
-`sqrbx-learn recap --enable` registers a Claude Code `PostToolUse` hook, every
-squarebox toolkit command the agent runs while working is logged to
-`/workspace/.squarebox/agent-tool-log`. `sqrbx-learn recap` then shows
-per-tool counts with real examples from your own tasks, and can hand the
-recent log to your AI CLI for a debrief of what those commands actually did.
-`recap --disable` removes the hook.
-
-The first launch asks for a skill level (beginner / intermediate / expert)
-to scale both the examples and the agent's coaching; you can change it later
-from the menu. Lessons render through `glow` when available so the markdown
-bodies display properly.
+> Currently disabled — the feature is half-baked and not surfaced during setup.
+> The `sqrbx-learn` binary remains installed in the image for later revival.
 
 Getting help
 ------------
@@ -368,7 +330,7 @@ Reconfiguring
 Re-run the first-run wizard at any time from inside the container with
 `sqrbx-setup`. With no arguments it walks every section; pass one or more
 section names to reconfigure just those: `git`, `github`, `ai`, `editors`,
-`tuis`, `multiplexers`, `sdks`, `shell`, `learn`. `sqrbx-setup --list` shows your
+`tuis`, `multiplexers`, `sdks`, `shell`. `sqrbx-setup --list` shows your
 current selections and `sqrbx-setup --help` the usage.
 
 Aliases

@@ -270,12 +270,13 @@ suite_setup_editors() {
 	# 4.5 c alias points to first AI tool (opencode)
 	run_test_grep "4.5 c alias set to opencode" "opencode" cat ~/.squarebox-ai-aliases
 
-	# 3.13 learn mode: image binary present, config persists, --help works,
-	# motd surfaces the hint when enabled
+	# 3.13 learn mode: image binary present, config persists, --help works.
+	# (Learn is currently disabled in the wizard/UX — see setup.sh
+	# SB_LEARN_ENABLED — but the binary stays installed and these tests
+	# keep it honest for revival. The MOTD hint is intentionally absent.)
 	run_test "3.13a sqrbx-learn installed" command -v sqrbx-learn
 	run_test_grep "3.13b learn config persists" "enabled" cat /workspace/.squarebox/learn
 	run_test "3.13c sqrbx-learn --help exits 0" sqrbx-learn --help
-	run_test_grep "3.13d motd shows learn hint when enabled" "sqrbx-learn" bash /usr/local/lib/squarebox/motd.sh
 	run_test_grep "3.13e help documents hands-on agent mode" "hands-on" sqrbx-learn --help
 	run_test "3.13f unknown lesson arg errors" bash -c '! sqrbx-learn __no_such_tool__ 2>/dev/null'
 
