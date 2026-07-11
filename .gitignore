@@ -6,6 +6,7 @@
 *.swo
 *~
 *.bak
+nvim.log
 
 # IDE / editor directories
 .vscode/
@@ -22,6 +23,7 @@ credentials.json
 # Docker build artifacts
 workspace/
 .config/
+.squarebox/
 
 # OS files
 Thumbs.db

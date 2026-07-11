@@ -7,7 +7,8 @@ set -euo pipefail
 #   e2e-test.sh <suite>
 #   e2e-test.sh all
 #
-# Suites: tools, shell, setup, update
+# Suites: tools, shell, setup, setup-editors, update, devcontainer,
+# setup-rerun, dotfiles, smoke, all
 # Output: TAP (Test Anything Protocol)
 
 # ── TAP helpers ──────────────────────────────────────────────────────────
@@ -15,11 +16,21 @@ set -euo pipefail
 PASS_COUNT=0
 FAIL_COUNT=0
 TEST_NUM=0
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+record_evidence() {
+	[ -n "${SQUAREBOX_EVIDENCE_DIR:-}" ] || return 0
+	local status="$1" name="$2" detail="${3:-}" id
+	id="${name%% *}"
+	SQUAREBOX_EVIDENCE_DIR="$SQUAREBOX_EVIDENCE_DIR" \
+		"$SCRIPT_DIR/e2e-evidence.sh" "$status" "$id" "$name" "$detail"
+}
 
 tap_ok() {
 	TEST_NUM=$((TEST_NUM + 1))
 	PASS_COUNT=$((PASS_COUNT + 1))
 	echo "ok ${TEST_NUM} - $1"
+	record_evidence pass "$1"
 }
 
 tap_fail() {
@@ -27,6 +38,8 @@ tap_fail() {
 	FAIL_COUNT=$((FAIL_COUNT + 1))
 	echo "not ok ${TEST_NUM} - $1"
 	[ -n "${2:-}" ] && echo "#   $2"
+	record_evidence fail "$1" "${2:-}"
+	return 0
 }
 
 run_test() {
@@ -55,6 +68,18 @@ run_test_grep() {
 # Covers: 5.1-5.14 (tool verification)
 
 suite_tools() {
+	# Canonical inventory for tools promised as always present. Keep this in the
+	# Candidate suite so publication cannot depend on the separate PR workflow.
+	local command_name
+	local -a core_commands=(
+		bat curl delta difft eza fd fzf gh glow gum jq just mise nano rg
+		starship xh yq zoxide
+	)
+	for command_name in "${core_commands[@]}"; do
+		run_test "tools.core.$command_name Core image exposes $command_name" \
+			command -v "$command_name"
+	done
+
 	# 5.1 bat --version + syntax highlighting
 	run_test "5.1a bat --version" bat --version
 	run_test "5.1b bat syntax highlight" bat --color=always /etc/hostname
@@ -88,6 +113,12 @@ suite_tools() {
 	# 5.15 ssh client present (openssh-client — git only Recommends it, so
 	# --no-install-recommends would drop it without an explicit install)
 	run_test "5.15 ssh installed" command -v ssh
+	run_test "5.16 Candidate checksum manifest present" \
+		test -s /usr/local/lib/squarebox/checksums.txt
+
+	# Learn mode is intentionally excluded from the default v1.1 Box.
+	run_test "learn.not-shipped Disabled learn commands and hooks are absent from the default image" bash -c \
+		'! command -v sqrbx-learn >/dev/null && ! command -v sqrbx-agent-tool-log >/dev/null'
 }
 
 # ── Suite: shell ─────────────────────────────────────────────────────────
@@ -136,8 +167,11 @@ suite_shell() {
 	run_test_grep "4.6c tui-aliases sourced" "squarebox-tui-aliases" cat ~/.bashrc
 	run_test_grep "4.6d mise activated" 'mise activate bash' cat ~/.bashrc
 
-	# Shell config loads without errors (also in build.yml)
-	run_test "4.0 shell config loads" bash -lc 'echo ok'
+	# Exercise the real interactive rc path. DEVCONTAINER suppresses only the
+	# first-run wizard; initialization still executes.
+	run_test "shell.interactive The actual interactive shell configuration initializes" \
+		env DEVCONTAINER=1 bash --noprofile --rcfile "$HOME/.bashrc" -ic \
+		'command -v starship >/dev/null && command -v zoxide >/dev/null'
 }
 
 # ── Suite: setup ─────────────────────────────────────────────────────────
@@ -147,32 +181,40 @@ suite_setup() {
 	# 3.1 setup triggers on first login (check bashrc has trigger)
 	run_test_grep "3.1 setup trigger in bashrc" "setup.sh" cat ~/.bashrc
 
-	# 3.12 non-interactive mode skips prompts
-	# Pre-configure git identity so that prompt is skipped
-	git config --global user.name "E2E Test" 2>/dev/null || true
-	git config --global user.email "e2e@test.local" 2>/dev/null || true
+	# 3.12 non-interactive mode completes without invoking prompts.
+	git config --global user.name "E2E Test"
+	git config --global user.email "e2e@test.local"
 
-	# Run setup.sh in non-interactive mode (piped stdin)
-	local setup_output
-	setup_output=$(echo "" | /usr/local/lib/squarebox/setup.sh 2>&1) || true
-
-	TEST_NUM=$((TEST_NUM + 1))
-	if echo "$setup_output" | grep -qi "skipping\|non-interactive"; then
-		PASS_COUNT=$((PASS_COUNT + 1))
-		echo "ok ${TEST_NUM} - 3.12 non-interactive mode skips prompts"
+	# A closed stdin is the production noninteractive contract. Require the
+	# setup process itself to succeed, and reject every prompt emitted by the
+	# plain-read and gum paths instead of treating a partial run as a pass.
+	local setup_output setup_status prompt_pattern
+	if setup_output=$(/usr/local/lib/squarebox/setup.sh </dev/null 2>&1); then
+		setup_status=0
 	else
-		FAIL_COUNT=$((FAIL_COUNT + 1))
-		echo "not ok ${TEST_NUM} - 3.12 non-interactive mode skips prompts"
+		setup_status=$?
+	fi
+	prompt_pattern='Git (name|email).*:|Re-authenticate\?|Sign in to GitHub\?|Selection \[[^]]+\]:|Install the LazyVim starter config|Select (AI coding assistants|text editors|TUI tools|multiplexers|SDKs|shell)'
+
+	if [ "$setup_status" -ne 0 ]; then
+		tap_fail "setup.noninteractive Noninteractive setup exits successfully without invoking an interactive prompt" \
+			"setup exited $setup_status"
+	elif grep -Eqi "$prompt_pattern" <<<"$setup_output"; then
+		tap_fail "setup.noninteractive Noninteractive setup exits successfully without invoking an interactive prompt" \
+			"interactive prompt detected"
+	elif ! grep -Fqx 'Skipping GitHub CLI auth (non-interactive)' <<<"$setup_output" \
+		|| ! grep -Fqx 'Skipping editor selection (non-interactive)' <<<"$setup_output"; then
+		tap_fail "setup.noninteractive Noninteractive setup exits successfully without invoking an interactive prompt" \
+			"expected noninteractive branches were not observed"
+	else
+		tap_ok "setup.noninteractive Noninteractive setup exits successfully without invoking an interactive prompt"
 	fi
 
 	# 3.2 git identity skip when preconfigured
-	TEST_NUM=$((TEST_NUM + 1))
-	if echo "$setup_output" | grep -qiv "git name"; then
-		PASS_COUNT=$((PASS_COUNT + 1))
-		echo "ok ${TEST_NUM} - 3.2 git identity skipped when preconfigured"
+	if ! echo "$setup_output" | grep -qi "git name"; then
+		tap_ok "3.2 git identity skipped when preconfigured"
 	else
-		FAIL_COUNT=$((FAIL_COUNT + 1))
-		echo "not ok ${TEST_NUM} - 3.2 git identity skipped when preconfigured"
+		tap_fail "3.2 git identity skipped when preconfigured"
 	fi
 }
 
@@ -183,7 +225,7 @@ suite_setup_editors() {
 	# Pre-seed selections in /workspace/.squarebox/
 	mkdir -p /workspace/.squarebox
 	echo "opencode,pi,paseo" > /workspace/.squarebox/ai-tool
-	echo "micro,edit,fresh,nvim" > /workspace/.squarebox/editors
+	echo "micro,edit,fresh,helix,nvim" > /workspace/.squarebox/editors
 	echo "lazygit,gh-dash,yazi" > /workspace/.squarebox/tuis
 	echo "tmux,zellij" > /workspace/.squarebox/multiplexer
 	echo "node,go" > /workspace/.squarebox/sdks
@@ -191,17 +233,21 @@ suite_setup_editors() {
 	# install (apt zsh + Oh My Zsh + two plugin clones) is network-heavy and
 	# would significantly slow the CI suite, so it's not pre-seeded by default.
 	echo "bash" > /workspace/.squarebox/shell
-	echo "enabled" > /workspace/.squarebox/learn
 	# Ensure stale markers from a previous run are cleared so the assertion
 	# below reflects the current selection, not leftover state.
 	rm -f ~/.squarebox-use-zsh ~/.squarebox-use-fish
 
 	# Pre-configure git identity
-	git config --global user.name "E2E Test" 2>/dev/null || true
-	git config --global user.email "e2e@test.local" 2>/dev/null || true
+	git config --global user.name "E2E Test"
+	git config --global user.email "e2e@test.local"
 
-	# Run setup.sh non-interactively (uses saved selections)
-	echo "" | /usr/local/lib/squarebox/setup.sh 2>&1 || true
+	# Its own exit status is Evidence: already-present binaries cannot hide a
+	# failed update.
+	if /usr/local/lib/squarebox/setup.sh </dev/null; then
+		tap_ok "setup.box-tier Selected Box-tier setup completes with production capabilities and the read-only timezone mount"
+	else
+		tap_fail "setup.box-tier Selected Box-tier setup completes with production capabilities and the read-only timezone mount"
+	fi
 
 	# Activate mise so SDK shims are visible in this session, and add
 	# ~/.local/bin to PATH (where opencode/editors/TUIs install).
@@ -218,12 +264,14 @@ suite_setup_editors() {
 	run_test "3.7b micro installed" command -v micro
 	run_test "3.7c edit installed" command -v edit
 	run_test "3.7d fresh installed" command -v fresh
-	run_test "3.7e nvim installed" command -v nvim
+	run_test "3.7e helix installed as hx" command -v hx
+	run_test "3.7f nvim installed" command -v nvim
 
-	# 3.7f-h TUI tools installed
-	run_test "3.7f lazygit installed" command -v lazygit
-	run_test "3.7g gh-dash installed" command -v gh-dash
-	run_test "3.7h yazi installed" command -v yazi
+	# 3.7g-k TUI tools installed (Yazi ships two coordinated binaries)
+	run_test "3.7g lazygit installed" command -v lazygit
+	run_test "3.7h gh-dash installed" command -v gh-dash
+	run_test "3.7i yazi installed" command -v yazi
+	run_test "3.7j ya installed" command -v ya
 
 	# 5.12 lazygit config uses delta pager (set up by install_lazygit)
 	run_test_grep "5.12 lazygit config uses delta" "delta" cat /home/dev/.config/lazygit/config.yml
@@ -247,21 +295,15 @@ suite_setup_editors() {
 
 	# 3.12 shell section: bash selection leaves no zsh/fish handoff markers
 	run_test_grep "3.12a shell config is bash" "bash" cat /workspace/.squarebox/shell
-	TEST_NUM=$((TEST_NUM + 1))
 	if [ ! -e ~/.squarebox-use-zsh ]; then
-		PASS_COUNT=$((PASS_COUNT + 1))
-		echo "ok ${TEST_NUM} - 3.12b no zsh marker for bash selection"
+		tap_ok "3.12b no zsh marker for bash selection"
 	else
-		FAIL_COUNT=$((FAIL_COUNT + 1))
-		echo "not ok ${TEST_NUM} - 3.12b no zsh marker for bash selection"
+		tap_fail "3.12b no zsh marker for bash selection"
 	fi
-	TEST_NUM=$((TEST_NUM + 1))
 	if [ ! -e ~/.squarebox-use-fish ]; then
-		PASS_COUNT=$((PASS_COUNT + 1))
-		echo "ok ${TEST_NUM} - 3.12c no fish marker for bash selection"
+		tap_ok "3.12c no fish marker for bash selection"
 	else
-		FAIL_COUNT=$((FAIL_COUNT + 1))
-		echo "not ok ${TEST_NUM} - 3.12c no fish marker for bash selection"
+		tap_fail "3.12c no fish marker for bash selection"
 	fi
 
 	# 4.4 EDITOR set to first selected editor (micro)
@@ -269,32 +311,6 @@ suite_setup_editors() {
 
 	# 4.5 c alias points to first AI tool (opencode)
 	run_test_grep "4.5 c alias set to opencode" "opencode" cat ~/.squarebox-ai-aliases
-
-	# 3.13 learn mode: image binary present, config persists, --help works.
-	# (Learn is currently disabled in the wizard/UX — see setup.sh
-	# SB_LEARN_ENABLED — but the binary stays installed and these tests
-	# keep it honest for revival. The MOTD hint is intentionally absent.)
-	run_test "3.13a sqrbx-learn installed" command -v sqrbx-learn
-	run_test_grep "3.13b learn config persists" "enabled" cat /workspace/.squarebox/learn
-	run_test "3.13c sqrbx-learn --help exits 0" sqrbx-learn --help
-	run_test_grep "3.13e help documents hands-on agent mode" "hands-on" sqrbx-learn --help
-	run_test "3.13f unknown lesson arg errors" bash -c '! sqrbx-learn __no_such_tool__ 2>/dev/null'
-
-	# 3.13g-3.13m ask/explain/recap: the agent-tool-log hook is installed and
-	# records toolkit commands, recap summarizes them, and --enable/--disable
-	# manage the Claude Code PostToolUse hook. Nothing here invokes a real
-	# LLM: recap only offers its AI debrief on an interactive terminal.
-	run_test "3.13g sqrbx-agent-tool-log installed" command -v sqrbx-agent-tool-log
-	run_test "3.13h hook logs toolkit commands" bash -c \
-		'echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rg -l TODO src/\"}}" | sqrbx-agent-tool-log && grep -q "|rg|rg -l TODO" /workspace/.squarebox/agent-tool-log'
-	run_test "3.13i hook ignores non-toolkit commands" bash -c \
-		'echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo hello\"}}" | sqrbx-agent-tool-log && ! grep -q "echo hello" /workspace/.squarebox/agent-tool-log'
-	run_test_grep "3.13j recap summarizes the agent log" "rg -l TODO" sqrbx-learn recap
-	run_test "3.13k recap --enable registers claude hook" bash -c \
-		'sqrbx-learn recap --enable >/dev/null && jq -e --arg c /usr/local/bin/sqrbx-agent-tool-log ".hooks.PostToolUse[]?.hooks[]? | select(.command == \$c)" ~/.claude/settings.json'
-	run_test "3.13l recap --disable removes claude hook" bash -c \
-		'sqrbx-learn recap --disable >/dev/null && ! jq -e --arg c /usr/local/bin/sqrbx-agent-tool-log ".hooks.PostToolUse[]?.hooks[]? | select(.command == \$c)" ~/.claude/settings.json'
-	run_test_grep "3.13m help documents ask/explain/recap" "recap" sqrbx-learn --help
 
 	# 3.14 sqrbx-help: installed, lists commands + fzf/zoxide shortcuts,
 	# and the motd surfaces the hint
@@ -324,18 +340,15 @@ suite_update() {
 	checksum_dir=$(mktemp -d)
 	echo "0000000000000000000000000000000000000000000000000000000000000000  delta_99.99.99_amd64.deb" > "$checksum_dir/checksums.txt"
 
-	TEST_NUM=$((TEST_NUM + 1))
-	# We can't easily trigger a tamper in sqrbx-update without modifying it,
-	# but we can verify the verify-checksum script rejects bad checksums
+	# Verify the shared verifier rejects bad bytes using the checksum path that
+	# production callers pass explicitly.
 	echo "test content" > "$checksum_dir/testfile"
 	local expected_hash="0000000000000000000000000000000000000000000000000000000000000000"
 	echo "${expected_hash}  testfile" > "$checksum_dir/test-checksums.txt"
-	if ! (cd "$checksum_dir" && verify-checksum testfile testfile < test-checksums.txt) 2>/dev/null; then
-		PASS_COUNT=$((PASS_COUNT + 1))
-		echo "ok ${TEST_NUM} - 7.6 checksum verification rejects tampered file"
+	if ! verify-checksum "$checksum_dir/testfile" testfile "$checksum_dir/test-checksums.txt" 2>/dev/null; then
+		tap_ok "7.6 checksum verification rejects tampered file"
 	else
-		FAIL_COUNT=$((FAIL_COUNT + 1))
-		echo "not ok ${TEST_NUM} - 7.6 checksum verification rejects tampered file"
+		tap_fail "7.6 checksum verification rejects tampered file"
 	fi
 	rm -rf "$checksum_dir"
 
@@ -356,9 +369,12 @@ suite_devcontainer() {
 	# 8.1 valid JSON
 	run_test "8.1 devcontainer.json is valid JSON" jq empty "$dc"
 
-	# 8.3 workspace folder — must resolve to the cloned repo under /workspaces,
-	# not the image's empty /workspace dir (Codespaces/Dev Containers convention)
-	run_test_grep "8.3 workspaceFolder is the cloned repo" "/workspaces/" jq -r '.workspaceFolder' "$dc"
+	# 8.3 the Dev Container mounts the cloned repository at the same Workspace
+	# path used by Selection and setup state.
+	run_test_grep "8.3 workspaceFolder and state share /workspace" "^/workspace$" \
+		jq -r '.workspaceFolder' "$dc"
+	run_test_grep "8.3b workspaceMount targets /workspace" "target=/workspace" \
+		jq -r '.workspaceMount' "$dc"
 
 	# 8.4 user is dev
 	run_test_grep "8.4 remoteUser is dev" "dev" jq -r '.remoteUser' "$dc"
@@ -391,13 +407,10 @@ suite_setup_rerun() {
 	run_test "9.4 sqrbx-setup --list runs" sqrbx-setup --list
 
 	# Invalid section name exits with error
-	TEST_NUM=$((TEST_NUM + 1))
 	if sqrbx-setup invalidname 2>/dev/null; then
-		FAIL_COUNT=$((FAIL_COUNT + 1))
-		echo "not ok ${TEST_NUM} - 9.5 sqrbx-setup rejects invalid section"
+		tap_fail "9.5 sqrbx-setup rejects invalid section"
 	else
-		PASS_COUNT=$((PASS_COUNT + 1))
-		echo "ok ${TEST_NUM} - 9.5 sqrbx-setup rejects invalid section"
+		tap_ok "9.5 sqrbx-setup rejects invalid section"
 	fi
 
 	# setup.sh accepts --rerun with a valid section without error (non-interactive)
@@ -421,29 +434,51 @@ suite_dotfiles() {
 
 	# 10.4 staling the volume copy and re-running the refresh restores it.
 	# This is the actual #89 regression: an upgraded volume holds an old bashrc.
-	TEST_NUM=$((TEST_NUM + 1))
 	if cp -f "$HOME/.bashrc" /tmp/bashrc.e2e.bak 2>/dev/null \
 		&& printf '\n# __e2e_stale_marker__\n' >> "$HOME/.bashrc" \
 		&& "$refresh" \
 		&& ! grep -q '__e2e_stale_marker__' "$HOME/.bashrc" \
 		&& cmp -s "$HOME/.bashrc" "$src"; then
-		PASS_COUNT=$((PASS_COUNT + 1))
-		echo "ok ${TEST_NUM} - 10.4 refresh restores a staled bashrc"
+		tap_ok "dotfiles.refresh A stale Managed-home dotfile is safely refreshed"
 	else
-		FAIL_COUNT=$((FAIL_COUNT + 1))
-		echo "not ok ${TEST_NUM} - 10.4 refresh restores a staled bashrc"
+		tap_fail "dotfiles.refresh A stale Managed-home dotfile is safely refreshed"
 		cp -f /tmp/bashrc.e2e.bak "$HOME/.bashrc" 2>/dev/null || true
 	fi
 
-	# 10.5 the refresh never exits non-zero (must not be able to abort boot)
+	# 10.5 a normal, safe refresh succeeds; unsafe destinations below are
+	# intentionally authoritative failures that block boot.
 	run_test "10.5 refresh-dotfiles.sh exits 0" "$refresh"
+
+	# 10.6 persistent home paths are user-controlled. The root entrypoint must
+	# not follow a symlink and overwrite another path while refreshing defaults.
+	local symlink_target="/tmp/squarebox-dotfile-symlink-target"
+	local live_backup="/tmp/squarebox-bashrc-live-backup"
+	cp -f "$HOME/.bashrc" "$live_backup"
+	printf 'do-not-overwrite\n' > "$symlink_target"
+	rm -f "$HOME/.bashrc"
+	ln -s "$symlink_target" "$HOME/.bashrc"
+	local refresh_status=0
+	if "$refresh"; then
+		refresh_status=0
+	else
+		refresh_status=$?
+	fi
+	if [ "$refresh_status" -ne 0 ] \
+		&& [ -L "$HOME/.bashrc" ] \
+		&& grep -qx 'do-not-overwrite' "$symlink_target"; then
+		tap_ok "dotfiles.symlink Managed dotfile refresh rejects symlink destinations"
+	else
+		tap_fail "dotfiles.symlink Managed dotfile refresh rejects symlink destinations"
+	fi
+	rm -f "$HOME/.bashrc" "$symlink_target"
+	mv "$live_backup" "$HOME/.bashrc"
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────
 
 usage() {
 	echo "Usage: $0 <suite|all>"
-	echo "Suites: tools, shell, setup, setup-editors, update, devcontainer, setup-rerun, dotfiles"
+	echo "Suites: tools, shell, setup, setup-editors, update, devcontainer, setup-rerun, dotfiles, smoke, all"
 	exit 1
 }
 
@@ -462,10 +497,16 @@ main() {
 		devcontainer)    suite_devcontainer ;;
 		setup-rerun)     suite_setup_rerun ;;
 		dotfiles)        suite_dotfiles ;;
+		smoke)
+			suite_tools
+			suite_shell
+			suite_dotfiles
+			;;
 		all)
 			suite_tools
 			suite_shell
 			suite_setup
+			suite_setup_editors
 			suite_update
 			suite_devcontainer
 			suite_setup_rerun

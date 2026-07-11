@@ -10,6 +10,10 @@
 #   {march}      64 / -arm64          (Micro's quirky format)
 #   {version}    version number (no prefix)
 #   {asset_version}  asset version when it differs from tag (edit)
+# verification is either:
+#   sha256                a caller must provide a matching vetted checksum
+#   github-release-digest GitHub's exact release-asset SHA-256 is authoritative
+# docker_arg maps Dockerfile-tier tools to their single pinned ARG.
 
 tools:
 
@@ -23,6 +27,8 @@ tools:
     binaries: delta
     dest: system
     group: dockerfile
+    verification: sha256
+    docker_arg: DELTA_VERSION
 
   yq:
     repo: mikefarah/yq
@@ -32,6 +38,8 @@ tools:
     binaries: yq
     dest: system
     group: dockerfile
+    verification: sha256
+    docker_arg: YQ_VERSION
 
   xh:
     repo: ducaale/xh
@@ -42,6 +50,8 @@ tools:
     tar_strip: 1
     dest: system
     group: dockerfile
+    verification: sha256
+    docker_arg: XH_VERSION
 
   glow:
     repo: charmbracelet/glow
@@ -52,6 +62,8 @@ tools:
     find_binary: true
     dest: system
     group: dockerfile
+    verification: sha256
+    docker_arg: GLOW_VERSION
 
   gum:
     repo: charmbracelet/gum
@@ -62,6 +74,8 @@ tools:
     find_binary: true
     dest: system
     group: dockerfile
+    verification: sha256
+    docker_arg: GUM_VERSION
 
   starship:
     repo: starship/starship
@@ -72,6 +86,8 @@ tools:
     tar_extract: starship
     dest: system
     group: dockerfile
+    verification: sha256
+    docker_arg: STARSHIP_VERSION
 
   just:
     repo: casey/just
@@ -82,6 +98,8 @@ tools:
     tar_extract: just
     dest: system
     group: dockerfile
+    verification: sha256
+    docker_arg: JUST_VERSION
 
   difftastic:
     repo: Wilfred/difftastic
@@ -92,6 +110,8 @@ tools:
     tar_extract: difft
     dest: system
     group: dockerfile
+    verification: sha256
+    docker_arg: DIFFTASTIC_VERSION
 
   mise:
     repo: jdx/mise
@@ -101,6 +121,8 @@ tools:
     binaries: mise
     dest: system
     group: dockerfile
+    verification: sha256
+    docker_arg: MISE_VERSION
 
   # ── setup.sh tools (installed as user to ~/.local/bin) ──────────────
 
@@ -113,6 +135,7 @@ tools:
     tar_extract: lazygit
     dest: user
     group: setup
+    verification: github-release-digest
 
   gh-dash:
     repo: dlvhdr/gh-dash
@@ -122,6 +145,7 @@ tools:
     binaries: gh-dash
     dest: user
     group: setup
+    verification: github-release-digest
 
   yazi:
     repo: sxyazi/yazi
@@ -132,6 +156,7 @@ tools:
     zip_subdir: yazi-{zarch}-unknown-linux-musl
     dest: user
     group: setup
+    verification: github-release-digest
 
   opencode:
     repo: anomalyco/opencode
@@ -142,6 +167,7 @@ tools:
     find_binary: true
     dest: user
     group: setup
+    verification: github-release-digest
 
   micro:
     repo: micro-editor/micro
@@ -152,6 +178,7 @@ tools:
     tar_strip: 1
     dest: user
     group: setup
+    verification: github-release-digest
 
   edit:
     repo: microsoft/edit
@@ -163,6 +190,7 @@ tools:
     asset_version_from_api: true
     dest: user
     group: setup
+    verification: github-release-digest
 
   fresh:
     repo: sinelaw/fresh
@@ -173,6 +201,7 @@ tools:
     find_binary: true
     dest: user
     group: setup
+    verification: github-release-digest
 
   helix:
     repo: helix-editor/helix
@@ -184,6 +213,7 @@ tools:
     post_install: helix_runtime
     dest: user
     group: setup
+    verification: github-release-digest
 
   nvim:
     repo: neovim/neovim
@@ -196,6 +226,7 @@ tools:
     symlink: ~/.local/nvim/bin/nvim
     dest: user
     group: setup
+    verification: github-release-digest
 
   zellij:
     repo: zellij-org/zellij
@@ -206,3 +237,4 @@ tools:
     tar_extract: zellij
     dest: user
     group: setup
+    verification: github-release-digest

@@ -21,10 +21,35 @@
 # SQUAREBOX_DC_AI="claude,codex" or SQUAREBOX_DC_SDKS="node,python".
 set -euo pipefail
 
-CONFIG_DIR=/workspace/.squarebox
-SETUP=/usr/local/lib/squarebox/setup.sh
+CONFIG_DIR=${SQUAREBOX_STATE_DIR:-/workspace/.squarebox}
+SETUP=${SQUAREBOX_SETUP_SCRIPT:-/usr/local/lib/squarebox/setup.sh}
 
-mkdir -p "$CONFIG_DIR"
+while [[ "$CONFIG_DIR" == */ && "$CONFIG_DIR" != / ]]; do CONFIG_DIR=${CONFIG_DIR%/}; done
+if [ -L "$CONFIG_DIR" ]; then
+	echo "squarebox: Selection state directory must not be a symlink: $CONFIG_DIR" >&2
+	exit 1
+fi
+if [ -e "$CONFIG_DIR" ] && [ ! -d "$CONFIG_DIR" ]; then
+	echo "squarebox: Selection state path is not a directory: $CONFIG_DIR" >&2
+	exit 1
+fi
+mkdir -p -- "$CONFIG_DIR"
+if [ -L "$CONFIG_DIR" ] || [ ! -d "$CONFIG_DIR" ]; then
+	echo "squarebox: unable to create a safe Selection state directory: $CONFIG_DIR" >&2
+	exit 1
+fi
+SELECTION_STATE_FILES=(ai-tool editors editor-default nvim-lazyvim nvim-lazyvim-sha tuis multiplexer sdks shell)
+for selection_file in "${SELECTION_STATE_FILES[@]}"; do
+	selection_path="$CONFIG_DIR/$selection_file"
+	if [ -L "$selection_path" ]; then
+		echo "squarebox: Selection state file must not be a symlink: $selection_path" >&2
+		exit 1
+	fi
+	if [ -e "$selection_path" ] && [ ! -f "$selection_path" ]; then
+		echo "squarebox: Selection state path is not a regular file: $selection_path" >&2
+		exit 1
+	fi
+done
 
 # Default toolset. Use ${VAR-default} (not :-) so an explicitly empty value
 # opts out, while an unset value falls back to the default.
@@ -42,7 +67,9 @@ sections=()
 seed() {
 	local file=$1 value=$2 section=$3
 	[ -z "$value" ] && return 0
-	[ -f "$CONFIG_DIR/$file" ] || printf '%s\n' "$value" > "$CONFIG_DIR/$file"
+	if [ ! -f "$CONFIG_DIR/$file" ]; then
+		printf '%s\n' "$value" > "$CONFIG_DIR/$file"
+	fi
 	sections+=("$section")
 }
 
@@ -57,4 +84,12 @@ if [ ${#sections[@]} -eq 0 ]; then
 fi
 
 echo "squarebox: installing default toolset (${sections[*]})..."
-"$SETUP" --rerun "${sections[@]}"
+if ! "$SETUP" --rerun "${sections[@]}"; then
+	# setup.sh reconciles each requested Selection independently and rewrites
+	# that section to the successfully observed subset. Preserve those results:
+	# deleting every newly seeded file here would erase a successful SDK merely
+	# because an unrelated assistant failed later in the same run.
+	echo "squarebox: default tool provisioning failed" >&2
+	exit 1
+fi
+touch "$HOME/.squarebox-setup-done"

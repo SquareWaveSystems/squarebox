@@ -6,13 +6,77 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  repository-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install static analysis
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      - name: Parse scripts and configuration
+        run: |
+          set -euo pipefail
+          while IFS= read -r file; do
+            case "$file" in
+              *.sh) bash -n "$file" ;;
+              *)
+                first=$(head -n 1 "$file" 2>/dev/null || true)
+                case "$first" in '#!'*bash*) bash -n "$file" ;; esac
+                ;;
+            esac
+          done < <(git ls-files)
+          while IFS= read -r file; do jq empty "$file"; done < <(git ls-files '*.json')
+          ruby -e 'require "yaml"; ARGV.each { |f| YAML.parse_file(f) }' \
+            .github/dependabot.yml .github/workflows/build.yml \
+            .github/workflows/e2e.yml scripts/lib/tools.yaml
+          "$(go env GOPATH)/bin/actionlint" -color
+
+      - name: ShellCheck errors
+        run: |
+          set -euo pipefail
+          files=()
+          while IFS= read -r file; do
+            case "$file" in
+              *.sh) files+=("$file") ;;
+              *)
+                first=$(head -n 1 "$file" 2>/dev/null || true)
+                case "$first" in '#!'*bash*) files+=("$file") ;; esac
+                ;;
+            esac
+          done < <(git ls-files)
+          shellcheck --severity=error "${files[@]}"
+
+      - name: Deterministic module tests
+        run: |
+          set -euo pipefail
+          mapfile -t test_files < <(
+            find tests -maxdepth 1 -type f -name 'test-*.sh' -perm -u+x | sort
+          )
+          test "${#test_files[@]}" -gt 0
+          for test_file in "${test_files[@]}"; do
+            echo "## $test_file"
+            "$test_file"
+          done
+
+  build:
+    needs: repository-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           push: false
@@ -55,11 +119,11 @@ jobs:
           '
 
       - name: Shell config loads without errors
-        run: docker run --rm squarebox:test bash -lc 'echo ok'
+        run: docker run --rm -e DEVCONTAINER=1 squarebox:test bash --noprofile --rcfile /home/dev/.bashrc -ic 'command -v starship && command -v zoxide'
 
       - name: Aliases resolve correctly
         run: |
-          docker run --rm squarebox:test bash -lic '
+          docker run --rm -e DEVCONTAINER=1 squarebox:test bash -lic '
             [[ $(type -t ls) == "alias" ]] || { echo "FAIL: ls not aliased"; exit 1; }
             [[ $(alias ls) == *eza* ]] || { echo "FAIL: ls not aliased to eza"; exit 1; }
             [[ $(alias cat) == *bat* ]] || { echo "FAIL: cat not aliased to bat"; exit 1; }
@@ -73,13 +137,24 @@ jobs:
 
       - name: Container stop/start persistence
         run: |
-          docker run --name sqrbx-persist squarebox:test \
-            bash -c 'echo "persist-ok" > /home/dev/testfile'
-          docker cp sqrbx-persist:/home/dev/testfile /tmp/testfile
-          grep -q "persist-ok" /tmp/testfile \
-            || { echo "FAIL: file did not persist"; exit 1; }
-          docker rm sqrbx-persist
+          docker run -d --name sqrbx-persist squarebox:test sleep infinity
+          docker exec sqrbx-persist bash -c 'echo "persist-ok" > /home/dev/testfile'
+          docker stop sqrbx-persist
+          docker start sqrbx-persist
+          docker exec sqrbx-persist grep -q "persist-ok" /home/dev/testfile
           echo "Persistence test passed"
+
+      - name: In-image smoke assertions
+        run: |
+          docker run --rm \
+            -v "$PWD/scripts:/workspace/scripts:ro" \
+            squarebox:test bash -c 'scripts/e2e-test.sh tools'
+          docker run --rm \
+            -v "$PWD/scripts:/workspace/scripts:ro" \
+            squarebox:test bash -c 'scripts/e2e-test.sh shell'
+          docker run --rm \
+            -v "$PWD/scripts:/workspace/scripts:ro" \
+            squarebox:test bash -c 'scripts/e2e-test.sh dotfiles'
 
       - name: Cleanup
         if: always()
@@ -91,12 +166,13 @@ jobs:
   # Dockerfile / tool-asset breakage at PR time (via QEMU) rather than only on
   # the release tag. Build-only; behavioural arm64 tests run in e2e on tags.
   build-arm64:
+    needs: repository-tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           platforms: linux/arm64

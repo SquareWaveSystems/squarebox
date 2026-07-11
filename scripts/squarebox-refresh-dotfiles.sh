@@ -20,16 +20,39 @@
 # the resolved PUID:PGID when it runs this as root before dropping privileges;
 # omit it when running unprivileged and the copying user owns the result.
 #
-# Deliberately NOT `set -e`: refreshing a convenience dotfile must never abort
-# container boot. Every step is best-effort and the script always exits 0.
+# Deliberately NOT `set -e`: report every rejected/failed destination in one
+# pass. A non-zero result is authoritative so the entrypoint never continues
+# after an unsafe refresh.
 set -uo pipefail
 
 owner="${1:-}"
+status=0
+source_root="${SQUAREBOX_DOTFILES_SOURCE:-/usr/local/lib/squarebox/dotfiles}"
+managed_home="${SQUAREBOX_MANAGED_HOME:-/home/dev}"
+
+if [ -n "$owner" ] && [[ ! "$owner" =~ ^[0-9]+:[0-9]+$ ]]; then
+	echo "squarebox: invalid dotfile owner '$owner' (expected uid:gid)" >&2
+	exit 2
+fi
+
+# Return true when the destination itself or any existing directory below the
+# Managed home is a symlink. Following one while running as root could
+# overwrite a file outside the Managed home.
+has_symlink_component() {
+	local path="$1"
+	while [[ "$path" == "$managed_home"/* ]]; do
+		if [ -L "$path" ]; then
+			return 0
+		fi
+		path="$(dirname "$path")"
+	done
+	return 1
+}
 
 # src:dest pairs — src is the non-volume image copy, dest is the volume path.
 pairs=(
-	"/usr/local/lib/squarebox/dotfiles/bashrc:/home/dev/.bashrc"
-	"/usr/local/lib/squarebox/dotfiles/starship.toml:/home/dev/.config/starship.toml"
+	"$source_root/bashrc:$managed_home/.bashrc"
+	"$source_root/starship.toml:$managed_home/.config/starship.toml"
 )
 
 for pair in "${pairs[@]}"; do
@@ -37,6 +60,12 @@ for pair in "${pairs[@]}"; do
 	dest="${pair#*:}"
 
 	[ -f "$src" ] || continue
+
+	if has_symlink_component "$dest"; then
+		echo "squarebox: refusing to refresh symlinked dotfile destination: $dest" >&2
+		status=1
+		continue
+	fi
 
 	# Operator bind-mounted this path — host-managed, leave it alone.
 	if mountpoint -q -- "$dest" 2>/dev/null; then
@@ -48,9 +77,22 @@ for pair in "${pairs[@]}"; do
 		continue
 	fi
 
-	mkdir -p "$(dirname "$dest")" 2>/dev/null
-	cp -f "$src" "$dest" 2>/dev/null || continue
-	[ -n "$owner" ] && chown "$owner" "$dest" 2>/dev/null
+	if ! mkdir -p "$(dirname "$dest")"; then
+		echo "squarebox: failed to create dotfile directory for $dest" >&2
+		status=1
+		continue
+	fi
+	# --remove-destination prevents cp from following a destination symlink if
+	# one appears between the check above and this operation.
+	if ! cp --remove-destination -- "$src" "$dest"; then
+		echo "squarebox: failed to refresh $dest" >&2
+		status=1
+		continue
+	fi
+	if [ -n "$owner" ] && ! chown -- "$owner" "$dest"; then
+		echo "squarebox: failed to set ownership on $dest" >&2
+		status=1
+	fi
 done
 
-exit 0
+exit "$status"

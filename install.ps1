@@ -1,291 +1,875 @@
 #!/usr/bin/env pwsh
-<#
-.SYNOPSIS
-    Windows installer for squarebox. Pure PowerShell — no Git Bash required.
-.DESCRIPTION
-    Run this from PowerShell 7+ to install squarebox. Handles clone, build,
-    container creation, and PowerShell profile setup natively.
-
-    First install:  irm https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.ps1 | iex
-    Re-install:     .\install.ps1
-    Edge:           .\install.ps1 -Edge
-    Verbose:        .\install.ps1 -Verbose
-#>
 #Requires -Version 7.0
 
+[CmdletBinding()]
 param(
     [switch]$Edge,
-    [switch]$Verbose
+    [switch]$Build,
+    [switch]$Adopt,
+    [string]$InstallDir,
+    [string]$WorkspaceDir,
+    [ValidateSet('docker', 'podman')][string]$Runtime,
+    [string]$ImageRepository,
+    [string]$Tag,
+    [string]$HomeVolume,
+    [ValidateRange(1, 2147483647)][int]$Puid,
+    [ValidateRange(1, 2147483647)][int]$Pgid
 )
 
 $ErrorActionPreference = 'Stop'
+$Repo = 'https://github.com/SquareWaveSystems/squarebox.git'
+$ReleasesApi = if ($env:SQUAREBOX_RELEASES_API) { $env:SQUAREBOX_RELEASES_API } else { 'https://api.github.com/repos/SquareWaveSystems/squarebox/releases' }
+$ReleaseAssets = if ($env:SQUAREBOX_RELEASE_ASSETS) { $env:SQUAREBOX_RELEASE_ASSETS } else { 'https://github.com/SquareWaveSystems/squarebox/releases/download' }
+$ManagedLabel = 'io.squarebox.managed'
+$IdentityLabel = 'io.squarebox.install-id'
+$UserHome = if ($IsWindows -and $env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+$LegacyStarshipBlob = 'fddcbf2d0dfd3b37fbfb645332eb89122078c236'
+$LegacyLazygitBlob = '12adb4319fd0624448a20cd98d546e84f6f70c19'
+$script:RollbackArmed = $true
+$script:RollbackInProgress = $false
+$script:CheckoutCreated = $false
+$script:RuntimeReady = $false
+$script:VolumeCreated = $false
+$script:ContainerCreated = $false
+$script:ImageAliasMutated = $false
+$script:PriorImageAliasId = ''
+$script:NewImageAliasId = ''
 
-$Repo        = 'https://github.com/SquareWaveSystems/squarebox.git'
-$InstallDir  = Join-Path $env:USERPROFILE 'squarebox'
-$ImageName   = 'squarebox'
-$ContainerName = 'squarebox'
+function Invoke-InstallRollback {
+    if (-not $script:RollbackArmed -or $script:RollbackInProgress) { return }
+    $script:RollbackInProgress = $true
+    $script:RollbackArmed = $false
+    try {
+        if ($script:RuntimeReady) {
+            if ($script:ContainerCreated) {
+                & $Runtime container inspect $ContainerName 2>$null | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                    $owner = (& $Runtime inspect -f '{{ index .Config.Labels "io.squarebox.install-id" }}' $ContainerName 2>$null)
+                    if ($LASTEXITCODE -eq 0 -and $owner -and $owner.Trim() -ceq $InstallId) {
+                        & $Runtime rm -f $ContainerName 2>$null | Out-Null
+                    }
+                }
+            }
+            if ($script:VolumeCreated) {
+                & $Runtime volume inspect $HomeVolume 2>$null | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                    $owner = (& $Runtime volume inspect -f '{{ index .Labels "io.squarebox.install-id" }}' $HomeVolume 2>$null)
+                    if ($LASTEXITCODE -eq 0 -and $owner -and $owner.Trim() -ceq $InstallId) {
+                        & $Runtime volume rm $HomeVolume 2>$null | Out-Null
+                    }
+                }
+            }
+            if ($script:ImageAliasMutated) {
+                if ($script:PriorImageAliasId) {
+                    & $Runtime tag $script:PriorImageAliasId $ImageAlias 2>$null | Out-Null
+                } else {
+                    $currentId = (& $Runtime image inspect -f '{{.Id}}' $ImageAlias 2>$null)
+                    if ($LASTEXITCODE -eq 0 -and (-not $script:NewImageAliasId -or $currentId.Trim() -ceq $script:NewImageAliasId)) {
+                        & $Runtime rmi $ImageAlias 2>$null | Out-Null
+                    }
+                }
+            }
+        }
+    } catch {
+        Write-Warning "Install rollback could not clean every runtime resource: $($_.Exception.Message)"
+    }
+    try {
+        if ($script:CheckoutCreated -and $InstallDir -and $StateFile -and -not (Test-Path -LiteralPath $StateFile)) {
+            Remove-Item -Recurse -Force -LiteralPath $InstallDir -ErrorAction Stop
+        }
+    } catch {
+        Write-Warning "Install rollback could not remove the incomplete checkout: $($_.Exception.Message)"
+    }
+}
 
-# Write-Error with $ErrorActionPreference='Stop' becomes a terminating error
-# before exit runs, showing an ugly exception trace. This helper prints a clean
-# error message and exits with code 1.
-function Abort([string]$msg) {
-    Write-Host "Error: $msg" -ForegroundColor Red
+function Abort([string]$Message) {
+    Invoke-InstallRollback
+    Write-Host "Error: $Message" -ForegroundColor Red
     exit 1
 }
-
-# --- Verify prerequisites ---
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Abort "Git is not installed. See https://git-scm.com/download/win"
+trap {
+    $failure = $_.Exception.Message
+    Invoke-InstallRollback
+    Write-Host "Error: $failure" -ForegroundColor Red
+    exit 1
 }
-# Detect container runtime. Override with $env:SQUAREBOX_RUNTIME.
-$hasDocker = [bool](Get-Command docker -ErrorAction SilentlyContinue)
-$hasPodman = [bool](Get-Command podman -ErrorAction SilentlyContinue)
-
-if ($env:SQUAREBOX_RUNTIME) {
-    if ($env:SQUAREBOX_RUNTIME -notin @('docker', 'podman')) {
-        Abort "SQUAREBOX_RUNTIME must be 'docker' or 'podman' (got '$($env:SQUAREBOX_RUNTIME)')."
+$StateFields = @(
+    'FORMAT', 'INSTALL_ID', 'RUNTIME', 'INSTALL_DIR', 'WORKSPACE_DIR', 'GIT_CONFIG_DIR',
+    'HOME_VOLUME', 'CONTAINER_NAME', 'IMAGE_ALIAS', 'IMAGE_REPOSITORY', 'IMAGE_REF',
+    'IMAGE_ID', 'IMAGE_DIGEST', 'SOURCE_REF', 'SOURCE_COMMIT', 'RELEASE_TAG',
+    'REQUESTED_TAG', 'PUID', 'PGID', 'BUILD', 'EDGE', 'SHELL_INIT', 'SHELL_RC',
+    'ORIGIN', 'HOME_VOLUME_ADOPTED'
+)
+function Test-ReleaseTag([string]$Value) {
+    return $Value.Length -le 128 -and $Value -cmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?$'
+}
+function Test-ReparsePoint([string]$Path) {
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    return $null -ne $item -and [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
+}
+function Test-StatePath([string]$Value) {
+    if ([string]::IsNullOrEmpty($Value) -or $Value -match '[\x00-\x1f\x7f]' -or -not [IO.Path]::IsPathFullyQualified($Value)) { return $false }
+    try { $full = [IO.Path]::GetFullPath($Value) } catch { return $false }
+    return $Value -ceq $full
+}
+function Test-SamePath([string]$Left, [string]$Right) {
+    $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    return [string]::Equals([IO.Path]::GetFullPath($Left), [IO.Path]::GetFullPath($Right), $comparison)
+}
+function Test-StateId([string]$Value) {
+    $parsed = 0L
+    return $Value -cmatch '^[0-9]{1,10}$' -and [long]::TryParse($Value, [ref]$parsed) -and $parsed -ge 1 -and $parsed -le 2147483647
+}
+function Assert-InstallState([hashtable]$State, [string]$Path, [string]$ExpectedInstallDir) {
+    if ($State.FORMAT -ne '1' -or $State.INSTALL_ID -cnotmatch '^[A-Za-z0-9._-]{8,128}$') { Abort "Invalid Install identity: $Path" }
+    if ($State.RUNTIME -cnotin @('docker', 'podman')) { Abort "Invalid Install identity: $Path (invalid RUNTIME)" }
+    foreach ($name in @('INSTALL_DIR', 'WORKSPACE_DIR', 'GIT_CONFIG_DIR', 'SHELL_INIT', 'SHELL_RC')) {
+        if (-not (Test-StatePath $State[$name])) { Abort "Invalid Install identity: $Path (invalid $name path)" }
     }
-    $Runtime = $env:SQUAREBOX_RUNTIME
-    if (-not (Get-Command $Runtime -ErrorAction SilentlyContinue)) {
-        Abort "SQUAREBOX_RUNTIME=$Runtime but '$Runtime' is not installed."
+    if (-not (Test-SamePath $State.INSTALL_DIR $ExpectedInstallDir)) { Abort "Invalid Install identity: $Path (INSTALL_DIR mismatch)" }
+    $installRoot = [IO.Path]::GetPathRoot($State.INSTALL_DIR)
+    $workspaceRoot = [IO.Path]::GetPathRoot($State.WORKSPACE_DIR)
+    if ((Test-SamePath $State.INSTALL_DIR $installRoot) -or (Test-SamePath $State.INSTALL_DIR $UserHome)) {
+        Abort "Invalid Install identity: $Path (unsafe INSTALL_DIR)"
     }
-} elseif ($hasDocker -and $hasPodman) {
-    Write-Host "Both Docker and Podman detected."
-    Write-Host "  1) Docker"
-    Write-Host "  2) Podman"
-    $choice = Read-Host "Which runtime? [1]"
-    $Runtime = if ($choice -eq '2') { 'podman' } else { 'docker' }
-} elseif ($hasDocker) {
-    $Runtime = 'docker'
-} elseif ($hasPodman) {
-    $Runtime = 'podman'
-} else {
-    Abort "Neither Docker nor Podman is installed. See https://docs.docker.com/get-docker/ or https://podman.io"
-}
-
-try { & $Runtime info 2>$null | Out-Null } catch {}
-if ($LASTEXITCODE -ne 0) {
-    Abort "$Runtime is not running or current user lacks permissions."
-}
-Write-Host "Using $Runtime as container runtime."
-
-# --- Clone or update ---
-if (Test-Path (Join-Path $InstallDir '.git')) {
-    Write-Host "Updating existing install..."
-    if ($Verbose) {
-        git -C $InstallDir fetch --tags --force origin
+    if ((Test-SamePath $State.WORKSPACE_DIR $workspaceRoot) -or (Test-SamePath $State.WORKSPACE_DIR $State.INSTALL_DIR) -or (Test-SamePath $State.WORKSPACE_DIR $UserHome)) {
+        Abort "Invalid Install identity: $Path (unsafe WORKSPACE_DIR)"
+    }
+    if (-not (Test-SamePath $State.GIT_CONFIG_DIR ([IO.Path]::Combine($State.INSTALL_DIR, '.squarebox', 'identity', 'git')))) {
+        Abort "Invalid Install identity: $Path (GIT_CONFIG_DIR is outside managed identity state)"
+    }
+    if (-not (Test-SamePath $State.SHELL_INIT $PROFILE.CurrentUserAllHosts) -or -not (Test-SamePath $State.SHELL_RC $PROFILE.CurrentUserAllHosts)) {
+        Abort "Invalid Install identity: $Path (unexpected PowerShell profile path)"
+    }
+    if ($State.HOME_VOLUME -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$' -or
+        $State.CONTAINER_NAME -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$') {
+        Abort "Invalid Install identity: $Path (invalid runtime resource name)"
+    }
+    if ($State.IMAGE_ALIAS -cnotmatch '^[a-z0-9][a-z0-9._/-]*(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$' -or
+        $State.IMAGE_REPOSITORY -cnotmatch '^[a-z0-9][a-z0-9._/-]*$' -or
+        $State.IMAGE_ID -cnotmatch '^(sha256:)?[0-9a-f]{64}$') {
+        Abort "Invalid Install identity: $Path (invalid image identity)"
+    }
+    if ($State.IMAGE_DIGEST -and $State.IMAGE_DIGEST -cnotmatch '^[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$') {
+        Abort "Invalid Install identity: $Path (invalid IMAGE_DIGEST)"
+    }
+    if ($State.SOURCE_COMMIT -cnotmatch '^[0-9a-f]{40}$' -or -not (Test-StateId $State.PUID) -or -not (Test-StateId $State.PGID)) {
+        Abort "Invalid Install identity: $Path (invalid source or host identity)"
+    }
+    if ($State.BUILD -notin @('0', '1') -or $State.EDGE -notin @('0', '1') -or $State.HOME_VOLUME_ADOPTED -notin @('0', '1') -or
+        ($State.EDGE -eq '1' -and $State.BUILD -ne '1')) {
+        Abort "Invalid Install identity: $Path (BUILD, EDGE, and HOME_VOLUME_ADOPTED must be 0 or 1)"
+    }
+    if ($State.ORIGIN -cne $Repo) { Abort "Invalid Install identity: $Path (noncanonical ORIGIN)" }
+    if ($State.EDGE -eq '1') {
+        if ($State.RELEASE_TAG -or $State.REQUESTED_TAG -or $State.SOURCE_REF -cne 'refs/remotes/origin/main') {
+            Abort "Invalid Install identity: $Path (inconsistent edge source identity)"
+        }
     } else {
-        git -C $InstallDir fetch --tags --force --quiet origin
+        if (-not (Test-ReleaseTag $State.RELEASE_TAG) -or $State.SOURCE_REF -cne $State.RELEASE_TAG) {
+            Abort "Invalid Install identity: $Path (invalid Release identity)"
+        }
+        if ($State.REQUESTED_TAG -and $State.REQUESTED_TAG -cne 'latest' -and
+            (-not (Test-ReleaseTag $State.REQUESTED_TAG) -or $State.REQUESTED_TAG -cne $State.RELEASE_TAG)) {
+            Abort "Invalid Install identity: $Path (invalid REQUESTED_TAG)"
+        }
     }
-    if ($LASTEXITCODE -ne 0) { Abort "git fetch failed." }
-} else {
-    Write-Host "Cloning squarebox..."
-    if ($Verbose) {
-        git clone -- $Repo $InstallDir
-    } else {
-        git clone --quiet -- $Repo $InstallDir
+    if ($State.BUILD -eq '1') {
+        if ($State.IMAGE_REF -cne $State.IMAGE_ALIAS) { Abort "Invalid Install identity: $Path (built IMAGE_REF must equal IMAGE_ALIAS)" }
+    } elseif ($State.RELEASE_TAG -cmatch '^v1\.0\.0(-rc.*)?$') {
+        if ($State.IMAGE_REF -cne "$($State.IMAGE_REPOSITORY):$($State.RELEASE_TAG)" -or -not $State.IMAGE_DIGEST -or
+            -not $State.IMAGE_DIGEST.StartsWith("$($State.IMAGE_REPOSITORY)@sha256:", [StringComparison]::Ordinal)) {
+            Abort "Invalid Install identity: $Path (invalid legacy image identity)"
+        }
+    } elseif (-not $State.IMAGE_DIGEST -or $State.IMAGE_REF -cne $State.IMAGE_DIGEST -or
+        -not $State.IMAGE_REF.StartsWith("$($State.IMAGE_REPOSITORY)@sha256:", [StringComparison]::Ordinal)) {
+        Abort "Invalid Install identity: $Path (release image identities do not match)"
     }
-    if ($LASTEXITCODE -ne 0) { Abort "git clone failed." }
+}
+function Read-InstallState([string]$Path, [string]$ExpectedInstallDir) {
+    $state = @{}
+    foreach ($line in [IO.File]::ReadAllLines($Path)) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith('#')) { continue }
+        $at = $line.IndexOf('=')
+        if ($at -lt 1) { Abort "Malformed Install identity: $Path" }
+        $key = $line.Substring(0, $at)
+        if ($StateFields -cnotcontains $key) { Abort "Unknown Install identity field '$key': $Path" }
+        if ($state.ContainsKey($key)) { Abort "Duplicate Install identity field '$key': $Path" }
+        $value = $line.Substring($at + 1)
+        if ($value -match "[`r`n]") { Abort "Malformed Install identity: $Path" }
+        $state.Add($key, $value)
+    }
+    foreach ($key in $StateFields) {
+        if (-not $state.ContainsKey($key)) { Abort "Missing Install identity field '$key': $Path" }
+    }
+    Assert-InstallState $state $Path $ExpectedInstallDir
+    return $state
+}
+function Test-Origin([string]$Origin) {
+    return @(
+        'https://github.com/SquareWaveSystems/squarebox',
+        'https://github.com/SquareWaveSystems/squarebox.git',
+        'git@github.com:SquareWaveSystems/squarebox.git',
+        'ssh://git@github.com/SquareWaveSystems/squarebox.git'
+    ) -ccontains $Origin
+}
+function Get-BoundedJson([string]$Uri, [int]$MaximumBytes) {
+    $response = Invoke-WebRequest -Uri $Uri -Headers @{ Accept = 'application/vnd.github+json' } `
+        -MaximumRetryCount 3 -RetryIntervalSec 1 -TimeoutSec 30
+    $content = [string]$response.Content
+    if ([Text.Encoding]::UTF8.GetByteCount($content) -gt $MaximumBytes) {
+        throw "HTTP response exceeded the $MaximumBytes-byte lifecycle metadata limit."
+    }
+    return $content | ConvertFrom-Json
 }
 
-# --- Select version ---
+# An installed script can find a custom identity without the caller repeating
+# the original environment on every rebuild.
+if (-not $InstallDir) {
+    if ($env:SQUAREBOX_DIR) { $InstallDir = $env:SQUAREBOX_DIR }
+    elseif ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot '.squarebox\install-state'))) { $InstallDir = $PSScriptRoot }
+    else { $InstallDir = Join-Path $UserHome 'squarebox' }
+}
+$InstallDir = [IO.Path]::GetFullPath($InstallDir)
+$StateFile = Join-Path $InstallDir '.squarebox\install-state'
+if ((Test-ReparsePoint (Join-Path $InstallDir '.squarebox')) -or (Test-ReparsePoint $StateFile)) {
+    Abort 'Install identity state must not be reached through a reparse point or symlink.'
+}
+$State = $null
+if (Test-Path -LiteralPath $StateFile -PathType Leaf) {
+    $State = Read-InstallState $StateFile $InstallDir
+}
+
+if (-not $WorkspaceDir) {
+    if ($env:SQUAREBOX_WORKSPACE) { $WorkspaceDir = $env:SQUAREBOX_WORKSPACE }
+    elseif ($State) { $WorkspaceDir = $State.WORKSPACE_DIR }
+    else { $WorkspaceDir = Join-Path $InstallDir 'workspace' }
+}
+$WorkspaceDir = [IO.Path]::GetFullPath($WorkspaceDir)
+$GitConfigDir = if ($State) { $State.GIT_CONFIG_DIR } else { [IO.Path]::Combine($InstallDir, '.squarebox', 'identity', 'git') }
+$ImageRepository = if ($ImageRepository) { $ImageRepository } elseif ($env:SQUAREBOX_IMAGE) { $env:SQUAREBOX_IMAGE } elseif ($State) { $State.IMAGE_REPOSITORY } else { 'ghcr.io/squarewavesystems/squarebox' }
+$RequestedTag = if ($Tag) { $Tag } elseif ($env:SQUAREBOX_TAG) { $env:SQUAREBOX_TAG } elseif ($State) { $State.REQUESTED_TAG } else { '' }
+$HomeVolume = if ($HomeVolume) { $HomeVolume } elseif ($env:SQUAREBOX_HOME_VOLUME) { $env:SQUAREBOX_HOME_VOLUME } elseif ($State) { $State.HOME_VOLUME } else { 'squarebox-home' }
+$ContainerName = if ($State) { $State.CONTAINER_NAME } else { 'squarebox' }
+$ImageAlias = if ($State) { $State.IMAGE_ALIAS } else { 'squarebox' }
+$InstallId = if ($State) { $State.INSTALL_ID } else { [guid]::NewGuid().ToString() }
+if ($State -and $HomeVolume -cne $State.HOME_VOLUME) { Abort 'Cannot change the recorded Managed-home name during rebuild; uninstall this identity first.' }
+if (-not $PSBoundParameters.ContainsKey('Edge') -and $State -and $State.EDGE -eq '1') { $Edge = $true }
+if (-not $PSBoundParameters.ContainsKey('Build') -and $State -and $State.BUILD -eq '1') { $Build = $true }
+if ($env:SQUAREBOX_EDGE -eq '1') { $Edge = $true }
+if ($env:SQUAREBOX_BUILD -eq '1') { $Build = $true }
+if ($Edge) { $Build = $true }
+$DefaultPuid = 1000; $DefaultPgid = 1000
+if ($IsLinux) {
+    $hostUid = [int](& id -u); $hostGid = [int](& id -g)
+    if ($hostUid -gt 0) { $DefaultPuid = $hostUid }
+    if ($hostGid -gt 0) { $DefaultPgid = $hostGid }
+}
+$Puid = if ($Puid) { $Puid } elseif ($env:PUID) { [int]$env:PUID } elseif ($State) { [int]$State.PUID } else { $DefaultPuid }
+$Pgid = if ($Pgid) { $Pgid } elseif ($env:PGID) { [int]$env:PGID } elseif ($State) { [int]$State.PGID } else { $DefaultPgid }
+if ($Puid -lt 1 -or $Pgid -lt 1) { Abort 'PUID and PGID must be positive integers.' }
+foreach ($path in @($InstallDir, $WorkspaceDir, $GitConfigDir)) {
+    if (-not (Test-StatePath $path)) { Abort "Lifecycle paths must be absolute and normalized (got '$path')." }
+}
+if ((Test-SamePath $InstallDir ([IO.Path]::GetPathRoot($InstallDir))) -or (Test-SamePath $InstallDir $UserHome)) { Abort "Unsafe install path '$InstallDir'." }
+if ((Test-SamePath $WorkspaceDir ([IO.Path]::GetPathRoot($WorkspaceDir))) -or (Test-SamePath $WorkspaceDir $InstallDir) -or (Test-SamePath $WorkspaceDir $UserHome)) {
+    Abort "Unsafe Workspace path '$WorkspaceDir'."
+}
+if (-not (Test-SamePath $GitConfigDir ([IO.Path]::Combine($InstallDir, '.squarebox', 'identity', 'git')))) { Abort 'Private Git identity path escaped managed state.' }
+if ($HomeVolume -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$' -or $ContainerName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$' -or
+    $ImageAlias -cnotmatch '^[a-z0-9][a-z0-9._/-]*(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$' -or
+    $ImageRepository -cnotmatch '^[a-z0-9][a-z0-9._/-]*$') { Abort 'Invalid runtime resource or image name.' }
+
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Abort 'Git is not installed.' }
+if (Test-Path $InstallDir) {
+    if (-not (Test-Path (Join-Path $InstallDir '.git'))) { Abort "$InstallDir exists but is not a Git checkout." }
+    $origin = (& git -C $InstallDir remote get-url origin 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Origin $origin)) { Abort "Unexpected checkout origin '$origin'; refusing reset." }
+    if (-not $State -and -not $Adopt) { Abort 'Existing checkout has no Install identity; verify it, then use -Adopt.' }
+    Write-Host 'Updating managed checkout...'
+    & git -C $InstallDir fetch --force origin '+refs/heads/main:refs/remotes/origin/main' '+refs/tags/*:refs/tags/*'
+    if ($LASTEXITCODE -ne 0) { Abort 'git fetch failed.' }
+} else {
+    Write-Host 'Cloning squarebox...'
+    $script:CheckoutCreated = $true
+    & git clone -- $Repo $InstallDir
+    if ($LASTEXITCODE -ne 0) { Abort 'git clone failed.' }
+}
+
+$LegacyRelease = $false
+$Manifest = $null
 if ($Edge) {
-    Write-Host "Using latest main (edge)..."
-    git -C $InstallDir checkout main --quiet
-    if ($LASTEXITCODE -ne 0) { Abort "git checkout main failed." }
-    git -C $InstallDir reset --hard --quiet origin/main
-    if ($LASTEXITCODE -ne 0) { Abort "git reset failed." }
+    $ReleaseTag = ''
+    $SourceRef = 'refs/remotes/origin/main'
+    Write-Host 'Using origin/main (edge)...'
+    & git -C $InstallDir checkout --detach $SourceRef
+    if ($LASTEXITCODE -ne 0) { Abort 'Unable to check out origin/main.' }
+    & git -C $InstallDir reset --hard $SourceRef
+    if ($LASTEXITCODE -ne 0) { Abort 'Unable to reset the managed checkout to origin/main.' }
 } else {
-    $latestTag = git -C $InstallDir tag --sort=-v:refname |
-        Where-Object { $_ -notmatch '-rc' } |
-        Select-Object -First 1
-    if ($latestTag) {
-        Write-Host "Using release $latestTag..."
-        git -C $InstallDir checkout $latestTag --quiet
-        if ($LASTEXITCODE -ne 0) { Abort "git checkout $latestTag failed." }
+    try {
+        $releaseUri = if ($RequestedTag -and $RequestedTag -cne 'latest') {
+            if (-not (Test-ReleaseTag $RequestedTag)) { Abort "Invalid release tag '$RequestedTag'." }
+            "$ReleasesApi/tags/$RequestedTag"
+        } else { "$ReleasesApi/latest" }
+        $Release = Get-BoundedJson $releaseUri 1048576
+        $ReleaseTag = [string]$Release.tag_name
+    } catch { Abort "Unable to resolve a published Release: $($_.Exception.Message)" }
+    if (-not (Test-ReleaseTag $ReleaseTag)) { Abort "Invalid published Release tag '$ReleaseTag'." }
+    if ($RequestedTag -and $RequestedTag -cne 'latest' -and $ReleaseTag -cne $RequestedTag) {
+        Abort 'Published Release metadata returned an unexpected tag.'
+    }
+    try {
+        $Manifest = Get-BoundedJson "$ReleaseAssets/$ReleaseTag/release.json" 65536
+    } catch {
+        if ($ReleaseTag -cmatch '^v1\.0\.0(-rc.*)?$') {
+            Write-Warning "$ReleaseTag predates release.json; using the explicit legacy v1.0 compatibility path."
+            $LegacyRelease = $true
+        } else { Abort "Published Release $ReleaseTag has no verifiable release.json." }
+    }
+    if (-not $LegacyRelease) {
+        if ($Manifest.schema -ne 1 -or $Manifest.version -cne $ReleaseTag -or $Manifest.source_ref -cne $ReleaseTag -or
+            $Manifest.source_sha -cnotmatch '^[0-9a-f]{40}$' -or
+            $Manifest.image_repository -cnotmatch '^[a-z0-9][a-z0-9._/-]*$' -or
+            $Manifest.image_digest -cnotmatch '^sha256:[0-9a-f]{64}$' -or
+            $Manifest.image_ref -cne "$($Manifest.image_repository)@$($Manifest.image_digest)") {
+            Abort "release.json for $ReleaseTag failed identity validation."
+        }
+    }
+    $checkoutRef = "refs/tags/$ReleaseTag"
+    & git -C $InstallDir rev-parse --verify "$checkoutRef`^{commit}" 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) { Abort "Published Release $ReleaseTag is absent from the trusted origin." }
+    Write-Host "Using published Release $ReleaseTag..."
+    & git -C $InstallDir checkout --detach $checkoutRef
+    if ($LASTEXITCODE -ne 0) { Abort "Unable to check out $ReleaseTag." }
+    & git -C $InstallDir reset --hard $checkoutRef
+    if ($LASTEXITCODE -ne 0) { Abort "Unable to reset the managed checkout to $ReleaseTag." }
+    $SourceRef = if ($Manifest) { [string]$Manifest.source_ref } else { $ReleaseTag }
+}
+$SourceCommit = (& git -C $InstallDir rev-parse HEAD).Trim()
+if ($Manifest -and $SourceCommit -cne $Manifest.source_sha) { Abort 'Checked-out source does not match release.json.' }
+
+if (-not $Runtime) {
+    if ($env:SQUAREBOX_RUNTIME) { $Runtime = $env:SQUAREBOX_RUNTIME }
+    elseif ($State) { $Runtime = $State.RUNTIME }
+}
+if ($State -and $Runtime -cne $State.RUNTIME) { Abort 'Cannot move an Install identity between runtimes during rebuild; uninstall this identity first.' }
+if ($Runtime -and $Runtime -cnotin @('docker', 'podman')) { Abort "Invalid runtime '$Runtime'." }
+if (-not $Runtime) {
+    $hasDocker = [bool](Get-Command docker -ErrorAction SilentlyContinue)
+    $hasPodman = [bool](Get-Command podman -ErrorAction SilentlyContinue)
+    if ($hasDocker -and $hasPodman) {
+        if ([Console]::IsInputRedirected) { $Runtime = 'docker' }
+        else {
+            $choice = Read-Host 'Runtime [docker/podman] (docker)'
+            $Runtime = if ($choice -eq 'podman') { 'podman' } else { 'docker' }
+        }
+    } elseif ($hasDocker) { $Runtime = 'docker' }
+    elseif ($hasPodman) { $Runtime = 'podman' }
+    else { Abort 'Neither Docker nor Podman is installed.' }
+}
+if (-not (Get-Command $Runtime -ErrorAction SilentlyContinue)) { Abort "Recorded runtime '$Runtime' is not installed." }
+& $Runtime info 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) { Abort "$Runtime is installed but unreachable (machine stopped or permission denied)." }
+$script:RuntimeReady = $true
+$RootlessPodman = $false
+if ($Runtime -ceq 'podman') {
+    $rootless = (& $Runtime info --format '{{.Host.Security.Rootless}}' 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $rootless -or $rootless.Trim() -cnotin @('true', 'false')) {
+        Abort 'Unable to determine whether Podman is rootless; refusing an ambiguous user mapping.'
+    }
+    $RootlessPodman = $rootless.Trim() -ceq 'true'
+    if ($RootlessPodman -and ($Puid -ne $DefaultPuid -or $Pgid -ne $DefaultPgid)) {
+        Abort "Rootless Podman maps the invoking host identity to image user dev; use PUID=$DefaultPuid and PGID=$DefaultPgid, or a rootful runtime for explicit remapping."
+    }
+}
+
+function Get-ResourceOwner([ValidateSet('container', 'volume')][string]$Kind, [string]$Name) {
+    if ($Kind -ceq 'container') {
+        $value = (& $Runtime inspect -f '{{ index .Config.Labels "io.squarebox.install-id" }}' $Name 2>$null)
     } else {
-        Write-Host "No releases found, using main branch..."
-        git -C $InstallDir checkout main --quiet
-        if ($LASTEXITCODE -ne 0) { Abort "git checkout main failed." }
-        git -C $InstallDir reset --hard --quiet origin/main
-        if ($LASTEXITCODE -ne 0) { Abort "git reset failed." }
+        $value = (& $Runtime volume inspect -f '{{ index .Labels "io.squarebox.install-id" }}' $Name 2>$null)
+    }
+    if ($LASTEXITCODE -ne 0) { Abort "Unable to verify ownership label for $Kind '$Name'." }
+    if ($value) { $value = $value.Trim() }
+    if ($value -cin @('<no value>', '<nil>')) { return '' }
+    return [string]$value
+}
+
+# RepoDigests is an unordered collection. Select the exact Candidate reference
+# when one is required; element zero is not stable across Docker and Podman.
+function Select-ImageRepoDigest([object[]]$RepoDigests, [string]$Expected = '') {
+    $valid = @($RepoDigests | ForEach-Object { ([string]$_).Trim() } |
+        Where-Object { $_ -cmatch '^[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$' })
+    if ($Expected) {
+        return [string]($valid | Where-Object { $_ -ceq $Expected } | Select-Object -First 1)
+    }
+    return [string]($valid | Select-Object -First 1)
+}
+
+$existingAliasId = (& $Runtime image inspect -f '{{.Id}}' $ImageAlias 2>$null)
+if ($LASTEXITCODE -eq 0 -and $existingAliasId) {
+    $script:PriorImageAliasId = $existingAliasId.Trim()
+    if (-not $State -or $existingAliasId.Trim() -cne $State.IMAGE_ID) {
+        if (-not $Adopt) { Abort "Image alias '$ImageAlias' is not owned by this Install identity." }
     }
 }
 
-# --- Build ---
-# Stamp the image with the checked-out version so the MOTD can show it.
-$SquareboxVersion = (& git -C $InstallDir describe --tags --always --dirty 2>$null)
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($SquareboxVersion)) { $SquareboxVersion = "dev" }
-Write-Host "Building image... " -NoNewline
-if ($Verbose) {
-    Write-Host ""
-    & $Runtime build --build-arg "SQUAREBOX_VERSION=$SquareboxVersion" -t $ImageName $InstallDir
+if ($Build) {
+    $ImageRef = $ImageAlias
+    $version = if ($ReleaseTag) { $ReleaseTag } else { $SourceCommit.Substring(0, 12) }
+    Write-Host "Building Candidate image from $SourceCommit..."
+    & $Runtime build --label "$ManagedLabel=true" --label "$IdentityLabel=$InstallId" --build-arg "SQUAREBOX_VERSION=$version" -t $ImageAlias $InstallDir
     if ($LASTEXITCODE -ne 0) { Abort "$Runtime build failed." }
+    $script:ImageAliasMutated = $true
 } else {
-    $buildLog = & $Runtime build --build-arg "SQUAREBOX_VERSION=$SquareboxVersion" -t $ImageName $InstallDir 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "FAILED" -ForegroundColor Red
-        Write-Host ($buildLog -join "`n")
-        Abort "$Runtime build failed."
+    if ($Manifest) {
+        if ($ImageRepository -cne $Manifest.image_repository) { Abort 'SQUAREBOX_IMAGE differs from release.json.' }
+        $ImageRef = [string]$Manifest.image_ref
+    } else { $ImageRef = "${ImageRepository}:$ReleaseTag" }
+    Write-Host "Pulling Candidate image $ImageRef..."
+    & $Runtime pull $ImageRef
+    if ($LASTEXITCODE -ne 0) { Abort "$Runtime pull failed." }
+    & $Runtime tag $ImageRef $ImageAlias
+    if ($LASTEXITCODE -ne 0) { Abort 'Unable to create the managed image alias.' }
+    $script:ImageAliasMutated = $true
+}
+$ImageId = (& $Runtime image inspect -f '{{.Id}}' $ImageAlias).Trim()
+if ($LASTEXITCODE -ne 0) { Abort 'Unable to inspect the Candidate image.' }
+$script:NewImageAliasId = $ImageId
+$repoDigestOutput = @()
+if (-not $Build) {
+    $repoDigestOutput = @(& $Runtime image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' $ImageRef 2>$null)
+    if ($LASTEXITCODE -ne 0) { $repoDigestOutput = @() }
+}
+$expectedDigest = ''
+if ($Manifest -and -not $Build) {
+    $expectedDigest = [string]$Manifest.image_ref
+} elseif (-not $Build -and $State -and $State.RELEASE_TAG -ceq $ReleaseTag) {
+    $expectedDigest = [string]$State.IMAGE_DIGEST
+}
+$ImageDigest = Select-ImageRepoDigest $repoDigestOutput $expectedDigest
+if ($Manifest -and -not $Build -and $ImageDigest -cne [string]$Manifest.image_ref) {
+    Abort 'Pulled image does not expose the exact release.json digest.'
+}
+if (-not $Build -and -not $Manifest -and -not $ImageDigest) {
+    Abort 'Pulled legacy image exposes no acceptable repository digest.'
+}
+if (-not $Build -and $State -and $State.RELEASE_TAG -ceq $ReleaseTag -and $State.IMAGE_DIGEST -and $State.IMAGE_DIGEST -cne $ImageDigest) {
+    Abort "Immutable image identity changed for $ReleaseTag."
+}
+
+$HomeVolumeAdopted = if ($State) { $State.HOME_VOLUME_ADOPTED -eq '1' } else { $false }
+& $Runtime volume inspect $HomeVolume 2>$null | Out-Null
+if ($LASTEXITCODE -eq 0) {
+    $owner = Get-ResourceOwner volume $HomeVolume
+    if ($owner -cne $InstallId) {
+        # Persisted adopted-home authority permits an ordinary rebuild; purge
+        # retains its independent -Force requirement in uninstall.ps1.
+        if (-not $owner -and ($Adopt -or ($State -and $State.HOME_VOLUME_ADOPTED -eq '1'))) {
+            $HomeVolumeAdopted = $true
+            if (-not $State -or $State.HOME_VOLUME_ADOPTED -ne '1') {
+                Write-Warning "Adopting unlabeled Managed home '$HomeVolume'; purge will require -Force."
+            }
+        } else { Abort "Volume '$HomeVolume' is not owned by this Install identity." }
     }
-    Write-Host "done"
+} else {
+    & $Runtime volume create --label "$ManagedLabel=true" --label "$IdentityLabel=$InstallId" $HomeVolume | Out-Null
+    if ($LASTEXITCODE -ne 0) { Abort "Unable to create Managed home '$HomeVolume'." }
+    $script:VolumeCreated = $true
+    $HomeVolumeAdopted = $false
 }
 
-# --- Remove old container ---
-$existing = & $Runtime ps -a --format '{{.Names}}' | Where-Object { $_ -eq $ContainerName }
-if ($existing) {
-    Write-Host "Removing old container..."
-    & $Runtime stop $ContainerName 2>$null | Out-Null
-    & $Runtime rm $ContainerName | Out-Null
+& $Runtime container inspect $ContainerName 2>$null | Out-Null
+if ($LASTEXITCODE -eq 0) {
+    $owner = Get-ResourceOwner container $ContainerName
+    if ($owner -cne $InstallId -and -not (-not $owner -and $Adopt)) { Abort "Box '$ContainerName' is not owned by this Install identity." }
+    & $Runtime rm -f $ContainerName | Out-Null
+    if ($LASTEXITCODE -ne 0) { Abort "Unable to replace managed Box '$ContainerName'." }
 }
 
-# --- Propagate host git identity ---
-$gitCfgDir = Join-Path $env:USERPROFILE '.config\git'
-if (-not (Test-Path $gitCfgDir)) { New-Item -ItemType Directory -Path $gitCfgDir -Force | Out-Null }
-$gitCfgFile = Join-Path $gitCfgDir 'config'
-
-$hostName  = git config --global user.name 2>$null
-$hostEmail = git config --global user.email 2>$null
-if ($hostName)  { git config --file $gitCfgFile user.name $hostName }
-if ($hostEmail) { git config --file $gitCfgFile user.email $hostEmail }
-
-# --- Seed default configs ---
-$configDir = Join-Path $InstallDir '.config'
-$workspaceDir = Join-Path $InstallDir 'workspace'
-foreach ($dir in @($configDir, $workspaceDir)) {
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-}
-
-$starshipDest = Join-Path $configDir 'starship.toml'
-if (-not (Test-Path $starshipDest)) {
-    Copy-Item (Join-Path $InstallDir 'starship.toml') $starshipDest
-}
-
-$lazygitDir = Join-Path $configDir 'lazygit'
-if (-not (Test-Path $lazygitDir)) { New-Item -ItemType Directory -Path $lazygitDir -Force | Out-Null }
-$lazygitCfg = Join-Path $lazygitDir 'config.yml'
-if (-not (Test-Path $lazygitCfg)) {
-    @"
-git:
-  paging:
-    colorArg: always
-    pager: delta --dark --paging=never
-"@ | Set-Content -Path $lazygitCfg
-}
-
-# --- Create container ---
-Write-Host "Creating container..."
-
-# Volume strategy: a single named volume backs /home/dev so shell history,
-# claude-code state, mise toolchains, and gh auth survive container recreates.
-# Bind mounts at sub-paths inside /home/dev override the volume - that's how
-# we keep image-managed config (bashrc, starship.toml, lazygit) in lockstep
-# with the repo while user state stays in the volume.
-$homeVolume = if ($env:SQUAREBOX_HOME_VOLUME) { $env:SQUAREBOX_HOME_VOLUME } else { 'squarebox-home' }
-$bashrcPath = Join-Path $InstallDir 'dotfiles\bashrc'
-
-# Guard the bashrc bind-mount source: if dotfiles\bashrc is missing (e.g. an
-# upgrader whose git pull silently failed), Docker would create an empty
-# directory at /home/dev/.bashrc on first start, leaving the container with
-# no shell init (no starship, no aliases, no first-run setup hand-off).
-if (-not (Test-Path -LiteralPath $bashrcPath -PathType Leaf)) {
-    Write-Host "Error: $bashrcPath not found." -ForegroundColor Red
-    Write-Host "       Your squarebox checkout is out of date or incomplete." -ForegroundColor Red
-    Write-Host "       Run: (cd '$InstallDir'; git pull) and retry." -ForegroundColor Red
-    exit 1
-}
-
-$rtVolumes = @(
-    '-v', "$workspaceDir`:/workspace"
-    '-v', "$homeVolume`:/home/dev"
-    '-v', "${bashrcPath}:/home/dev/.bashrc:ro"
-    '-v', "$gitCfgDir`:/home/dev/.config/git"
-    '-v', "${starshipDest}:/home/dev/.config/starship.toml"
-    '-v', "${lazygitDir}:/home/dev/.config/lazygit"
-)
-
-# SSH: mount ~/.ssh read-only so git/ssh inside the container can use the
-# host's keys and config. Windows named-pipe agent forwarding (\\.\pipe\...)
-# into a Linux container's Unix socket is not reliably supported, so we don't
-# attempt pipe forwarding — keys are available directly.
-$sshDir = Join-Path $env:USERPROFILE '.ssh'
-if (Test-Path $sshDir) {
-    $rtVolumes += @('-v', "${sshDir}:/home/dev/.ssh:ro")
-}
-
-# Drop all capabilities except those needed for scoped sudo
-$rtOpts = @(
-    '--cap-drop=ALL'
-    '--cap-add=CHOWN', '--cap-add=DAC_OVERRIDE', '--cap-add=FOWNER'
-    '--cap-add=SETUID', '--cap-add=SETGID', '--cap-add=KILL'
-)
-
-$createResult = & $Runtime create -it --name $ContainerName @rtOpts @rtVolumes $ImageName 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Abort "Failed to create container '$ContainerName':`n$createResult"
-}
-
-# --- PowerShell profile setup ---
-$profileDir = Split-Path $PROFILE
-if (-not (Test-Path $profileDir)) {
-    New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
-}
-
-# Strip existing managed block and legacy function defs
-if (Test-Path $PROFILE) {
-    $lines = Get-Content $PROFILE
-    $filtered = [System.Collections.Generic.List[string]]::new()
-    $skip = $false
-    foreach ($line in $lines) {
-        if ($line -match '^# >>> squarebox >>>') { $skip = $true; continue }
-        if ($line -match '^# <<< squarebox <<<') { $skip = $false; continue }
-        if ($skip) { continue }
-        if ($line -match '^\s*function\s+(sqrbx|squarebox|sqrbx-rebuild|squarebox-rebuild|sqrbx-uninstall|squarebox-uninstall)\s*(\{|$)') { continue }
-        $filtered.Add($line)
+# Copy only Git identity values into private install state; never mount the
+# host's real global configuration or credential helpers.
+function Ensure-ManagedDirectory([string]$Path, [string]$Description) {
+    if (Test-ReparsePoint $Path) { Abort "$Description must not be a reparse point or symlink: $Path" }
+    if ((Test-Path -LiteralPath $Path) -and -not (Test-Path -LiteralPath $Path -PathType Container)) {
+        Abort "$Description is not a directory: $Path"
     }
-    Set-Content -Path $PROFILE -Value ($filtered -join "`n")
+    if (-not (Test-Path -LiteralPath $Path)) { New-Item -ItemType Directory -Path $Path | Out-Null }
+}
+function Get-ManagedBlob([string]$Path) {
+    $blob = (& git -C $InstallDir hash-object -- $Path 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $blob -or $blob.Trim() -cnotmatch '^[0-9a-f]{40}$') { Abort "Unable to identify managed config: $Path" }
+    return $blob.Trim()
+}
+function Write-CandidateLazygitDefault([string]$CandidateScript, [string]$Destination) {
+    if ((Test-ReparsePoint $CandidateScript) -or -not (Test-Path -LiteralPath $CandidateScript -PathType Leaf)) {
+        Abort "Candidate installer is not a regular file: $CandidateScript"
+    }
+    $lines = [IO.File]::ReadAllLines($CandidateScript)
+    $begin = @(); $end = @()
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -ceq '# squarebox-lazygit-default-begin') { $begin += $index }
+        if ($lines[$index] -ceq '# squarebox-lazygit-default-end') { $end += $index }
+    }
+    if ($begin.Count -ne 1 -or $end.Count -ne 1 -or $end[0] -le $begin[0] + 1) { Abort 'Candidate installer has no unique lazygit default.' }
+    $content = [Collections.Generic.List[string]]::new()
+    for ($index = $begin[0] + 1; $index -lt $end[0]; $index++) {
+        if (-not $lines[$index].StartsWith('# ', [StringComparison]::Ordinal)) { Abort 'Candidate lazygit default is malformed.' }
+        $content.Add($lines[$index].Substring(2))
+    }
+    [IO.File]::WriteAllText($Destination, ($content -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
+}
+function Write-BlobTracker([string]$Path, [string]$Blob) {
+    if (Test-ReparsePoint $Path) { throw "Managed-config tracker must not be a reparse point or symlink: $Path" }
+    if ((Test-Path -LiteralPath $Path) -and -not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Managed-config tracker is not a file: $Path" }
+    $temp = Join-Path (Split-Path $Path) ".tracker.$PID.$([guid]::NewGuid().ToString('N'))"
+    try {
+        [IO.File]::WriteAllText($temp, "$Blob`n", [Text.UTF8Encoding]::new($false))
+        [IO.File]::Move($temp, $Path, $true)
+    } finally {
+        if (Test-Path -LiteralPath $temp) { Remove-Item -Force -LiteralPath $temp }
+    }
+}
+function Update-ManagedFile([string]$Source, [string]$Destination, [string]$Tracker, [string[]]$LegacyBlobs = @()) {
+    if ((Test-ReparsePoint $Source) -or -not (Test-Path -LiteralPath $Source -PathType Leaf)) { Abort "Managed-config source is not a regular file: $Source" }
+    if (Test-ReparsePoint $Destination) { Abort "Managed-config destination must not be a reparse point or symlink: $Destination" }
+    if ((Test-Path -LiteralPath $Destination) -and -not (Test-Path -LiteralPath $Destination -PathType Leaf)) { Abort "Managed-config destination is not a regular file: $Destination" }
+    if (Test-ReparsePoint $Tracker) { Abort "Managed-config tracker must not be a reparse point or symlink: $Tracker" }
+    if ((Test-Path -LiteralPath $Tracker) -and -not (Test-Path -LiteralPath $Tracker -PathType Leaf)) { Abort "Managed-config tracker is not a file: $Tracker" }
+    $sourceBlob = Get-ManagedBlob $Source
+    if (Test-Path -LiteralPath $Destination -PathType Leaf) {
+        $currentBlob = Get-ManagedBlob $Destination
+        if (Test-Path -LiteralPath $Tracker -PathType Leaf) {
+            $trackerLines = [IO.File]::ReadAllLines($Tracker)
+            if ($trackerLines.Count -ne 1 -or $trackerLines[0] -cnotmatch '^[0-9a-f]{40}$') { Abort "Invalid managed-config tracker: $Tracker" }
+            $recordedBlob = $trackerLines[0]
+        } elseif ($LegacyBlobs.Count -gt 0 -and $LegacyBlobs -ccontains $currentBlob) {
+            $recordedBlob = $currentBlob
+        } else {
+            Write-Warning "Preserving untracked user config at $Destination."
+            return
+        }
+        if ($currentBlob -cne $recordedBlob) {
+            Write-Warning "Preserving user-modified config at $Destination."
+            return
+        }
+    }
+    $temp = Join-Path (Split-Path $Destination) ".squarebox-config.$PID.$([guid]::NewGuid().ToString('N'))"
+    $backup = Join-Path (Split-Path $Destination) ".squarebox-config-backup.$PID.$([guid]::NewGuid().ToString('N'))"
+    $hadDestination = Test-Path -LiteralPath $Destination -PathType Leaf
+    try {
+        [IO.File]::Copy($Source, $temp, $true)
+        if ($hadDestination) { [IO.File]::Copy($Destination, $backup, $true) }
+        [IO.File]::Move($temp, $Destination, $true)
+        try {
+            Write-BlobTracker $Tracker $sourceBlob
+        } catch {
+            if ($hadDestination) { [IO.File]::Move($backup, $Destination, $true) }
+            elseif (Test-Path -LiteralPath $Destination) { Remove-Item -Force -LiteralPath $Destination }
+            throw
+        }
+    } finally {
+        if (Test-Path -LiteralPath $temp) { Remove-Item -Force -LiteralPath $temp }
+        if (Test-Path -LiteralPath $backup) { Remove-Item -Force -LiteralPath $backup }
+    }
+}
+$StateDir = Join-Path $InstallDir '.squarebox'
+$IdentityDir = Join-Path $StateDir 'identity'
+$ManagedConfigDir = Join-Path $StateDir 'managed-config'
+$ConfigDir = Join-Path $InstallDir '.config'
+$LazygitDir = Join-Path $ConfigDir 'lazygit'
+Ensure-ManagedDirectory $StateDir 'Managed state directory'
+Ensure-ManagedDirectory $IdentityDir 'Managed identity directory'
+Ensure-ManagedDirectory $GitConfigDir 'Managed Git identity directory'
+Ensure-ManagedDirectory $ManagedConfigDir 'Managed-config tracker directory'
+Ensure-ManagedDirectory $ConfigDir 'Managed config directory'
+Ensure-ManagedDirectory $LazygitDir 'Managed lazygit directory'
+if (-not $IsWindows) {
+    & chmod 700 $StateDir $IdentityDir $GitConfigDir
+    if ($LASTEXITCODE -ne 0) { Abort 'Unable to secure private Install-identity directories.' }
+}
+if (-not (Test-Path -LiteralPath $WorkspaceDir)) { New-Item -ItemType Directory -Path $WorkspaceDir | Out-Null }
+$GitConfigFile = Join-Path $GitConfigDir 'config'
+if (Test-ReparsePoint $GitConfigFile) { Abort "Managed Git identity must not be a reparse point or symlink: $GitConfigFile" }
+$existingName = (& git config --file $GitConfigFile user.name 2>$null)
+$existingEmail = (& git config --file $GitConfigFile user.email 2>$null)
+$hostName = (& git config --global user.name 2>$null)
+$hostEmail = (& git config --global user.email 2>$null)
+if ($env:SQUAREBOX_GIT_NAME) { $hostName = $env:SQUAREBOX_GIT_NAME }
+if ($env:SQUAREBOX_GIT_EMAIL) { $hostEmail = $env:SQUAREBOX_GIT_EMAIL }
+if (-not $hostName) { $hostName = $existingName }
+if (-not $hostEmail) { $hostEmail = $existingEmail }
+$GitConfigTemp = Join-Path $GitConfigDir ".git-config.$([guid]::NewGuid().ToString('N'))"
+try {
+    [IO.File]::WriteAllText($GitConfigTemp, '', [Text.UTF8Encoding]::new($false))
+    if ($hostName) {
+        & git config --file $GitConfigTemp user.name $hostName
+        if ($LASTEXITCODE -ne 0) { Abort 'Unable to write the private Git user name.' }
+    }
+    if ($hostEmail) {
+        & git config --file $GitConfigTemp user.email $hostEmail
+        if ($LASTEXITCODE -ne 0) { Abort 'Unable to write the private Git email.' }
+    }
+    if (-not $IsWindows) {
+        & chmod 600 $GitConfigTemp
+        if ($LASTEXITCODE -ne 0) { Abort 'Unable to secure the private Git identity.' }
+    }
+    [IO.File]::Move($GitConfigTemp, $GitConfigFile, $true)
+} finally {
+    if (Test-Path -LiteralPath $GitConfigTemp) { Remove-Item -Force -LiteralPath $GitConfigTemp }
 }
 
-# Append managed block. Use a single-quoted here-string so $PROFILE variables
-# like @args aren't expanded at install time, then substitute the install path.
+$StarshipDest = Join-Path $ConfigDir 'starship.toml'
+$PriorStarshipBlobs = @()
+if ($State) {
+    $priorBlob = (& git -C $InstallDir rev-parse "$($State.SOURCE_COMMIT):starship.toml" 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $priorBlob -and $priorBlob.Trim() -cmatch '^[0-9a-f]{40}$') { $PriorStarshipBlobs = @($priorBlob.Trim()) }
+} elseif ($Adopt) {
+    $PriorStarshipBlobs = @($LegacyStarshipBlob)
+}
+Update-ManagedFile (Join-Path $InstallDir 'starship.toml') $StarshipDest (Join-Path $ManagedConfigDir 'starship.toml.blob') $PriorStarshipBlobs
+
+$LazygitConfig = Join-Path $LazygitDir 'config.yml'
+$LazygitDefault = Join-Path $ManagedConfigDir ".lazygit-default.$PID"
+try {
+    Write-CandidateLazygitDefault (Join-Path $InstallDir 'install.sh') $LazygitDefault
+    # Blob identity of the v1.0 generated default after repository EOL rules.
+    $LegacyLazygitBlobs = if ($State -or $Adopt) { @($LegacyLazygitBlob) } else { @() }
+    Update-ManagedFile $LazygitDefault $LazygitConfig (Join-Path $ManagedConfigDir 'lazygit-config.yml.blob') $LegacyLazygitBlobs
+} finally {
+    if (Test-Path -LiteralPath $LazygitDefault) { Remove-Item -Force -LiteralPath $LazygitDefault }
+}
+$BashrcPath = Join-Path $InstallDir 'dotfiles\bashrc'
+if (-not (Test-Path -LiteralPath $BashrcPath -PathType Leaf)) { Abort 'Selected source lacks dotfiles/bashrc.' }
+
+$SeedDir = Join-Path $WorkspaceDir '.squarebox'
+$SeedSections = [Collections.Generic.List[string]]::new()
+$SeededFiles = [Collections.Generic.List[string]]::new()
+$script:SeedDirReady = $false
+$SelectionStateFiles = @('ai-tool', 'editors', 'editor-default', 'nvim-lazyvim', 'nvim-lazyvim-sha', 'tuis', 'multiplexer', 'sdks', 'shell')
+function Initialize-SeedDirectory {
+    if (Test-ReparsePoint $SeedDir) { Abort "Selection state directory must not be a reparse point or symlink: $SeedDir" }
+    if ((Test-Path -LiteralPath $SeedDir) -and -not (Test-Path -LiteralPath $SeedDir -PathType Container)) {
+        Abort "Selection state path is not a directory: $SeedDir"
+    }
+    if (-not (Test-Path -LiteralPath $SeedDir)) { New-Item -ItemType Directory -Path $SeedDir | Out-Null }
+    if ((Test-ReparsePoint $SeedDir) -or -not (Test-Path -LiteralPath $SeedDir -PathType Container)) {
+        Abort "Unable to create a safe Selection state directory: $SeedDir"
+    }
+    foreach ($name in $SelectionStateFiles) {
+        $path = Join-Path $SeedDir $name
+        if (Test-ReparsePoint $path) { Abort "Selection state file must not be a reparse point or symlink: $path" }
+        if ((Test-Path -LiteralPath $path) -and -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            Abort "Selection state path is not a regular file: $path"
+        }
+    }
+    $script:SeedDirReady = $true
+}
+function Add-Seed([string]$File, [string]$Value, [string]$Section) {
+    if ([string]::IsNullOrEmpty($Value)) { return }
+    if (-not $script:SeedDirReady) { Initialize-SeedDirectory }
+    $path = Join-Path $SeedDir $File
+    if (-not (Test-Path $path)) {
+        Set-Content -LiteralPath $path -Value $Value
+        $SeededFiles.Add($path)
+    }
+    $SeedSections.Add($Section)
+}
+Add-Seed 'ai-tool' $env:SQUAREBOX_AI 'ai'
+Add-Seed 'sdks' $env:SQUAREBOX_SDKS 'sdks'
+Add-Seed 'editors' $env:SQUAREBOX_EDITORS 'editors'
+Add-Seed 'tuis' $env:SQUAREBOX_TUIS 'tuis'
+Add-Seed 'multiplexer' $env:SQUAREBOX_MULTIPLEXERS 'multiplexers'
+
+$RuntimeOptions = @(
+    '--label', "$ManagedLabel=true", '--label', "$IdentityLabel=$InstallId",
+    '--cap-drop=ALL', '--cap-add=CHOWN', '--cap-add=DAC_OVERRIDE', '--cap-add=FOWNER',
+    '--cap-add=SETUID', '--cap-add=SETGID', '--cap-add=KILL',
+    '-e', "PUID=$Puid", '-e', "PGID=$Pgid"
+)
+$BindSuffix = ''; $ReadOnlyBindSuffix = ':ro'
+if ($Runtime -ceq 'podman') {
+    $RuntimeOptions += @('--security-opt', 'label=disable')
+    if ($RootlessPodman) {
+        $RuntimeOptions += '--userns=keep-id:uid=1000,gid=1000'
+    }
+}
+$RuntimeVolumes = @(
+    '-v', "${WorkspaceDir}:/workspace$BindSuffix",
+    '-v', "${HomeVolume}:/home/dev",
+    '-v', "${BashrcPath}:/home/dev/.bashrc$ReadOnlyBindSuffix",
+    '-v', "${GitConfigDir}:/home/dev/.config/git$BindSuffix",
+    '-v', "${StarshipDest}:/home/dev/.config/starship.toml$BindSuffix",
+    '-v', "${LazygitDir}:/home/dev/.config/lazygit$BindSuffix"
+)
+$SshDir = Join-Path $UserHome '.ssh'
+if (Test-Path $SshDir) { $RuntimeVolumes += @('-v', "${SshDir}:/home/dev/.ssh$ReadOnlyBindSuffix") }
+
+Write-Host 'Creating managed Box...'
+& $Runtime create -it --name $ContainerName @RuntimeOptions @RuntimeVolumes $ImageAlias | Out-Null
+if ($LASTEXITCODE -ne 0) { Abort "Unable to create managed Box '$ContainerName'." }
+$script:ContainerCreated = $true
+
+$ProfilePath = $PROFILE.CurrentUserAllHosts
+$ShellInit = $ProfilePath
+$stateValues = @(
+    $InstallDir, $WorkspaceDir, $GitConfigDir, $HomeVolume, $ContainerName,
+    $ImageAlias, $ImageRepository, $ImageRef, $ImageId, $ImageDigest,
+    $SourceRef, $SourceCommit, $ReleaseTag, $RequestedTag, $ProfilePath
+)
+if (@($stateValues | Where-Object { $_ -match "[`r`n]" }).Count -gt 0) { Abort 'Install identity values may not contain newlines.' }
+$StateDir = Split-Path $StateFile
+if (-not (Test-Path $StateDir)) { New-Item -ItemType Directory -Path $StateDir -Force | Out-Null }
+$stateLines = @(
+    'FORMAT=1', "INSTALL_ID=$InstallId", "RUNTIME=$Runtime", "INSTALL_DIR=$InstallDir",
+    "WORKSPACE_DIR=$WorkspaceDir", "GIT_CONFIG_DIR=$GitConfigDir", "HOME_VOLUME=$HomeVolume",
+    "CONTAINER_NAME=$ContainerName", "IMAGE_ALIAS=$ImageAlias", "IMAGE_REPOSITORY=$ImageRepository",
+    "IMAGE_REF=$ImageRef", "IMAGE_ID=$ImageId", "IMAGE_DIGEST=$ImageDigest",
+    "SOURCE_REF=$SourceRef", "SOURCE_COMMIT=$SourceCommit", "RELEASE_TAG=$ReleaseTag",
+    "REQUESTED_TAG=$RequestedTag", "PUID=$Puid", "PGID=$Pgid",
+    "BUILD=$([int][bool]$Build)", "EDGE=$([int][bool]$Edge)",
+    "SHELL_INIT=$ShellInit", "SHELL_RC=$ProfilePath", "ORIGIN=$Repo",
+    "HOME_VOLUME_ADOPTED=$([int]$HomeVolumeAdopted)"
+)
+$StateTemp = Join-Path $StateDir ".install-state.$([guid]::NewGuid().ToString('N'))"
+try {
+    [IO.File]::WriteAllLines($StateTemp, $stateLines, [Text.UTF8Encoding]::new($false))
+    if (-not $IsWindows) {
+        & chmod 600 $StateTemp
+        if ($LASTEXITCODE -ne 0) { Abort 'Unable to secure the Install identity state.' }
+    }
+    [void](Read-InstallState $StateTemp $InstallDir)
+    [IO.File]::Move($StateTemp, $StateFile, $true)
+    $script:RollbackArmed = $false
+} finally {
+    if (Test-Path -LiteralPath $StateTemp) { Remove-Item -Force -LiteralPath $StateTemp }
+}
+
+$ProfileDir = Split-Path $ProfilePath
+if (-not (Test-Path $ProfileDir)) { New-Item -ItemType Directory -Path $ProfileDir -Force | Out-Null }
+function Test-SquareboxProfileBlock([string]$Path) {
+    if (Test-ReparsePoint $Path) { Abort "PowerShell profile must not be a reparse point or symlink: $Path" }
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { Abort "PowerShell profile is not a regular file: $Path" }
+    $inside = $false; $blocks = 0
+    foreach ($line in [IO.File]::ReadAllLines($Path)) {
+        if ($line -ceq '# >>> squarebox >>>') {
+            if ($inside -or $blocks -gt 0) { Abort "Malformed squarebox marker block in $Path; the profile was preserved." }
+            $inside = $true; $blocks++; continue
+        }
+        if ($line -ceq '# <<< squarebox <<<') {
+            if (-not $inside) { Abort "Malformed squarebox marker block in $Path; the profile was preserved." }
+            $inside = $false; continue
+        }
+    }
+    if ($inside) { Abort "Malformed squarebox marker block in $Path; the profile was preserved." }
+    return $blocks -eq 1
+}
+function Remove-SquareboxProfileBlock([string]$Path) {
+    if (-not (Test-SquareboxProfileBlock $Path)) { return }
+    $filtered = [Collections.Generic.List[string]]::new(); $inside = $false
+    foreach ($line in [IO.File]::ReadAllLines($Path)) {
+        if ($line -ceq '# >>> squarebox >>>') { $inside = $true; continue }
+        if ($line -ceq '# <<< squarebox <<<') { $inside = $false; continue }
+        if (-not $inside) { $filtered.Add($line) }
+    }
+    $temp = Join-Path (Split-Path $Path) ".squarebox-profile.$PID.$([guid]::NewGuid().ToString('N'))"
+    try {
+        [IO.File]::WriteAllLines($temp, $filtered, [Text.UTF8Encoding]::new($false))
+        [IO.File]::Move($temp, $Path, $true)
+    } finally {
+        if (Test-Path -LiteralPath $temp) { Remove-Item -Force -LiteralPath $temp }
+    }
+}
+function Add-SquareboxProfileBlock([string]$Path, [string]$Block) {
+    if (Test-ReparsePoint $Path) { Abort "PowerShell profile must not be a reparse point or symlink: $Path" }
+    if ((Test-Path -LiteralPath $Path) -and -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        Abort "PowerShell profile is not a regular file: $Path"
+    }
+    $existing = if (Test-Path -LiteralPath $Path -PathType Leaf) { [IO.File]::ReadAllText($Path) } else { '' }
+    if ($existing -and -not ($existing.EndsWith("`n", [StringComparison]::Ordinal))) { $existing += [Environment]::NewLine }
+    $temp = Join-Path (Split-Path $Path) ".squarebox-profile.$PID.$([guid]::NewGuid().ToString('N'))"
+    try {
+        [IO.File]::WriteAllText($temp, $existing + $Block.TrimEnd([char[]]"`r`n") + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+        [IO.File]::Move($temp, $Path, $true)
+    } finally {
+        if (Test-Path -LiteralPath $temp) { Remove-Item -Force -LiteralPath $temp }
+    }
+}
+# v1.0 wrote the adapter to the current-host profile. Remove it there before
+# installing the portable all-hosts adapter so stale definitions cannot win.
+$ProfilePaths = @($ProfilePath, $PROFILE.CurrentUserCurrentHost) | Select-Object -Unique
+foreach ($path in $ProfilePaths) {
+    $hasBlock = Test-SquareboxProfileBlock $path
+    if ($hasBlock) {
+        if ($hasBlock -and $State -and -not ([IO.File]::ReadAllLines($path) -ccontains "# squarebox-install-id=$InstallId")) {
+            Abort "Existing PowerShell adapter '$path' is not owned by this Install identity."
+        }
+        if ($hasBlock -and -not $State -and -not $Adopt) {
+            Abort "Existing PowerShell adapter '$path' has no Install identity; review it, then use -Adopt."
+        }
+    }
+}
+foreach ($path in $ProfilePaths) { Remove-SquareboxProfileBlock $path }
 $profileBlock = @'
 # >>> squarebox >>>
-# squarebox shell integration - managed by install.ps1.
-Remove-Item Alias:sqrbx, Alias:squarebox, Alias:sqrbx-rebuild, Alias:squarebox-rebuild, Alias:sqrbx-uninstall, Alias:squarebox-uninstall -ErrorAction SilentlyContinue
+# Managed by squarebox using the recorded Install identity.
+# squarebox-install-id=__INSTALL_ID__
 function sqrbx {
-    # Dispatch subcommands (currently: uninstall) so 'sqrbx uninstall' is
-    # symmetric with the standalone sqrbx-uninstall function below.
     if ($args.Count -gt 0 -and $args[0] -eq 'uninstall') {
         $rest = if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { @() }
-        & "__INSTALL_DIR__\uninstall.ps1" @rest
+        & '__INSTALL__\uninstall.ps1' @rest
         return
     }
-    # If the container was left running after an ungraceful exit (closed
-    # terminal instead of 'exit'), attaching to PID1 bash drops you onto a
-    # prompt it already printed to the dead TTY - blinking cursor, no output.
-    # Reset so the next start attaches to a fresh PID1 that paints a visible prompt.
-    $running = (& __RUNTIME__ inspect -f '{{.State.Running}}' squarebox 2>$null)
-    if ($running -and $running.Trim() -eq 'true') {
-        & __RUNTIME__ stop squarebox > $null 2>&1
-    }
-    & __RUNTIME__ start -ai squarebox
+    $owner = (& __RUNTIME__ inspect -f '{{ index .Config.Labels "io.squarebox.install-id" }}' '__CONTAINER__' 2>$null)
+    if (-not $owner -or $owner.Trim() -cne '__INSTALL_ID__') { throw 'squarebox Install identity mismatch; refusing to start.' }
+    $running = (& __RUNTIME__ inspect -f '{{.State.Running}}' '__CONTAINER__' 2>$null)
+    if ($running -and $running.Trim() -ceq 'true') { & __RUNTIME__ stop '__CONTAINER__' | Out-Null }
+    & __RUNTIME__ start -ai '__CONTAINER__'
+    if ($LASTEXITCODE -ne 0) { throw 'squarebox failed to start.' }
 }
 function squarebox { sqrbx @args }
-function sqrbx-rebuild { & "__INSTALL_DIR__\install.ps1" @args }
+function sqrbx-rebuild { & '__INSTALL__\install.ps1' @args }
 function squarebox-rebuild { sqrbx-rebuild @args }
-function sqrbx-uninstall { & "__INSTALL_DIR__\uninstall.ps1" @args }
+function sqrbx-uninstall { & '__INSTALL__\uninstall.ps1' @args }
 function squarebox-uninstall { sqrbx-uninstall @args }
 # <<< squarebox <<<
 '@
-$profileBlock = $profileBlock -replace '__INSTALL_DIR__', $InstallDir
-$profileBlock = $profileBlock -replace '__RUNTIME__', $Runtime
-$profileBlock | Add-Content -Path $PROFILE
+$profileValues = @{
+    INSTALL = $InstallDir.Replace("'", "''")
+    RUNTIME = $Runtime
+    CONTAINER = $ContainerName
+    INSTALL_ID = $InstallId
+}
+# Regex replacement scans the template once. Sequential String.Replace calls
+# would corrupt an otherwise valid path containing text such as __RUNTIME__.
+$profileBlock = [regex]::Replace($profileBlock, '__(INSTALL|RUNTIME|CONTAINER|INSTALL_ID)__', {
+    param($match)
+    return [string]$profileValues[$match.Groups[1].Value]
+})
+try { [void][scriptblock]::Create($profileBlock) }
+catch { Abort "Generated PowerShell profile failed to parse after interpolation: $($_.Exception.Message)" }
+Add-SquareboxProfileBlock $ProfilePath $profileBlock
+Write-Host "Installed shell integration -> $ProfilePath"
 
-Write-Host "Installed squarebox shell integration -> $PROFILE"
+if ($SeedSections.Count -gt 0) {
+    Write-Host "Provisioning requested Selection on the retained Box ($($SeedSections -join ', '))..."
+    & $Runtime start $ContainerName | Out-Null
+    if ($LASTEXITCODE -ne 0) { Abort 'Unable to start the retained Box for provisioning.' }
+    & $Runtime exec -u dev -e HOME=/home/dev $ContainerName /usr/local/lib/squarebox/setup.sh --rerun @SeedSections
+    $provisionExit = $LASTEXITCODE
+    & $Runtime stop $ContainerName | Out-Null
+    if ($provisionExit -ne 0) {
+        foreach ($path in $SeededFiles) { Remove-Item -Force -LiteralPath $path -ErrorAction SilentlyContinue }
+        Abort 'Requested provisioning failed; the retained Box was not discarded.'
+    }
+}
 
-# --- Start container ---
-if ([System.Console]::IsInputRedirected) {
-    Write-Host "Install complete. Run 'squarebox' (or 'sqrbx') to start."
+Write-Host "Install identity recorded at $StateFile"
+if ([Console]::IsInputRedirected) {
+    Write-Host "Install complete. Start a new PowerShell session, then run 'squarebox'."
 } else {
     & $Runtime start -ai $ContainerName
+    if ($LASTEXITCODE -ne 0) { Abort 'Managed Box failed to start.' }
 }

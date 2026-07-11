@@ -14,7 +14,10 @@ tablet, or phone (please don't).
 The goal is to make modern terminal tooling easy and accessible. One-line
 install, interactive first-run setup, sensible defaults (thanks [omarchy](https://omarchy.org)).
 
-![squarebox first-run setup](https://raw.githubusercontent.com/SquareWaveSystems/squarebox/demo/demo/squarebox-setup.gif)
+Preparing an existing installation for v1.1? Read the
+[migration guide](docs/releases/v1.1.0.md) and [changelog](CHANGELOG.md).
+
+![squarebox first-run setup](demo/squarebox-setup.gif)
 *(Actual setup may involve more staring at the screen.)*
 
 Prerequisites
@@ -29,7 +32,10 @@ asks which to use. Override with `SQUAREBOX_RUNTIME=docker` or
 
 > **Podman (Experimental):** Docker is the primary tested runtime; Podman may
 > have rough edges around volume mounts, SSH agent forwarding, or rebuild
-> flows — please file an issue if you hit one.
+> flows. The rootless adapter maps the host user to the image's `dev` account
+> and uses `--security-opt label=disable`: host SELinux labels are left
+> untouched, while SELinux container separation is disabled for this
+> development Box. Please file an issue if you hit a runtime-specific edge.
 
 <details>
 <summary><strong>Don't have Docker or Podman? One-line install</strong></summary>
@@ -72,13 +78,11 @@ of AI coding assistant, and language SDKs.
 
     curl -fsSL https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.sh | bash -s -- --edge
 
-Stable pulls the prebuilt image for the latest tagged release (pre-release tags
-like `-rc` are skipped). Edge builds from the latest commit on `main` — no image
-is published for unreleased commits, so edge always builds from source. To build
-the released version from source instead of pulling, pass `--build`. The install
-script itself is published as a release asset, so the URL is pinned to a tagged
-version of the script — pushes to `main` won't break new installs until a
-release is cut.
+Stable resolves the latest published GitHub Release and pulls the immutable
+image digest recorded in its `release.json`. Raw Git tags are not installable
+stable releases. An explicit `SQUAREBOX_TAG=v…` resolves that published Release
+and its matching source revision. Edge builds the latest commit on `main`. To
+build a published Release from source instead of pulling, pass `--build`.
 
 If the install fails or you want to see the full build/pull and git output,
 re-run with `--verbose`.
@@ -86,17 +90,17 @@ re-run with `--verbose`.
 <details>
 <summary><strong>Advanced install options (flags &amp; environment variables)</strong></summary>
 
-Flags: `--build` (build from source instead of pulling), `--edge` (latest
-`main`), `--verbose`.
+Flags: `--build` (build from source), `--edge` (latest `main`), `--adopt`
+(one-time migration of a legacy installation), and `--verbose`.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `SQUAREBOX_DIR` | `~/squarebox` | Install location (repo + workspace). Point at durable storage on hosts where `$HOME` is volatile — e.g. Unraid `/mnt/user/appdata/squarebox`. |
 | `SQUAREBOX_WORKSPACE` | `$SQUAREBOX_DIR/workspace` | Host path mounted as `/workspace`. |
-| `SQUAREBOX_TAG` | matched release / `latest` | Image tag to pull (e.g. `v1.0.0-rc1` to test a pre-release). |
-| `SQUAREBOX_IMAGE` | `ghcr.io/squarewavesystems/squarebox` | Image repository to pull from. |
+| `SQUAREBOX_TAG` | latest published stable | Published Release to install (for example `v1.1.0-rc5`). Tags use `vMAJOR.MINOR.PATCH[-prerelease]`; build metadata is not published. |
+| `SQUAREBOX_IMAGE` | value from `release.json` | Optional image-repository override for development/testing. |
 | `SQUAREBOX_BUILD` | `0` | `1` is equivalent to `--build`. |
-| `PUID` / `PGID` | `1000` / `1000` | Host uid/gid that should own bind-mounted files. Unraid/NAS: `99` / `100`. |
+| `PUID` / `PGID` | invoking Linux user | Host uid/gid that should own bind-mounted files. Docker/rootful hosts may override these (Unraid/NAS: `99` / `100`); rootless Podman requires the invoking host identity. |
 | `SQUAREBOX_RUNTIME` | auto | Force `docker` or `podman`. |
 | `SQUAREBOX_HOME_VOLUME` | `squarebox-home` | Name of the named volume backing `/home/dev`. |
 | `SQUAREBOX_EDGE` | `0` | `1` is equivalent to `--edge`. |
@@ -109,19 +113,32 @@ scripted installs). Values use the same keys as `sqrbx-setup`:
 |----------|---------|
 | `SQUAREBOX_AI` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,paseo`) |
 | `SQUAREBOX_SDKS` | language SDKs (`node,python,go,dotnet,rust`) |
-| `SQUAREBOX_EDITORS` | editors (`micro,edit,fresh,nvim`) |
+| `SQUAREBOX_EDITORS` | editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
 | `SQUAREBOX_TUIS` | TUI tools (`lazygit,gh-dash,yazi`) |
 | `SQUAREBOX_MULTIPLEXERS` | multiplexers (`tmux,zellij`) |
 | `SQUAREBOX_GIT_NAME` / `SQUAREBOX_GIT_EMAIL` | git identity (when no host gitconfig) |
 
-Example: `SQUAREBOX_AI=claude SQUAREBOX_SDKS=node,python curl -fsSL …/install.sh | bash`
+Example:
+
+```bash
+curl -fsSL https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.sh \
+  | env SQUAREBOX_AI=claude SQUAREBOX_SDKS=node,python bash
+```
 
 </details>
+
+Each successful v1.1 install records its effective lifecycle settings at
+`<SQUAREBOX_DIR>/.squarebox/install-state` (mode 0600 on POSIX; inherited
+current-user install-directory ACL on native Windows). Rebuild and uninstall
+parse this file as data; they do not reconstruct defaults or source it as shell
+code. Release pulls record an immutable image digest; source/edge builds record
+their local image ID/reference. Existing pre-v1.1 checkouts require a one-time
+reviewed `--adopt`/`-Adopt`.
 
 **Windows (PowerShell 7+)**
 
 Windows users can install directly from PowerShell - no Git Bash required.
-This handles clone, build, container creation, and PowerShell aliases
+This handles Release resolution, pull/build, Box creation, and PowerShell functions
 (`sqrbx`, `squarebox`, etc.) natively:
 
     irm https://github.com/SquareWaveSystems/squarebox/releases/latest/download/install.ps1 | iex
@@ -130,11 +147,21 @@ Once installed, you can re-run or pass flags from the local copy:
 
     .\install.ps1              # re-install / update
     .\install.ps1 -Edge        # latest main instead of latest release
-    .\install.ps1 -Verbose     # show full build output
+    .\install.ps1 -Build       # build the resolved source locally
+    .\install.ps1 -Adopt       # migrate a legacy pre-v1.1 installation
 
 > **Note:** `irm ... | iex` does not support flags - PowerShell interprets them
 > as arguments to `Invoke-Expression`, not the script. Use the local
-> `.\install.ps1` form for `-Edge` or `-Verbose`.
+> `.\install.ps1` form for `-Edge`, `-Build`, or `-Adopt`. PowerShell streams
+> runtime and Git failures directly by default.
+
+> **Windows adapter boundary:** Keep install, rebuild, and uninstall on the
+> adapter that created the v1.1 Install identity. Native PowerShell and Git Bash
+> use the same `FORMAT=1` field names, but their native path and shell-profile
+> values are not interchangeable; cross-adapter state consumption is rejected.
+> Native PowerShell mounts `%USERPROFILE%\.ssh` read-only when it exists and
+> does not forward `SSH_AUTH_SOCK`. The separate Git Bash adapter supports SSH
+> agent-socket forwarding with its Bash lifecycle.
 
 Start
 -----
@@ -145,13 +172,14 @@ These are shell functions wrapping `docker start -ai squarebox` (or
 `podman start -ai squarebox`), added automatically for Bash, Zsh, and
 PowerShell 7+.
 
-The container is persistent: it suspends on exit and resumes on start, keeping
-installed packages, config, and shell history intact between sessions. Your
+The Box suspends on exit and resumes on start, keeping its current filesystem
+between those starts. Box replacement discards that filesystem; selected
+Box-tier packages are reconciled automatically in the replacement. Your
 code lives on the host at `~/squarebox/workspace` (bind-mounted), and per-user
 state — shell history, GitHub CLI auth, claude-code data, mise toolchains —
-lives in a named Docker volume (`squarebox-home`) that survives container
-recreation. Image-managed config like `.bashrc` is bind-mounted from the repo
-so updates flow through to the running container.
+lives in a named Docker volume (`squarebox-home`) that survives replacement.
+Image-managed config is refreshed safely into that Managed home at startup;
+desktop source builds may instead use explicit managed bind mounts.
 
 Run as a long-lived server (Unraid / NAS / VPS)
 -----------------------------------------------
@@ -201,6 +229,7 @@ What's included
 | [gum](https://github.com/charmbracelet/gum) | Go | Tool for shell scripts and dotfiles |
 | [jq](https://github.com/jqlang/jq) | C | JSON processor |
 | [just](https://github.com/casey/just) | Rust | Command runner / modern make alternative |
+| [mise](https://github.com/jdx/mise) | Rust | Polyglot tool-version and SDK manager |
 | [nano](https://nano-editor.org) | C | Default text editor |
 | [ripgrep](https://github.com/BurntSushi/ripgrep) | Rust | Fast recursive grep |
 | [starship](https://github.com/starship/starship) | Rust | Cross-shell prompt |
@@ -222,10 +251,10 @@ pre-selected non-interactively via the `SQUAREBOX_AI`/`SQUAREBOX_SDKS`/… env v
 | Name | Language | Description |
 |------|----------|-------------|
 | [Claude Code](https://github.com/anthropics/claude-code) | TypeScript | AI coding assistant |
-| [GitHub Copilot CLI](https://github.com/githubnext/github-copilot-cli) | TypeScript | GitHub Copilot in the terminal * |
+| [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/cli-getting-started) | TypeScript | Supported GitHub Copilot terminal client (`copilot`) * |
 | [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) | TypeScript | Google Gemini in the terminal * |
-| [OpenAI Codex CLI](https://github.com/openai/codex) | TypeScript | OpenAI Codex in the terminal * |
-| [opencode](https://github.com/anomalyco/opencode) | Go | AI coding TUI |
+| [OpenAI Codex CLI](https://github.com/openai/codex) | Rust | OpenAI Codex in the terminal * |
+| [opencode](https://github.com/anomalyco/opencode) | TypeScript/Bun | AI coding TUI |
 | [Pi Coding Agent](https://github.com/earendil-works/pi) | TypeScript | Minimal terminal coding harness (Earendil) * |
 | [Paseo](https://paseo.sh) | TypeScript | Remote control for AI CLI agents * |
 
@@ -233,14 +262,15 @@ pre-selected non-interactively via the `SQUAREBOX_AI`/`SQUAREBOX_SDKS`/… env v
 
 ### Text Editors
 
-Nano is always available as the default editor.
+Nano is always available and remains the fallback default unless you choose an
+installed editor instead.
 
 | Name | Language | Description |
 |------|----------|-------------|
 | [micro](https://github.com/micro-editor/micro) | Go | Modern, intuitive terminal editor |
 | [edit](https://github.com/microsoft/edit) | Rust | Terminal text editor (Microsoft) |
 | [fresh](https://github.com/sinelaw/fresh) | Rust | Modern terminal text editor |
-| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) - *coming soon* |
+| [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) |
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
 
 Selecting **nvim** offers to install the [LazyVim](https://www.lazyvim.org/) starter config to `~/.config/nvim`, turning Neovim into a preconfigured IDE. Plugins sync on first launch and persist in the `squarebox-home` volume. A Nerd Font in your terminal is recommended for icons; the starter is skipped if `~/.config/nvim` already exists, so your own config is never overwritten.
@@ -311,18 +341,14 @@ and fish.
 | .NET    | `dotnet` |
 | Rust    | `rust` |
 
-### Learning mode (beta)
-
-> Currently disabled — the feature is half-baked and not surfaced during setup.
-> The `sqrbx-learn` binary remains installed in the image for later revival.
-
 Getting help
 ------------
 
 Run `sqrbx-help` inside the container for a one-screen overview of the
-`sqrbx-*` commands plus the fzf (`Ctrl+R`/`Ctrl+T`/`Alt+C`/`**<Tab>`) and
-zoxide (`z`/`zi`) keyboard shortcuts. The MOTD points to it on every shell
-start.
+`sqrbx-*` commands, Bash's fzf (`Ctrl+R`/`Ctrl+T`/`Alt+C`/`**<Tab>`) bindings,
+and zoxide (`z`/`zi`) navigation. Zsh and Fish retain the `fzf`, `ff`, and
+`eff` commands but do not claim those Bash-specific bindings. The MOTD points
+to the help command on every shell start.
 
 Reconfiguring
 -------------
@@ -383,20 +409,29 @@ Update
 
     sqrbx-update
 
-Checks all GitHub-released tools against latest versions and updates them
-in-place. No rebuild required. Your container state, SDKs, and config are
-preserved.
+Checks installed registered tools against upstream releases. A dry run never
+installs absent optional tools; `--apply` updates the installed set only. Naming
+an absent tool explicitly is an install request. Failures are aggregated,
+reported with preserved logs, and return nonzero. Managed-home tools can advance
+in place. Image-tier tools advance only through a newer Squarebox Candidate and
+Box rebuild unless the current Candidate already authorizes the exact release
+asset; an unvetted upstream release is reported but never advertised as applyable.
+Broken version probes and incomplete Yazi, Helix, or Neovim output sets are
+reported as repairs; a failed post-install verification restores prior managed
+outputs.
 
     sqrbx-update              # show available updates (dry run)
-    sqrbx-update --apply      # download and install all updates
-    sqrbx-update lazygit      # update a single tool
+    sqrbx-update --apply      # update all installed registered tools
+    sqrbx-update lazygit      # update, or explicitly install, one tool
     sqrbx-update --list       # list all tools and current versions
 
 ### Full rebuild (from the host)
 
     sqrbx-rebuild
 
-Pulls the latest changes, rebuilds the image, and replaces the container.
+Resolves the requested published Release, pulls its immutable image digest, and
+replaces the Box. Installations created with `--build` retain that choice and
+build the matching source instead.
 Your code in ~/squarebox/workspace is safe since it lives on the host. Most
 in-container state (shell history, GitHub auth, SDK toolchains) survives
 because /home/dev is backed by the `squarebox-home` named Docker volume.
@@ -404,25 +439,28 @@ Manually installed apt packages are still lost, since the image is rebuilt.
 
 #### What survives a rebuild
 
-| Survives | Lost |
-|----------|------|
-| Code in ~/squarebox/workspace (host bind mount) | Manually installed apt packages |
-| /home/dev (squarebox-home named volume): shell history, GitHub CLI auth, claude-code data, mise toolchains | |
-| Starship, lazygit, .bashrc (bind-mounted from repo, picks up updates) | |
-| AI tool / editor / SDK selections (in /workspace/.squarebox) | |
-| SSH keys (on host, forwarded via agent) | |
+| Survives | Reconciled or lost |
+|----------|--------------------|
+| Workspace code on the host | Selected tmux/Zsh/Fish packages are reconciled into the new Box |
+| Managed home: history, auth, assistant data, mise toolchains | Manually installed, unselected APT packages are lost |
+| Selection state in `/workspace/.squarebox` | Image-tier binaries are replaced by the Candidate digest |
+| Host SSH access exposed by the selected lifecycle adapter | Image-managed dotfiles are safely refreshed |
 
-To wipe per-user state and start fresh, remove the named volume:
-`docker volume rm squarebox-home`.
+Use `sqrbx-uninstall --purge` to wipe recorded state. Do not remove a volume by
+name alone; lifecycle commands verify the Install identity and ownership
+labels before deleting a Managed resource.
 
-> **Tip:** Use `sqrbx-update` from inside the container to update tools without
-> rebuilding. Only use `sqrbx-rebuild` when the base image itself needs to
-> change (new apt packages, new base tools, Dockerfile changes).
+> **Tip:** Use `sqrbx-update` from inside the container for Managed-home tools.
+> Use `sqrbx-rebuild` for image-tier binaries, new APT packages, base-tool
+> changes, or any upstream release the current Candidate cannot authorize.
 
 Disk usage
 ----------
 
-The base image (CLI tools only, no optional components) is **~370 MB** on disk.
+The reviewed amd64 v1.1 Candidate is approximately **900 MB** in
+`docker image ls` (about 638 MB of files in a running Box). Registry transfer,
+shared local layers, and unpacked filesystem size are different measurements;
+inspect the exact Release on your platform.
 
 First-run selections add to that:
 
@@ -434,34 +472,40 @@ First-run selections add to that:
 | OpenAI Codex CLI | ~50 MB |
 | OpenCode | ~30 MB |
 | Pi Coding Agent | ~50 MB |
+| Paseo | Varies by npm release |
 | lazygit / gh-dash / yazi | ~10 / ~10 / ~10 MB |
 | micro / edit | ~12 / ~7 MB |
 | fresh / nvim | ~10 / ~45 MB |
+| Helix | Varies by release (binary plus runtime files) |
 | Node.js | ~90 MB |
 | Python | ~50 MB |
 | Go | ~500 MB |
 | .NET | ~800 MB |
 
-A typical setup (Claude Code + Node.js + one editor) lands around **~800 MB**.
-Sizes are approximate and will vary as tools are updated.
+Optional sizes are approximate and change independently of Squarebox Releases.
 
 Security
 --------
 
-Base image tools are pinned to specific versions and verified against SHA256
-checksums when the Docker image is built, so `docker build` is reproducible.
+Direct-download image-tier tools are pinned and fail closed against repository
+SHA-256 checksums. Published image bytes are immutable by digest; rebuilding
+later is not guaranteed to reproduce them because the Ubuntu base and APT
+repositories are external mutable inputs.
 
 Optional tools selected during first-run setup (editors, TUIs, OpenCode,
-zellij) install the latest upstream release at the time you run setup. The
-trust model is the same as running each tool's installer yourself: HTTPS
-downloads from the project's official GitHub release (or upstream server). You
-get new features without waiting for a squarebox release, at the cost of
-build-time pinning for that tier.
+zellij) install the latest upstream release at the time you run setup. For
+GitHub-hosted artifacts, Squarebox resolves one exact release tag and asset
+name, requires GitHub's SHA-256 release-asset digest, and verifies the bytes
+before extraction. Missing or mismatched digest metadata fails closed. These
+tools remain Managed-home selections rather than image-build pins. Setup
+installs an absent selection; `sqrbx-update --apply` is the explicit path for
+updating an already observed registered tool to a newer authorized release.
 
 SDKs (Node, Python, Go, .NET, Rust) are installed by [mise](https://github.com/jdx/mise),
 which is itself a Dockerfile-tier pinned binary. mise downloads each SDK
 toolchain from its upstream over HTTPS using its own integrity checks. npm-based
-AI tools (Copilot CLI, Gemini CLI, Codex CLI, Pi) use npm's built-in integrity verification.
+AI tools (Copilot CLI, Gemini CLI, Codex CLI, Pi, and Paseo) use npm's built-in
+integrity verification.
 
 For the full trust model (what `install.sh` does on your machine, how each
 layer is verified, and how to inspect the script before running it) see
@@ -474,7 +518,8 @@ Open this repo in VS Code with the
 [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers),
 or launch it in [GitHub Codespaces](https://github.com/features/codespaces).
 The included `.devcontainer/devcontainer.json` builds the full **squarebox** image
-automatically and opens the cloned repo at `/workspaces/<repo>`.
+automatically and mounts the cloned repository at `/workspace`, matching setup
+and Selection state.
 
 The interactive first-run wizard can't run in devcontainer mode (no TTY at
 create time), so a default toolset — **Claude Code + Node.js** — is installed
@@ -483,9 +528,9 @@ container environment variables (set to an empty string to opt out of a tier):
 
 | Variable | Default | Selects |
 |----------|---------|---------|
-| `SQUAREBOX_DC_AI` | `claude` | AI assistants (`claude,copilot,gemini,codex,opencode,pi`) |
+| `SQUAREBOX_DC_AI` | `claude` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,paseo`) |
 | `SQUAREBOX_DC_SDKS` | `node` | SDKs (`node,python,go,dotnet,rust`) |
-| `SQUAREBOX_DC_EDITORS` | _(none)_ | Editors (`micro,edit,fresh,nvim`) |
+| `SQUAREBOX_DC_EDITORS` | _(none)_ | Editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
 | `SQUAREBOX_DC_TUIS` | _(none)_ | TUI tools (`lazygit,gh-dash,yazi`) |
 
 To add or change tools after the fact, run `sqrbx-setup` from the integrated
@@ -499,16 +544,19 @@ Uninstall
 
     sqrbx-uninstall
 
-Removes the container, image, and shell integration but **keeps**
-`~/squarebox` (including `workspace/`) and the `squarebox-home` named volume
+Removes the recorded Box, owned image reference, and shell integration but **keeps**
+the install directory/Workspace and Managed-home volume
 (shell history, gh auth, mise toolchains) so your code and per-user state are
-safe by default. Pass `--purge` to also remove both:
+safe by default. Pass `--purge` to remove the Managed home and recorded install
+directory. The default Workspace nested inside that directory is removed with
+it; a custom external Workspace is always preserved:
 
     sqrbx-uninstall --purge
 
-A second confirmation is required if `~/squarebox/workspace` is non-empty.
+A second confirmation is required if the recorded Workspace is non-empty.
 Pass `-y` (or `-Yes` on PowerShell) to skip all prompts for scripting.
-Idempotent: safe to re-run once uninstalled.
+Idempotent for a valid Install identity. Legacy resources require `--adopt`;
+purging an adopted, unlabeled volume additionally requires `--force`.
 
 **Windows (PowerShell 7+):**
 
@@ -517,7 +565,9 @@ Idempotent: safe to re-run once uninstalled.
     sqrbx-uninstall -Yes           # skip confirmations
 
 **Broken-state recovery** (e.g. shell functions are missing, or after partial
-install): run the script directly from the install directory:
+install): run the script matching the adapter that created the Install identity
+directly from the install directory. PowerShell and Git Bash lifecycle state is
+not cross-consumed:
 
     ~/squarebox/uninstall.sh              # Linux / macOS / Git Bash
     ~/squarebox/uninstall.ps1             # Windows PowerShell

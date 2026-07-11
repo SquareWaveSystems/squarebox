@@ -4,13 +4,13 @@
 # Usage:
 #   demo/record.sh
 #
-# Requires: vhs, gum, toilet
+# Requires: vhs, gum, toilet, ffmpeg, ttyd
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-for cmd in vhs gum toilet; do
+for cmd in vhs gum toilet ffmpeg ttyd; do
     if ! command -v "$cmd" &>/dev/null; then
         echo "Error: $cmd is required but not installed." >&2
         exit 1
