@@ -980,9 +980,20 @@ _install_tmux_inner() {
 	fi
 }
 
+# Self-heal tmux settings that older configs may predate. The config heredoc in
+# _install_tmux_inner only runs when no tmux.conf exists, so upgraded containers
+# never picked up newly-added defaults (e.g. `set -g mouse on`, needed for scroll
+# to work in Blink/mobile terminals instead of leaking mouse escapes to the prompt).
+_ensure_tmux_defaults() {
+	local conf="$HOME/.config/tmux/tmux.conf"
+	[ -f "$conf" ] || return 0
+	grep -q '^set -g mouse on' "$conf" || echo 'set -g mouse on' >> "$conf"
+}
+
 install_tmux() {
-	if command -v tmux &>/dev/null; then echo "Tmux already installed, skipping."; return 0; fi
+	if command -v tmux &>/dev/null; then echo "Tmux already installed, skipping."; _ensure_tmux_defaults; return 0; fi
 	run_with_spinner "Installing tmux..." _install_tmux_inner
+	_ensure_tmux_defaults
 }
 
 _install_zellij_inner() {
