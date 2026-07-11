@@ -131,35 +131,24 @@ if should_run git; then
 	_current_email=$(git config --global user.email 2>/dev/null || true)
 
 	if $SB_RERUN && [ -n "$_current_name" ] && $INTERACTIVE; then
-		echo "Current git name: $_current_name"
-		echo "Current git email: ${_current_email:-(not set)}"
+		# Existing identity on re-run: present it pre-filled so you can edit
+		# inline or just accept it. Empty input (cleared gum value or a blank
+		# read — i.e. hitting Enter) keeps the current value unchanged.
 		if $HAS_GUM; then
-			gum confirm "Change git identity?" --default=false && _change_git=true || _change_git=false
+			name=$(gum input --value "$_current_name" --header "Git name:" --width 40) || name="$_current_name"
 		else
-			read -rp "Change git identity? [y/N]: " _git_reply
-			case "${_git_reply:-N}" in
-				[Yy]*) _change_git=true ;;
-				*)     _change_git=false ;;
-			esac
+			read -rp "Git name [$_current_name]: " name
 		fi
-		if $_change_git; then
-			if $HAS_GUM; then
-				name=$(gum input --value "$_current_name" --header "Git name:" --width 40) || name="$_current_name"
-			else
-				read -rp "Git name [$_current_name]: " name
-			fi
-			# Empty input (cleared gum value or blank read) keeps the current value
-			[ -z "$name" ] && name="$_current_name"
-			git config --file ~/.config/git/config user.name "$name"
-			if $HAS_GUM; then
-				email=$(gum input --value "$_current_email" --header "Git email:" --width 40) || email="$_current_email"
-			else
-				read -rp "Git email [$_current_email]: " email
-			fi
-			[ -z "$email" ] && email="$_current_email"
-			# Only write email if we have a non-empty value (preserves "unset" state)
-			[ -n "$email" ] && git config --file ~/.config/git/config user.email "$email"
+		[ -z "$name" ] && name="$_current_name"
+		git config --file ~/.config/git/config user.name "$name"
+		if $HAS_GUM; then
+			email=$(gum input --value "$_current_email" --header "Git email:" --width 40) || email="$_current_email"
+		else
+			read -rp "Git email [$_current_email]: " email
 		fi
+		[ -z "$email" ] && email="$_current_email"
+		# Only write email if we have a non-empty value (preserves "unset" state)
+		[ -n "$email" ] && git config --file ~/.config/git/config user.email "$email"
 	else
 		if [ -z "$_current_name" ]; then
 			if $INTERACTIVE; then
