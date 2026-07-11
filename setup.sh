@@ -6,11 +6,18 @@ set -euo pipefail
 # When called from .bashrc first-run:   setup.sh (no args)
 
 SB_RERUN=false
+SB_RECONCILE_BOX=false
 SB_SECTIONS=()
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--rerun) SB_RERUN=true; shift ;;
+		--reconcile-box)
+			SB_RECONCILE_BOX=true
+			SB_RERUN=true
+			SB_SECTIONS=(editors multiplexers shell)
+			shift
+			;;
 		*)       SB_SECTIONS+=("$1"); shift ;;
 	esac
 done
@@ -19,6 +26,35 @@ done
 if $SB_RERUN && [ ${#SB_SECTIONS[@]} -eq 0 ]; then
 	SB_SECTIONS=(git github ai editors tuis multiplexers sdks shell)
 fi
+
+SB_FAILURES=0
+
+record_failure() {
+	echo "ERROR: $*" >&2
+	SB_FAILURES=$((SB_FAILURES + 1))
+}
+
+cancel_setup() {
+	echo
+	echo "Setup cancelled; existing Selections were preserved."
+	exit 130
+}
+
+gum_confirm_or_cancel() {
+	local rc
+	if gum confirm "$@"; then
+		return 0
+	else
+		rc=$?
+	fi
+	[ "$rc" -eq 1 ] && return 1
+	cancel_setup
+}
+
+join_csv() {
+	local IFS=,
+	echo "$*"
+}
 
 should_run() {
 	# In first-run mode (no --rerun), always run all sections
@@ -34,6 +70,23 @@ SB_TMPDIR=$(mktemp -d)
 export SB_TMPDIR
 trap 'rm -rf "$SB_TMPDIR"' EXIT
 
+SB_STATE_DIR="${SQUAREBOX_STATE_DIR:-/workspace/.squarebox}"
+SB_TOOL_LIB="${SQUAREBOX_TOOL_LIB:-/usr/local/lib/squarebox/tool-lib.sh}"
+SB_SELECTION_STATE_FILES=(ai-tool editors editor-default nvim-lazyvim nvim-lazyvim-sha tuis multiplexer sdks shell)
+
+# Selection state is host-owned input. Never follow a Workspace symlink while
+# reading or writing it: a checkout could otherwise redirect setup into an
+# unrelated host directory.
+while [[ "$SB_STATE_DIR" == */ && "$SB_STATE_DIR" != / ]]; do SB_STATE_DIR="${SB_STATE_DIR%/}"; done
+if [ -L "$SB_STATE_DIR" ]; then
+	echo "ERROR: Selection state directory must not be a symlink: $SB_STATE_DIR" >&2
+	exit 1
+fi
+if [ -e "$SB_STATE_DIR" ] && [ ! -d "$SB_STATE_DIR" ]; then
+	echo "ERROR: Selection state path is not a directory: $SB_STATE_DIR" >&2
+	exit 1
+fi
+
 # Fix /workspace ownership if volume mount left it owned by a different UID
 if [ -d /workspace ] && ! [ -w /workspace ]; then
 	if ! command -v sudo >/dev/null 2>&1; then
@@ -48,15 +101,34 @@ if [ -d /workspace ] && ! [ -w /workspace ]; then
 	fi
 fi
 
-# Source shared tool library. Optional tools install from latest upstream
-# releases over HTTPS at setup time, so the library's default no-op
-# sb_verify is fine here since we don't ship checksums for these tools.
-export SB_TOOLS_YAML=/usr/local/lib/squarebox/tools.yaml
-source /usr/local/lib/squarebox/tool-lib.sh
+mkdir -p -- "$SB_STATE_DIR"
+if [ -L "$SB_STATE_DIR" ] || [ ! -d "$SB_STATE_DIR" ]; then
+	echo "ERROR: unable to create a safe Selection state directory: $SB_STATE_DIR" >&2
+	exit 1
+fi
+for _selection_file in "${SB_SELECTION_STATE_FILES[@]}"; do
+	_selection_path="$SB_STATE_DIR/$_selection_file"
+	if [ -L "$_selection_path" ]; then
+		echo "ERROR: Selection state file must not be a symlink: $_selection_path" >&2
+		exit 1
+	fi
+	if [ -e "$_selection_path" ] && [ ! -f "$_selection_path" ]; then
+		echo "ERROR: Selection state path is not a regular file: $_selection_path" >&2
+		exit 1
+	fi
+done
+
+# Source the shared installer. Setup-tier GitHub artifacts are accepted only
+# when the exact release tag and asset name carry a valid SHA-256 digest in the
+# GitHub release-asset metadata; the shared library verifies it before promote.
+export SB_TOOLS_YAML="${SQUAREBOX_TOOLS_YAML:-/usr/local/lib/squarebox/tools.yaml}"
+source "$SB_TOOL_LIB"
 
 # Detect interactive terminal
 INTERACTIVE=false
-[ -t 0 ] && INTERACTIVE=true
+if ! $SB_RECONCILE_BOX && [ -t 0 ]; then
+	INTERACTIVE=true
+fi
 
 # Check for gum TUI tool
 HAS_GUM=false
@@ -75,14 +147,19 @@ section_header() {
 run_with_spinner() {
 	local title="$1"; shift
 	if $HAS_GUM; then
-		# Run command in background — gum spin can't invoke shell functions directly
-		"$@" &>/dev/null &
+		# Run command in background — gum spin can't invoke shell functions
+		# directly. Keep its output so a failure remains diagnosable.
+		local command_log="$SB_TMPDIR/spinner-${RANDOM}.log"
+		"$@" >"$command_log" 2>&1 &
 		local cmd_pid=$!
 		gum spin --spinner dot --title "$title" -- bash -c "tail --pid=$cmd_pid -f /dev/null"
 		local rc=0
 		wait "$cmd_pid" || rc=$?
 		if [ $rc -eq 0 ]; then
 			gum style --foreground 2 "✓ ${title%...}"
+		else
+			printf '%s\n' "${title%...} failed:" >&2
+			cat "$command_log" >&2
 		fi
 		return $rc
 	else
@@ -91,20 +168,10 @@ run_with_spinner() {
 	fi
 }
 
-# Install Debian packages resiliently.
-#
-# `apt-get update` refreshes *every* configured source, including the
-# third-party repos wired up at build time (github-cli, gierens/eza). Those are
-# only needed to install gh/eza during the image build — but their source lists
-# linger in the image, so a transient outage of one of them (e.g. deb.gierens.de
-# briefly serving no Release file) makes `apt-get update` exit non-zero. With the
-# old `update && install` chaining that aborted the whole install of a base-repo
-# package like tmux, failing E2E and sinking the release build.
-#
-# So let update fail soft — the reachable indexes (incl. the Debian base repo)
-# still refresh — and gate on the install itself, which is the real requirement.
+# Install Ubuntu Box-tier packages with an explicit, non-interactive sudo
+# contract. Build-only third-party sources are removed by the Dockerfile, so a
+# failed update is authoritative rather than silently using stale indexes.
 apt_install() {
-	sudo apt-get update -qq || true
 	# /etc/localtime is a read-only bind-mount in the running container (see
 	# docker-compose.yml), so tzdata's postinst can never rewrite it: any apt
 	# run that pulls a tzdata upgrade dies on a "device or resource busy" mv,
@@ -112,11 +179,22 @@ apt_install() {
 	# fish, …) — silently, since we discard output. Freeze tzdata (the host
 	# owns the timezone via the mount) and install non-interactively so no
 	# postinst can block on a debconf prompt in this tty-less context.
-	sudo apt-mark hold tzdata >/dev/null 2>&1 || true
 	local _apt_log
-	if ! _apt_log=$(sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" 2>&1); then
+	if dpkg-query -W -f='${Status}' tzdata 2>/dev/null | grep -q 'ok installed'; then
+		if ! _apt_log=$(sudo -n apt-mark hold tzdata 2>&1); then
+			echo "apt_install: unable to hold tzdata under the read-only /etc/localtime contract" >&2
+			printf '%s\n' "$_apt_log" >&2
+			return 1
+		fi
+	fi
+	if ! _apt_log=$(sudo -n apt-get update -qq 2>&1); then
+		echo "apt_install: package index refresh failed" >&2
+		printf '%s\n' "$_apt_log" | tail -30 >&2
+		return 1
+	fi
+	if ! _apt_log=$(DEBIAN_FRONTEND=noninteractive sudo -n apt-get install -y -qq "$@" 2>&1); then
 		echo "apt_install: failed to install: $*" >&2
-		printf '%s\n' "$_apt_log" | tail -20 >&2
+		printf '%s\n' "$_apt_log" | tail -30 >&2
 		return 1
 	fi
 }
@@ -148,33 +226,29 @@ if should_run git; then
 		# inline or just accept it. Empty input (cleared gum value or a blank
 		# read — i.e. hitting Enter) keeps the current value unchanged.
 		if $HAS_GUM; then
-			name=$(gum input --value "$_current_name" --header "Git name:" --width 40) || name="$_current_name"
+			if ! name=$(gum input --value "$_current_name" --header "Git name:" --width 40); then cancel_setup; fi
 		else
 			read -rp "Git name [$_current_name]: " name
 		fi
 		[ -z "$name" ] && name="$_current_name"
-		git config --file ~/.config/git/config user.name "$name"
 		if $HAS_GUM; then
-			email=$(gum input --value "$_current_email" --header "Git email:" --width 40) || email="$_current_email"
+			if ! email=$(gum input --value "$_current_email" --header "Git email:" --width 40); then cancel_setup; fi
 		else
 			read -rp "Git email [$_current_email]: " email
 		fi
 		[ -z "$email" ] && email="$_current_email"
-		# Only write email if we have a non-empty value (preserves "unset" state)
-		[ -n "$email" ] && git config --file ~/.config/git/config user.email "$email"
 	else
 		if [ -z "$_current_name" ]; then
 			if $INTERACTIVE; then
 				while true; do
 					if $HAS_GUM; then
-						name=$(gum input --placeholder "Your Name" --header "Git name:" --width 40) || true
+						if ! name=$(gum input --placeholder "Your Name" --header "Git name:" --width 40); then cancel_setup; fi
 					else
 						read -rp "Git name: " name
 					fi
 					[ -n "$name" ] && break
 					echo "Name cannot be empty."
 				done
-				git config --file ~/.config/git/config user.name "$name"
 			else
 				echo "Skipping git identity setup (non-interactive)"
 			fi
@@ -184,17 +258,20 @@ if should_run git; then
 			if $INTERACTIVE; then
 				while true; do
 					if $HAS_GUM; then
-						email=$(gum input --placeholder "you@example.com" --header "Git email:" --width 40) || true
+						if ! email=$(gum input --placeholder "you@example.com" --header "Git email:" --width 40); then cancel_setup; fi
 					else
 						read -rp "Git email: " email
 					fi
 					[ -n "$email" ] && break
 					echo "Email cannot be empty."
 				done
-				git config --file ~/.config/git/config user.email "$email"
 			fi
 		fi
 	fi
+	# Commit the identity only after every prompt completed; cancelling the
+	# email prompt cannot leave a partially changed name behind.
+	[ -n "${name:-}" ] && git config --file ~/.config/git/config user.name "$name"
+	[ -n "${email:-}" ] && git config --file ~/.config/git/config user.email "$email"
 fi
 
 # GitHub CLI config lives at ~/.config/gh (the gh default) and is preserved
@@ -226,7 +303,7 @@ if should_run github; then
 			echo "GitHub CLI: already authenticated"
 			gh auth status 2>&1 | head -5 || true
 			if $HAS_GUM; then
-				gum confirm "Re-authenticate?" --default=false && _do_reauth=true || _do_reauth=false
+				gum_confirm_or_cancel "Re-authenticate?" --default=false && _do_reauth=true || _do_reauth=false
 			else
 				read -rp "Re-authenticate? [y/N]: " _reauth_reply
 				case "${_reauth_reply:-N}" in
@@ -244,7 +321,7 @@ if should_run github; then
 		if $SB_RERUN && $INTERACTIVE; then
 			echo "GitHub CLI: previously skipped"
 			if $HAS_GUM; then
-				gum confirm "Sign in to GitHub?" --default=true && do_gh_login=true || do_gh_login=false
+				gum_confirm_or_cancel "Sign in to GitHub?" --default=true && do_gh_login=true || do_gh_login=false
 			else
 				read -rp "Sign in to GitHub? [Y/n]: " gh_reply
 				case "${gh_reply:-Y}" in
@@ -267,7 +344,7 @@ if should_run github; then
 	elif $INTERACTIVE; then
 		echo
 		if $HAS_GUM; then
-			gum confirm "Sign in to GitHub?" --default=true && do_gh_login=true || do_gh_login=false
+			gum_confirm_or_cancel "Sign in to GitHub?" --default=true && do_gh_login=true || do_gh_login=false
 		else
 			read -rp "Sign in to GitHub? [Y/n]: " gh_reply
 			case "${gh_reply:-Y}" in
@@ -294,7 +371,51 @@ if should_run github; then
 fi
 
 # Shared infrastructure (needed by multiple sections)
-mkdir -p /workspace/.squarebox ~/.local/bin
+mkdir -p ~/.local/bin
+export PATH="$HOME/.local/bin:$PATH"
+
+# Translate managed bash aliases into Fish syntax and keep the Fish selection
+# snippet current even when only ai/editors/tuis is re-run.
+_squarebox_bash_line_to_fish() {
+	local line="$1"
+	case "$line" in
+		"export PATH="*)
+			local val="${line#export PATH=}"
+			val="${val#\"}"; val="${val%\"}"
+			val="${val#\'}"; val="${val%\'}"
+			echo "set -x PATH ${val//:/ }"
+			;;
+		"export "*=*)
+			local rest="${line#export }"
+			local name="${rest%%=*}"
+			local val="${rest#*=}"
+			val="${val#\"}"; val="${val%\"}"
+			val="${val#\'}"; val="${val%\'}"
+			echo "set -x $name $val"
+			;;
+		"alias "*=*) echo "$line" ;;
+	esac
+}
+
+_refresh_fish_selections() {
+	local conf_dir="$HOME/.config/fish/conf.d"
+	[ -d "$conf_dir" ] || return 0
+	local sel_out="$conf_dir/squarebox-selections.fish"
+	{
+		echo "# Generated by setup.sh from ~/.squarebox-* bash files."
+		local src _sq_line
+		for src in \
+			"$HOME/.squarebox-ai-aliases" \
+			"$HOME/.squarebox-editor-aliases" \
+			"$HOME/.squarebox-tui-aliases"; do
+			[ -f "$src" ] || continue
+			echo "# --- from $(basename "$src") ---"
+			while IFS= read -r _sq_line; do
+				_squarebox_bash_line_to_fish "$_sq_line"
+			done < "$src"
+		done
+	} > "$sel_out"
+}
 
 # Optional tools install the latest upstream release at setup time.
 # Pinned versions live only in the Dockerfile tier (checksums.txt).
@@ -316,20 +437,20 @@ _squarebox_mise_activate() {
 }
 
 _install_mise_sdk_inner() {
-	mise use -g "$1@latest" >/dev/null 2>&1
+	mise use -g "$1@${2:-latest}"
 }
 
 _install_mise_sdk() {
-	local tool="$1" label="$2"
+	local tool="$1" label="$2" version="${3:-latest}"
 	if ! command -v mise >/dev/null 2>&1; then
 		echo "Error: mise is not installed (expected at /usr/local/bin/mise)" >&2
 		return 1
 	fi
-	if mise which "$tool" >/dev/null 2>&1; then
+	if mise which "$tool" >/dev/null 2>&1 && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then
 		echo "${label} already installed, skipping."
 		return 0
 	fi
-	run_with_spinner "Installing ${label} (via mise)..." _install_mise_sdk_inner "$tool"
+	run_with_spinner "Installing/updating ${label} (via mise)..." _install_mise_sdk_inner "$tool" "$version" || return 1
 	_squarebox_mise_activate
 	if ! mise which "$tool" >/dev/null 2>&1; then
 		echo "Error: ${label} not available after mise install" >&2
@@ -347,10 +468,10 @@ install_rust()   { _install_mise_sdk rust   "Rust"; }
 ensure_node_for_npm() {
 	_squarebox_mise_activate
 	if command -v node &>/dev/null; then return 0; fi
-	install_node
+	install_node || return 1
 	_squarebox_mise_activate
 	# Persist Node.js in SDK config so it survives rebuilds
-	local sdk_cfg="/workspace/.squarebox/sdks"
+	local sdk_cfg="$SB_STATE_DIR/sdks"
 	if [ -f "$sdk_cfg" ]; then
 		local sdk_current
 		sdk_current=$(cat "$sdk_cfg")
@@ -362,11 +483,35 @@ ensure_node_for_npm() {
 	fi
 }
 
+ensure_node_major_for_npm() {
+	local minimum="$1" major=""
+	_squarebox_mise_activate
+	if command -v node >/dev/null 2>&1; then
+		major=$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || true)
+	fi
+	if [[ "$major" =~ ^[0-9]+$ ]] && [ "$major" -ge "$minimum" ]; then
+		return 0
+	fi
+	_install_mise_sdk node "Node.js ${minimum}+" "$minimum" || return 1
+	_squarebox_mise_activate
+	major=$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || true)
+	if [[ ! "$major" =~ ^[0-9]+$ ]] || [ "$major" -lt "$minimum" ]; then
+		echo "Error: Node.js ${minimum}+ is required (observed '${major:-missing}')" >&2
+		return 1
+	fi
+	local sdk_cfg="$SB_STATE_DIR/sdks" sdk_current=""
+	[ -f "$sdk_cfg" ] && sdk_current=$(cat "$sdk_cfg")
+	if [[ ",$sdk_current," != *",node,"* ]]; then
+		printf '%s\n' "${sdk_current:+$sdk_current,}node" > "$sdk_cfg"
+	fi
+}
+
 # AI coding assistant
 if should_run ai; then
-AI_CONFIG="/workspace/.squarebox/ai-tool"
+AI_CONFIG="$SB_STATE_DIR/ai-tool"
 
 ai_prev=""
+ai_cancelled=false
 if [ -f "$AI_CONFIG" ]; then
 	ai_prev=$(cat "$AI_CONFIG")
 fi
@@ -390,11 +535,13 @@ if $INTERACTIVE; then
 		done
 		gum_args=(--no-limit --header "Select AI coding assistants (space=toggle, enter=confirm):")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
-		selected=$(gum choose "${gum_args[@]}" \
+		if ! selected=$(gum choose "${gum_args[@]}" \
 			"Claude Code" "GitHub Copilot CLI" "Google Gemini CLI" \
-			"OpenAI Codex CLI" "OpenCode" "Pi Coding Agent" "Paseo") || true
+			"OpenAI Codex CLI" "OpenCode" "Pi Coding Agent" "Paseo"); then
+			cancel_setup
+		fi
 		ai_choice=""
-		while IFS= read -r line; do
+		while ! $ai_cancelled && IFS= read -r line; do
 			case "$line" in
 				"Claude Code")        ai_choice="${ai_choice:+$ai_choice,}claude" ;;
 				"GitHub Copilot CLI") ai_choice="${ai_choice:+$ai_choice,}copilot" ;;
@@ -437,77 +584,119 @@ if $INTERACTIVE; then
 			fi
 		fi
 	fi
-	echo "$ai_choice" > "$AI_CONFIG"
 elif [ -n "$ai_prev" ]; then
 	ai_choice="$ai_prev"
 	echo "Installing AI tools: $ai_choice (from previous selection)"
 else
 	echo "Defaulting to Claude Code (non-interactive)"
 	ai_choice="claude"
-	echo "$ai_choice" > "$AI_CONFIG"
 fi
 
 install_copilot() {
-	if command -v github-copilot-cli &>/dev/null; then echo "GitHub Copilot CLI already installed, skipping."; return 0; fi
-	ensure_node_for_npm
-	run_with_spinner "Installing GitHub Copilot CLI..." npm install -g --silent @githubnext/github-copilot-cli
+	if command -v copilot &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "GitHub Copilot CLI already installed, skipping."; return 0; fi
+	ensure_node_major_for_npm 22 || return 1
+	run_with_spinner "Installing/updating GitHub Copilot CLI..." npm install -g --silent @github/copilot || return 1
+	command -v copilot >/dev/null 2>&1
 }
 
 install_gemini() {
-	if command -v gemini &>/dev/null; then echo "Google Gemini CLI already installed, skipping."; return 0; fi
-	ensure_node_for_npm
-	run_with_spinner "Installing Google Gemini CLI..." npm install -g --silent @google/gemini-cli
+	if command -v gemini &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "Google Gemini CLI already installed, skipping."; return 0; fi
+	ensure_node_for_npm || return 1
+	run_with_spinner "Installing/updating Google Gemini CLI..." npm install -g --silent @google/gemini-cli || return 1
+	command -v gemini >/dev/null 2>&1
 }
 
 install_codex() {
-	if command -v codex &>/dev/null; then echo "OpenAI Codex CLI already installed, skipping."; return 0; fi
-	ensure_node_for_npm
-	run_with_spinner "Installing OpenAI Codex CLI..." npm install -g --silent @openai/codex
+	if command -v codex &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "OpenAI Codex CLI already installed, skipping."; return 0; fi
+	ensure_node_for_npm || return 1
+	run_with_spinner "Installing/updating OpenAI Codex CLI..." npm install -g --silent @openai/codex || return 1
+	command -v codex >/dev/null 2>&1
 }
 
 install_pi() {
-	if command -v pi &>/dev/null; then echo "Pi Coding Agent already installed, skipping."; return 0; fi
-	ensure_node_for_npm
+	if command -v pi &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "Pi Coding Agent already installed, skipping."; return 0; fi
+	ensure_node_for_npm || return 1
 	# --ignore-scripts is the upstream-recommended install flag (see pi.dev).
-	run_with_spinner "Installing Pi Coding Agent..." npm install -g --silent --ignore-scripts @earendil-works/pi-coding-agent
+	run_with_spinner "Installing/updating Pi Coding Agent..." npm install -g --silent --ignore-scripts @earendil-works/pi-coding-agent || return 1
+	command -v pi >/dev/null 2>&1
 }
 
 install_paseo() {
-	if command -v paseo &>/dev/null; then echo "Paseo already installed, skipping."; return 0; fi
-	ensure_node_for_npm
-	run_with_spinner "Installing Paseo..." npm install -g --silent @getpaseo/cli
+	if command -v paseo &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "Paseo already installed, skipping."; return 0; fi
+	ensure_node_for_npm || return 1
+	run_with_spinner "Installing/updating Paseo..." npm install -g --silent @getpaseo/cli || return 1
+	command -v paseo >/dev/null 2>&1
 }
 
+install_claude() {
+	if command -v claude >/dev/null 2>&1 && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then
+		echo "Claude Code already installed, skipping."
+		return 0
+	fi
+	local installer="$SB_TMPDIR/claude-install.sh"
+	curl -fsSL https://claude.ai/install.sh -o "$installer" || return 1
+	bash "$installer" || return 1
+	command -v claude >/dev/null 2>&1
+}
+
+ai_command_present() {
+	case "$1" in
+		claude) command -v claude >/dev/null 2>&1 ;;
+		copilot) command -v copilot >/dev/null 2>&1 ;;
+		gemini) command -v gemini >/dev/null 2>&1 ;;
+		codex) command -v codex >/dev/null 2>&1 ;;
+		opencode) command -v opencode >/dev/null 2>&1 ;;
+		pi) command -v pi >/dev/null 2>&1 ;;
+		paseo) command -v paseo >/dev/null 2>&1 ;;
+		*) return 1 ;;
+	esac
+}
+
+if ! $ai_cancelled; then
+installed_ai=()
+committed_ai=()
 for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
+	ai_ok=false
 	case "$ai_tool" in
 		claude)
 			# Trust boundary: the Claude Code install script manages its own binary
 			# fetching and verification. We rely on HTTPS for script integrity.
-			run_with_spinner "Installing Claude Code..." \
-				bash -c 'curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1' \
-				|| echo "Warning: Claude Code installation failed."
+			run_with_spinner "Installing/updating Claude Code..." install_claude && ai_ok=true
 			;;
 		opencode)
-			if command -v opencode &>/dev/null; then
+			if command -v opencode &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then
 				echo "OpenCode already installed, skipping."
+				ai_ok=true
 			else
-				run_with_spinner "Installing OpenCode..." sb_install opencode latest \
-					|| echo "Warning: OpenCode installation failed."
+				run_with_spinner "Installing/updating OpenCode..." sb_install opencode latest \
+					&& command -v opencode >/dev/null 2>&1 && ai_ok=true
 			fi
 			;;
-		copilot)  install_copilot || echo "Warning: GitHub Copilot CLI installation failed." ;;
-		gemini)   install_gemini || echo "Warning: Google Gemini CLI installation failed." ;;
-		codex)    install_codex || echo "Warning: OpenAI Codex CLI installation failed." ;;
-		pi)       install_pi || echo "Warning: Pi Coding Agent installation failed." ;;
-		paseo)    install_paseo || echo "Warning: Paseo installation failed." ;;
+		copilot) install_copilot && ai_ok=true ;;
+		gemini)  install_gemini  && ai_ok=true ;;
+		codex)   install_codex   && ai_ok=true ;;
+		pi)      install_pi      && ai_ok=true ;;
+		paseo)   install_paseo   && ai_ok=true ;;
 	esac
+	if $ai_ok; then
+		installed_ai+=("$ai_tool")
+		committed_ai+=("$ai_tool")
+	else
+		record_failure "$ai_tool installation failed; new Selection was not committed"
+		ai_command_present "$ai_tool" && installed_ai+=("$ai_tool")
+		[[ ",$ai_prev," == *",$ai_tool,"* ]] && committed_ai+=("$ai_tool")
+	fi
 done
+
+ai_choice=$(join_csv "${committed_ai[@]}")
+observed_ai=$(join_csv "${installed_ai[@]}")
+printf '%s\n' "$ai_choice" > "$AI_CONFIG"
 
 # Set aliases based on selection — c maps to first selected tool in priority order
 {
 	c_target=""
 	for ai_tool in claude copilot gemini codex opencode pi paseo; do
-		if [[ ",$ai_choice," == *",$ai_tool,"* ]]; then
+		if [[ ",$observed_ai," == *",$ai_tool,"* ]]; then
 			[ -z "$c_target" ] && c_target="$ai_tool"
 			case "$ai_tool" in
 				claude)   echo "alias claude-yolo='claude --dangerously-skip-permissions'" ;;
@@ -517,20 +706,31 @@ done
 	done
 	if [ -n "$c_target" ]; then
 		case "$c_target" in
-			copilot) echo "alias c='github-copilot-cli'" ;;
+			copilot) echo "alias c='copilot'" ;;
 			*)       echo "alias c='$c_target'" ;;
 		esac
 	fi
 } > ~/.squarebox-ai-aliases
+fi # ! ai_cancelled
 fi # should_run ai
 
 # Text editors
 if should_run editors; then
-EDITOR_CONFIG="/workspace/.squarebox/editors"
+EDITOR_CONFIG="$SB_STATE_DIR/editors"
+EDITOR_DEFAULT_CONFIG="$SB_STATE_DIR/editor-default"
 
 editor_prev=""
+editor_default_prev=""
+editor_cancelled=false
 if [ -f "$EDITOR_CONFIG" ]; then
 	editor_prev=$(cat "$EDITOR_CONFIG")
+fi
+if [ -f "$EDITOR_DEFAULT_CONFIG" ]; then
+	editor_default_prev=$(cat "$EDITOR_DEFAULT_CONFIG")
+	case "$editor_default_prev" in
+		nano|micro|edit|fresh|hx|nvim) ;;
+		*) echo "Warning: ignoring invalid saved default editor '$editor_default_prev'." >&2; editor_default_prev="" ;;
+	esac
 fi
 
 if $INTERACTIVE; then
@@ -544,14 +744,17 @@ if $INTERACTIVE; then
 				micro) gum_selected="${gum_selected:+$gum_selected,}micro" ;;
 				edit)  gum_selected="${gum_selected:+$gum_selected,}edit" ;;
 				fresh) gum_selected="${gum_selected:+$gum_selected,}fresh" ;;
+				helix) gum_selected="${gum_selected:+$gum_selected,}helix" ;;
 				nvim)  gum_selected="${gum_selected:+$gum_selected,}nvim" ;;
 			esac
 		done
-		echo "Nano is always available as the default editor."
+		echo "Nano is always available and remains the fallback default unless you choose an installed editor instead."
 		gum_args=(--no-limit --header "Select text editors to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
-		selected=$(gum choose "${gum_args[@]}" \
-			"micro" "edit" "fresh" "nvim") || true
+		if ! selected=$(gum choose "${gum_args[@]}" \
+			"micro" "edit" "fresh" "helix" "nvim"); then
+			cancel_setup
+		fi
 		editor_list=""
 		while IFS= read -r line; do
 			[ -z "$line" ] && continue
@@ -559,13 +762,14 @@ if $INTERACTIVE; then
 		done <<< "$selected"
 	else
 		echo "Select text editors to install (comma-separated, or 'all', or press Enter to skip):"
-		echo "  Nano is always available as the default editor."
-		for ed_item in "1:micro:micro" "2:edit:edit" "3:fresh:fresh" "4:nvim:nvim"; do
+		echo "  Nano is always available and remains the fallback default unless you choose an installed editor instead."
+		for ed_item in "1:micro:micro" "2:edit:edit" "3:fresh:fresh" "4:helix:helix (hx)" "5:nvim:nvim"; do
 			num="${ed_item%%:*}"; rest="${ed_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
 			case "$key" in
 				micro) desc="modern, intuitive terminal editor" ;;
 				edit)  desc="terminal text editor (Microsoft)" ;;
 				fresh) desc="modern terminal text editor" ;;
+				helix) desc="modal editor (Kakoune-inspired)" ;;
 				nvim)  desc="Neovim" ;;
 			esac
 			if [[ ",$editor_prev," == *",${key},"* ]]; then
@@ -574,37 +778,39 @@ if $INTERACTIVE; then
 				echo "  ${num}) ${label} — ${desc}"
 			fi
 		done
-		read -rp "Selection [1,2,3,4/all/skip]: " editor_selection
+		read -rp "Selection [1,2,3,4,5/all/skip]: " editor_selection
 		if [ -z "$editor_selection" ] && [ -n "$editor_prev" ]; then
 			editor_list="$editor_prev"
 		else
 			editor_list=""
 			if [ "$editor_selection" = "all" ]; then
-				editor_list="micro,edit,fresh,nvim"
+				editor_list="micro,edit,fresh,helix,nvim"
 			elif [ -n "$editor_selection" ]; then
 				for item in $(echo "$editor_selection" | tr ',' ' '); do
 					case "$item" in
 						1) editor_list="${editor_list:+$editor_list,}micro" ;;
 						2) editor_list="${editor_list:+$editor_list,}edit" ;;
 						3) editor_list="${editor_list:+$editor_list,}fresh" ;;
-						4) editor_list="${editor_list:+$editor_list,}nvim" ;;
+						4) editor_list="${editor_list:+$editor_list,}helix" ;;
+						5) editor_list="${editor_list:+$editor_list,}nvim" ;;
 					esac
 				done
 			fi
 		fi
 	fi
-	echo "$editor_list" > "$EDITOR_CONFIG"
 elif [ -n "$editor_prev" ]; then
 	editor_list="$editor_prev"
 	[ -n "$editor_list" ] && echo "Installing editors: $editor_list (from previous selection)"
 else
 	echo "Skipping editor selection (non-interactive)"
 	editor_list=""
-	echo "$editor_list" > "$EDITOR_CONFIG"
 fi
 
+if ! $editor_cancelled; then
+
 # LazyVim starter — offered when Neovim is among the selected editors
-LAZYVIM_CONFIG="/workspace/.squarebox/nvim-lazyvim"
+LAZYVIM_CONFIG="$SB_STATE_DIR/nvim-lazyvim"
+LAZYVIM_SHA_CONFIG="$SB_STATE_DIR/nvim-lazyvim-sha"
 lazyvim_prev=""
 [ -f "$LAZYVIM_CONFIG" ] && lazyvim_prev=$(cat "$LAZYVIM_CONFIG")
 lazyvim_choice=false
@@ -615,7 +821,13 @@ if [[ ",$editor_list," == *",nvim,"* ]]; then
 		echo
 		echo "LazyVim turns Neovim into a preconfigured IDE (needs a Nerd Font in your terminal for icons)."
 		if $HAS_GUM; then
-			gum confirm "Install the LazyVim starter config for Neovim?" --default="$lv_default" && lazyvim_choice=true || lazyvim_choice=false
+			if gum confirm "Install the LazyVim starter config for Neovim?" --default="$lv_default"; then
+				lazyvim_choice=true
+			else
+				confirm_rc=$?
+				[ "$confirm_rc" -gt 1 ] && cancel_setup
+				lazyvim_choice=false
+			fi
 		else
 			if $lv_default; then _lv_hint="Y/n"; else _lv_hint="y/N"; fi
 			read -rp "Install the LazyVim starter config for Neovim? [$_lv_hint]: " _lv_reply
@@ -625,7 +837,6 @@ if [[ ",$editor_list," == *",nvim,"* ]]; then
 				case "$_lv_reply" in [Yy]*) lazyvim_choice=true ;; *) lazyvim_choice=false ;; esac
 			fi
 		fi
-		echo "$lazyvim_choice" > "$LAZYVIM_CONFIG"
 	elif [ -n "$lazyvim_prev" ]; then
 		lazyvim_choice="$lazyvim_prev"
 	fi
@@ -633,63 +844,162 @@ fi
 
 install_micro() {
 	if command -v micro &>/dev/null; then echo "Micro already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Micro..." sb_install micro latest
+	run_with_spinner "Installing Micro..." sb_install micro latest || return 1
+	command -v micro >/dev/null 2>&1
 }
 
 install_edit() {
 	if command -v edit &>/dev/null; then echo "Edit already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Edit..." sb_install edit latest
+	run_with_spinner "Installing Edit..." sb_install edit latest || return 1
+	command -v edit >/dev/null 2>&1
 }
 
 install_fresh() {
 	if command -v fresh &>/dev/null; then echo "Fresh already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Fresh..." sb_install fresh latest
+	run_with_spinner "Installing Fresh..." sb_install fresh latest || return 1
+	command -v fresh >/dev/null 2>&1
+}
+
+install_helix() {
+	if command -v hx &>/dev/null && [ -d "$HOME/.config/helix/runtime" ]; then
+		echo "Helix already installed, skipping."
+		return 0
+	fi
+	run_with_spinner "Installing Helix..." sb_install helix latest || return 1
+	command -v hx >/dev/null 2>&1 && [ -d "$HOME/.config/helix/runtime" ]
 }
 
 install_nvim() {
 	if command -v nvim &>/dev/null; then echo "Neovim already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Neovim..." sb_install nvim latest
+	run_with_spinner "Installing Neovim..." sb_install nvim latest || return 1
+	command -v nvim >/dev/null 2>&1
+}
+
+_lazyvim_default_sha() {
+	local repo=LazyVim/starter api_base repo_body branch encoded_branch commit_body sha rc
+	api_base="${SB_GITHUB_API_BASE:-https://api.github.com}"
+	repo_body=$(_sb_gh_api_get "${api_base}/repos/${repo}" "${repo} repository metadata") || {
+		rc=$?; return "$rc"
+	}
+	branch=$(printf '%s' "$repo_body" | jq -er \
+		'.default_branch | select(type == "string" and length > 0)' 2>/dev/null) || {
+		echo "Error: no valid default branch in GitHub metadata for $repo" >&2
+		return 1
+	}
+	[[ "$branch" =~ ^[A-Za-z0-9._/-]+$ ]] \
+		&& [[ "$branch" != /* ]] && [[ "$branch" != */ ]] \
+		&& [[ "$branch" != *..* ]] && [[ "$branch" != *//* ]] || {
+		echo "Error: unsafe default branch in GitHub metadata for $repo" >&2
+		return 1
+	}
+	encoded_branch=$(printf '%s' "$branch" | jq -sRr '@uri') || return 1
+	commit_body=$(_sb_gh_api_get \
+		"${api_base}/repos/${repo}/commits/${encoded_branch}" \
+		"${repo} default branch ${branch}") || {
+		rc=$?; return "$rc"
+	}
+	sha=$(printf '%s' "$commit_body" | jq -er \
+		'.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' 2>/dev/null) || {
+		echo "Error: no valid commit SHA in GitHub metadata for $repo" >&2
+		return 1
+	}
+	printf '%s\n' "$sha"
 }
 
 install_lazyvim() {
-	if [ -e ~/.config/nvim ]; then
+	local sha
+	# nvim-treesitter may compile parsers after a Box replacement. The starter
+	# config persists in the Managed home, but its compiler is Box-tier state.
+	if [ -L "$HOME/.config/nvim" ]; then
+		echo "Error: refusing symlinked LazyVim destination: $HOME/.config/nvim" >&2
+		return 1
+	fi
+	if [ -e "$HOME/.config/nvim" ]; then
 		echo "~/.config/nvim already exists, skipping LazyVim starter clone."
 		return 0
 	fi
-	run_with_spinner "Installing LazyVim starter..." _install_lazyvim_inner
-}
-
-_install_lazyvim_inner() {
-	# nvim-treesitter compiles parsers on first launch, which needs a C compiler
+	# Resolve immutable source identity before installing a compiler or changing
+	# the Managed home. Metadata failure is authoritative.
+	sha=$(_lazyvim_default_sha) || return 1
 	if ! command -v cc &>/dev/null && ! command -v gcc &>/dev/null; then
 		apt_install build-essential || return 1
 	fi
-	git clone --depth 1 https://github.com/LazyVim/starter ~/.config/nvim >/dev/null 2>&1 || return 1
-	rm -rf ~/.config/nvim/.git
+	run_with_spinner "Installing LazyVim starter..." _install_lazyvim_inner "$sha" || return 1
+	printf '%s\n' "$sha" > "$LAZYVIM_SHA_CONFIG"
+}
+
+_install_lazyvim_inner() {
+	local sha="$1" stage head rc=0
+	[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+	mkdir -p "$HOME/.config" || return 1
+	# Stage beside the destination so the final rename stays within the Managed
+	# home filesystem; /tmp may be a different mount and expose a partial copy.
+	stage=$(mktemp -d "$HOME/.config/.nvim.squarebox-stage.XXXXXX") || return 1
+	git init -q "$stage" >/dev/null 2>&1 || rc=$?
+	[ "$rc" -ne 0 ] || git -C "$stage" remote add origin https://github.com/LazyVim/starter.git >/dev/null 2>&1 || rc=$?
+	[ "$rc" -ne 0 ] || git -C "$stage" fetch --depth=1 --no-tags origin "$sha" >/dev/null 2>&1 || rc=$?
+	[ "$rc" -ne 0 ] || git -C "$stage" checkout --detach "$sha" >/dev/null 2>&1 || rc=$?
+	if [ "$rc" -eq 0 ]; then
+		head=$(git -C "$stage" rev-parse --verify HEAD 2>/dev/null) || rc=$?
+	fi
+	if [ "$rc" -eq 0 ] && [ "$head" != "$sha" ]; then
+		echo "Error: LazyVim starter HEAD verification failed" >&2
+		rc=1
+	fi
+	[ "$rc" -ne 0 ] || rm -rf -- "$stage/.git" || rc=$?
+	[ "$rc" -ne 0 ] || mv -T -- "$stage" "$HOME/.config/nvim" || rc=$?
+	if [ "$rc" -ne 0 ]; then
+		rm -rf -- "$stage"
+		return "$rc"
+	fi
 }
 
 installed_editors=()
+committed_editors=()
 for editor in $(echo "$editor_list" | tr ',' ' '); do
 	case "$editor" in
-		micro) install_micro && installed_editors+=("micro") || echo "Warning: Micro installation failed." ;;
-		edit) install_edit && installed_editors+=("edit") || echo "Warning: Edit installation failed." ;;
-		fresh) install_fresh && installed_editors+=("fresh") || echo "Warning: Fresh installation failed." ;;
-		nvim) install_nvim && installed_editors+=("nvim") || echo "Warning: Neovim installation failed." ;;
+		micro)
+			if install_micro; then installed_editors+=("micro"); committed_editors+=("micro")
+			else record_failure "Micro installation failed; new Selection was not committed"; [[ ",$editor_prev," == *",micro,"* ]] && committed_editors+=("micro"); fi ;;
+		edit)
+			if install_edit; then installed_editors+=("edit"); committed_editors+=("edit")
+			else record_failure "Edit installation failed; new Selection was not committed"; [[ ",$editor_prev," == *",edit,"* ]] && committed_editors+=("edit"); fi ;;
+		fresh)
+			if install_fresh; then installed_editors+=("fresh"); committed_editors+=("fresh")
+			else record_failure "Fresh installation failed; new Selection was not committed"; [[ ",$editor_prev," == *",fresh,"* ]] && committed_editors+=("fresh"); fi ;;
+		helix)
+			if install_helix; then installed_editors+=("hx"); committed_editors+=("helix")
+			else record_failure "Helix installation failed; new Selection was not committed"; [[ ",$editor_prev," == *",helix,"* ]] && committed_editors+=("helix"); fi ;;
+		nvim)
+			if install_nvim; then installed_editors+=("nvim"); committed_editors+=("nvim")
+			else record_failure "Neovim installation failed; new Selection was not committed"; [[ ",$editor_prev," == *",nvim,"* ]] && committed_editors+=("nvim"); fi ;;
 	esac
 done
+editor_list=$(join_csv "${committed_editors[@]}")
 
 # Bootstrap LazyVim starter config when chosen and Neovim is available
 if [ "$lazyvim_choice" = "true" ] && command -v nvim &>/dev/null; then
-	install_lazyvim || echo "Warning: LazyVim starter setup failed."
+	if install_lazyvim; then
+		printf 'true\n' > "$LAZYVIM_CONFIG"
+	else
+		record_failure "LazyVim starter setup failed; Selection was not committed"
+		printf 'false\n' > "$LAZYVIM_CONFIG"
+	fi
+elif [[ ",$editor_list," == *",nvim,"* ]]; then
+	printf 'false\n' > "$LAZYVIM_CONFIG"
 fi
 
-# Prompt for default editor if multiple were installed
-editor_cmd=""
+# Prompt for the default editor if multiple were installed. Persist this
+# separately from the editor set so noninteractive Box reconciliation cannot
+# silently reset a user's non-first choice.
+editor_cmd="nano"
 if [ ${#installed_editors[@]} -gt 1 ] && $INTERACTIVE; then
 	echo
 	if $HAS_GUM; then
-		editor_cmd=$(gum choose --header "Select default editor (\$EDITOR):" \
-			"nano" "${installed_editors[@]}") || true
+		if ! editor_cmd=$(gum choose --header "Select default editor (\$EDITOR):" \
+			"nano" "${installed_editors[@]}"); then
+			cancel_setup
+		fi
 	else
 		echo "Select default editor (\$EDITOR):"
 		echo "  0) nano"
@@ -701,24 +1011,45 @@ if [ ${#installed_editors[@]} -gt 1 ] && $INTERACTIVE; then
 			editor_cmd="${installed_editors[$((ed_sel-1))]}"
 		fi
 	fi
-	[ "$editor_cmd" = "nano" ] && editor_cmd=""
-elif [ ${#installed_editors[@]} -ge 1 ]; then
+	[ -n "$editor_cmd" ] || editor_cmd="nano"
+elif $INTERACTIVE && [ ${#installed_editors[@]} -ge 1 ]; then
 	editor_cmd="${installed_editors[0]}"
+else
+	default_observed=false
+	if [ "$editor_default_prev" = nano ]; then
+		default_observed=true
+	else
+		for observed_editor in "${installed_editors[@]}"; do
+			if [ "$observed_editor" = "$editor_default_prev" ]; then
+				default_observed=true
+				break
+			fi
+		done
+	fi
+	if $default_observed; then
+		editor_cmd="$editor_default_prev"
+	elif [ ${#installed_editors[@]} -ge 1 ]; then
+		editor_cmd="${installed_editors[0]}"
+	fi
 fi
 
 # Set EDITOR (nano is the default if nothing chosen)
+printf '%s\n' "$editor_list" > "$EDITOR_CONFIG"
+printf '%s\n' "$editor_cmd" > "$EDITOR_DEFAULT_CONFIG"
 {
-	if [ -n "$editor_cmd" ]; then
+	if [ "$editor_cmd" != nano ]; then
 		echo "export EDITOR='$editor_cmd'"
 	fi
 } > ~/.squarebox-editor-aliases
+fi # ! editor_cancelled
 fi # should_run editors
 
 # TUI tools
 if should_run tuis; then
-TUI_CONFIG="/workspace/.squarebox/tuis"
+TUI_CONFIG="$SB_STATE_DIR/tuis"
 
 tui_prev=""
+tui_cancelled=false
 if [ -f "$TUI_CONFIG" ]; then
 	tui_prev=$(cat "$TUI_CONFIG")
 fi
@@ -738,8 +1069,10 @@ if $INTERACTIVE; then
 		done
 		gum_args=(--no-limit --header "Select TUI tools to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
-		selected=$(gum choose "${gum_args[@]}" \
-			"lazygit" "gh-dash" "yazi") || true
+		if ! selected=$(gum choose "${gum_args[@]}" \
+			"lazygit" "gh-dash" "yazi"); then
+			cancel_setup
+		fi
 		tui_list=""
 		while IFS= read -r line; do
 			[ -z "$line" ] && continue
@@ -773,44 +1106,73 @@ if $INTERACTIVE; then
 			fi
 		fi
 	fi
-	echo "$tui_list" > "$TUI_CONFIG"
 elif [ -n "$tui_prev" ]; then
 	tui_list="$tui_prev"
 	[ -n "$tui_list" ] && echo "Installing TUI tools: $tui_list (from previous selection)"
 else
 	echo "Skipping TUI tool selection (non-interactive)"
 	tui_list=""
-	echo "$tui_list" > "$TUI_CONFIG"
 fi
 
+if ! $tui_cancelled; then
+
 install_lazygit() {
-	if command -v lazygit &>/dev/null; then echo "Lazygit already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Lazygit..." sb_install lazygit latest
+	if command -v lazygit &>/dev/null; then
+		echo "Lazygit already installed, reconciling configuration."
+	else
+		run_with_spinner "Installing Lazygit..." sb_install lazygit latest || return 1
+	fi
+	command -v lazygit >/dev/null 2>&1 || return 1
 	# Install default lazygit config if missing
-	if [ ! -f ~/.config/lazygit/config.yml ]; then
-		mkdir -p ~/.config/lazygit
-		printf 'git:\n  paging:\n    colorArg: always\n    pager: delta --dark --paging=never\n' > ~/.config/lazygit/config.yml
+	if [ ! -f "$HOME/.config/lazygit/config.yml" ]; then
+		mkdir -p "$HOME/.config/lazygit" || return 1
+		if ! (
+			config_tmp=""
+			cleanup_config_stage() {
+				[ -z "$config_tmp" ] || rm -f -- "$config_tmp"
+			}
+			trap cleanup_config_stage EXIT
+			trap 'exit 1' HUP INT TERM
+			config_tmp=$(mktemp "$HOME/.config/lazygit/.config.yml.squarebox-tmp.XXXXXX") || exit 1
+			printf 'git:\n  paging:\n    colorArg: always\n    pager: delta --dark --paging=never\n' \
+				> "$config_tmp" || exit 1
+			mv -fT -- "$config_tmp" "$HOME/.config/lazygit/config.yml" || exit 1
+			config_tmp=""
+		); then
+			return 1
+		fi
 	fi
 }
 
 install_gh_dash() {
 	if command -v gh-dash &>/dev/null; then echo "gh-dash already installed, skipping."; return 0; fi
-	run_with_spinner "Installing gh-dash..." sb_install gh-dash latest
+	run_with_spinner "Installing gh-dash..." sb_install gh-dash latest || return 1
+	command -v gh-dash >/dev/null 2>&1
 }
 
 install_yazi() {
-	if command -v yazi &>/dev/null; then echo "Yazi already installed, skipping."; return 0; fi
-	run_with_spinner "Installing Yazi..." sb_install yazi latest
+	if command -v yazi &>/dev/null && command -v ya &>/dev/null; then echo "Yazi already installed, skipping."; return 0; fi
+	run_with_spinner "Installing Yazi..." sb_install yazi latest || return 1
+	command -v yazi >/dev/null 2>&1 && command -v ya >/dev/null 2>&1
 }
 
 installed_tuis=()
+committed_tuis=()
 for tui in $(echo "$tui_list" | tr ',' ' '); do
 	case "$tui" in
-		lazygit) install_lazygit && installed_tuis+=("lazygit") || echo "Warning: Lazygit installation failed." ;;
-		gh-dash) install_gh_dash && installed_tuis+=("gh-dash") || echo "Warning: gh-dash installation failed." ;;
-		yazi)    install_yazi    && installed_tuis+=("yazi")    || echo "Warning: Yazi installation failed." ;;
+		lazygit)
+			if install_lazygit; then installed_tuis+=("lazygit"); committed_tuis+=("lazygit")
+			else record_failure "Lazygit installation failed; new Selection was not committed"; [[ ",$tui_prev," == *",lazygit,"* ]] && committed_tuis+=("lazygit"); fi ;;
+		gh-dash)
+			if install_gh_dash; then installed_tuis+=("gh-dash"); committed_tuis+=("gh-dash")
+			else record_failure "gh-dash installation failed; new Selection was not committed"; [[ ",$tui_prev," == *",gh-dash,"* ]] && committed_tuis+=("gh-dash"); fi ;;
+		yazi)
+			if install_yazi; then installed_tuis+=("yazi"); committed_tuis+=("yazi")
+			else record_failure "Yazi installation failed; new Selection was not committed"; [[ ",$tui_prev," == *",yazi,"* ]] && committed_tuis+=("yazi"); fi ;;
 	esac
 done
+tui_list=$(join_csv "${committed_tuis[@]}")
+printf '%s\n' "$tui_list" > "$TUI_CONFIG"
 
 # Set TUI aliases (lg for lazygit) only when installed
 {
@@ -820,13 +1182,15 @@ done
 		esac
 	done
 } > ~/.squarebox-tui-aliases
+fi # ! tui_cancelled
 fi # should_run tuis
 
 # Terminal multiplexer
 if should_run multiplexers; then
-MUX_CONFIG="/workspace/.squarebox/multiplexer"
+MUX_CONFIG="$SB_STATE_DIR/multiplexer"
 
 mux_prev=""
+mux_cancelled=false
 if [ -f "$MUX_CONFIG" ]; then
 	mux_prev=$(cat "$MUX_CONFIG")
 fi
@@ -845,8 +1209,10 @@ if $INTERACTIVE; then
 		done
 		gum_args=(--no-limit --header "Select terminal multiplexer:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
-		selected=$(gum choose "${gum_args[@]}" \
-			"tmux" "zellij") || true
+		if ! selected=$(gum choose "${gum_args[@]}" \
+			"tmux" "zellij"); then
+			cancel_setup
+		fi
 		mux_list=""
 		while IFS= read -r line; do
 			[ -z "$line" ] && continue
@@ -879,22 +1245,22 @@ if $INTERACTIVE; then
 			fi
 		fi
 	fi
-	echo "$mux_list" > "$MUX_CONFIG"
 elif [ -n "$mux_prev" ]; then
 	mux_list="$mux_prev"
 	[ -n "$mux_list" ] && echo "Installing multiplexer(s): $mux_list (from previous selection)"
 else
 	echo "Skipping multiplexer selection (non-interactive)"
 	mux_list=""
-	echo "$mux_list" > "$MUX_CONFIG"
 fi
 
+if ! $mux_cancelled; then
+
 _install_tmux_inner() {
-	apt_install tmux || return 1
+	command -v tmux >/dev/null 2>&1 || apt_install tmux || return 1
 	# Install default config (Omarchy-inspired defaults)
-	mkdir -p ~/.config/tmux
+	mkdir -p ~/.config/tmux || return 1
 	if [ ! -f ~/.config/tmux/tmux.conf ]; then
-		cat > ~/.config/tmux/tmux.conf <<-'TMUXCONF'
+		cat > ~/.config/tmux/tmux.conf <<-'TMUXCONF' || return 1
 		# Prefix
 		set -g prefix C-Space
 		set -g prefix2 C-b
@@ -1000,21 +1366,33 @@ _install_tmux_inner() {
 _ensure_tmux_defaults() {
 	local conf="$HOME/.config/tmux/tmux.conf"
 	[ -f "$conf" ] || return 0
-	grep -q '^set -g mouse on' "$conf" || echo 'set -g mouse on' >> "$conf"
+	# Existing explicit `mouse off` is a user decision. Migrate only configs
+	# that have no mouse setting at all.
+	grep -Eq '^[[:space:]]*set(-option)?[[:space:]]+-g[[:space:]]+mouse[[:space:]]+(on|off)([[:space:]]|$)' "$conf" \
+		|| echo 'set -g mouse on' >> "$conf"
 }
 
 install_tmux() {
-	if command -v tmux &>/dev/null; then echo "Tmux already installed, skipping."; _ensure_tmux_defaults; return 0; fi
-	run_with_spinner "Installing tmux..." _install_tmux_inner
-	_ensure_tmux_defaults
+	run_with_spinner "Installing tmux..." _install_tmux_inner || return 1
+	_ensure_tmux_defaults || return 1
+	command -v tmux >/dev/null 2>&1
 }
 
 _install_zellij_inner() {
-	sb_install zellij latest
+	command -v zellij >/dev/null 2>&1 || sb_install zellij latest || return 1
+	command -v zellij >/dev/null 2>&1 || return 1
 	# Install default config (Omarchy-inspired defaults to match tmux)
-	mkdir -p ~/.config/zellij
-	if [ ! -f ~/.config/zellij/config.kdl ]; then
-		cat > ~/.config/zellij/config.kdl <<-'ZELLIJCONF'
+	mkdir -p "$HOME/.config/zellij" || return 1
+	if [ ! -f "$HOME/.config/zellij/config.kdl" ]; then
+		if ! (
+			config_tmp=""
+			cleanup_config_stage() {
+				[ -z "$config_tmp" ] || rm -f -- "$config_tmp"
+			}
+			trap cleanup_config_stage EXIT
+			trap 'exit 1' HUP INT TERM
+			config_tmp=$(mktemp "$HOME/.config/zellij/.config.kdl.squarebox-tmp.XXXXXX") || exit 1
+			cat > "$config_tmp" <<-'ZELLIJCONF' || exit 1
 		// squarebox — Omarchy-inspired defaults (mirroring tmux keybindings)
 
 		// ── General options ─────────────────────────────────────────────
@@ -1219,12 +1597,27 @@ _install_zellij_inner() {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
 		    }
 		}
-		ZELLIJCONF
+			ZELLIJCONF
+				mv -fT -- "$config_tmp" "$HOME/.config/zellij/config.kdl" || exit 1
+			config_tmp=""
+		); then
+			return 1
+		fi
+	fi
 
-		# Create a default layout with the compact bar at the top
-		mkdir -p ~/.config/zellij/layouts
-		if [ ! -f ~/.config/zellij/layouts/default.kdl ]; then
-			cat > ~/.config/zellij/layouts/default.kdl <<-'ZELLIJLAYOUT'
+	# Create a default layout with the compact bar at the top. This is
+	# reconciled independently so a rerun can finish an earlier partial setup.
+	mkdir -p "$HOME/.config/zellij/layouts" || return 1
+	if [ ! -f "$HOME/.config/zellij/layouts/default.kdl" ]; then
+		if ! (
+			layout_tmp=""
+			cleanup_layout_stage() {
+				[ -z "$layout_tmp" ] || rm -f -- "$layout_tmp"
+			}
+			trap cleanup_layout_stage EXIT
+			trap 'exit 1' HUP INT TERM
+			layout_tmp=$(mktemp "$HOME/.config/zellij/layouts/.default.kdl.squarebox-tmp.XXXXXX") || exit 1
+			cat > "$layout_tmp" <<-'ZELLIJLAYOUT' || exit 1
 			layout {
 			    pane size=1 borderless=true {
 			        plugin location="compact-bar"
@@ -1232,28 +1625,55 @@ _install_zellij_inner() {
 			    pane
 			}
 			ZELLIJLAYOUT
+				mv -fT -- "$layout_tmp" "$HOME/.config/zellij/layouts/default.kdl" || exit 1
+			layout_tmp=""
+		); then
+			return 1
 		fi
 	fi
 }
 
 install_zellij() {
-	if command -v zellij &>/dev/null; then echo "Zellij already installed, skipping."; return 0; fi
+	if command -v zellij &>/dev/null \
+		&& [ -f "$HOME/.config/zellij/config.kdl" ] \
+		&& [ -f "$HOME/.config/zellij/layouts/default.kdl" ]; then
+		echo "Zellij already installed, skipping."
+		return 0
+	fi
 	run_with_spinner "Installing Zellij..." _install_zellij_inner
 }
 
+installed_mux=()
+committed_mux=()
 for mux in $(echo "$mux_list" | tr ',' ' '); do
 	case "$mux" in
-		tmux) install_tmux || echo "Warning: tmux installation failed." ;;
-		zellij) install_zellij || echo "Warning: Zellij installation failed." ;;
+		tmux)
+			if install_tmux; then installed_mux+=("tmux"); committed_mux+=("tmux")
+			else
+				record_failure "tmux installation failed; new Selection was not committed"
+				[[ ",$mux_prev," == *",tmux,"* ]] && committed_mux+=("tmux")
+			fi
+			;;
+		zellij)
+			if install_zellij; then installed_mux+=("zellij"); committed_mux+=("zellij")
+			else
+				record_failure "Zellij installation failed; new Selection was not committed"
+				[[ ",$mux_prev," == *",zellij,"* ]] && committed_mux+=("zellij")
+			fi
+			;;
 	esac
 done
+mux_list=$(join_csv "${committed_mux[@]}")
+printf '%s\n' "$mux_list" > "$MUX_CONFIG"
+fi # ! mux_cancelled
 fi # should_run multiplexers
 
 # SDKs
 if should_run sdks; then
-SDK_CONFIG="/workspace/.squarebox/sdks"
+SDK_CONFIG="$SB_STATE_DIR/sdks"
 
 sdk_prev=""
+sdk_cancelled=false
 if [ -f "$SDK_CONFIG" ]; then
 	sdk_prev=$(cat "$SDK_CONFIG")
 fi
@@ -1275,8 +1695,10 @@ if $INTERACTIVE; then
 		done
 		gum_args=(--no-limit --header "Select SDKs to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
-		selected=$(gum choose "${gum_args[@]}" \
-			"Node.js" "Python" "Go" ".NET" "Rust") || true
+		if ! selected=$(gum choose "${gum_args[@]}" \
+			"Node.js" "Python" "Go" ".NET" "Rust"); then
+			cancel_setup
+		fi
 		sdk_list=""
 		while IFS= read -r line; do
 			case "$line" in
@@ -1319,7 +1741,6 @@ if $INTERACTIVE; then
 			fi
 		fi
 	fi
-	echo "$sdk_list" > "$SDK_CONFIG"
 elif [ -n "$sdk_prev" ]; then
 	sdk_list="$sdk_prev"
 	if [ -n "$sdk_list" ]; then
@@ -1328,28 +1749,43 @@ elif [ -n "$sdk_prev" ]; then
 else
 	echo "Skipping SDK selection (non-interactive)"
 	sdk_list=""
-	echo "$sdk_list" > "$SDK_CONFIG"
 fi
+
+if ! $sdk_cancelled; then
 
 # All SDK installers (install_node/python/go/dotnet/rust) are defined earlier
 # in setup.sh and delegate to mise via _install_mise_sdk.
 
+installed_sdks=()
+committed_sdks=()
 for sdk in $(echo "$sdk_list" | tr ',' ' '); do
+	sdk_ok=false
 	case "$sdk" in
-		node)   install_node   || echo "Warning: Node.js installation failed." ;;
-		python) install_python || echo "Warning: Python installation failed." ;;
-		go)     install_go     || echo "Warning: Go installation failed." ;;
-		dotnet) install_dotnet || echo "Warning: .NET installation failed." ;;
-		rust)   install_rust   || echo "Warning: Rust installation failed." ;;
+		node)   install_node   && sdk_ok=true ;;
+		python) install_python && sdk_ok=true ;;
+		go)     install_go     && sdk_ok=true ;;
+		dotnet) install_dotnet && sdk_ok=true ;;
+		rust)   install_rust   && sdk_ok=true ;;
 	esac
+	if $sdk_ok; then
+		installed_sdks+=("$sdk")
+		committed_sdks+=("$sdk")
+	else
+		record_failure "$sdk SDK installation/update failed; new Selection was not committed"
+		[[ ",$sdk_prev," == *",$sdk,"* ]] && committed_sdks+=("$sdk")
+	fi
 done
+sdk_list=$(join_csv "${committed_sdks[@]}")
+printf '%s\n' "$sdk_list" > "$SDK_CONFIG"
+fi # ! sdk_cancelled
 fi # should_run sdks
 
 # Shell (experimental) — offer Zsh + Oh My Zsh or Fish as alternatives to Bash
 if should_run shell; then
-SHELL_CONFIG="/workspace/.squarebox/shell"
+SHELL_CONFIG="$SB_STATE_DIR/shell"
 
 shell_prev=""
+shell_cancelled=false
 if [ -f "$SHELL_CONFIG" ]; then
 	shell_prev=$(cat "$SHELL_CONFIG")
 fi
@@ -1366,7 +1802,9 @@ if $INTERACTIVE; then
 		esac
 		gum_args=(--header "Select default shell:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
-		shell_pick=$(gum choose "${gum_args[@]}" "bash" "zsh (experimental)" "fish (experimental)") || shell_pick=""
+		if ! shell_pick=$(gum choose "${gum_args[@]}" "bash" "zsh (experimental)" "fish (experimental)"); then
+			cancel_setup
+		fi
 		case "$shell_pick" in
 			"zsh (experimental)")  shell_choice="zsh" ;;
 			"fish (experimental)") shell_choice="fish" ;;
@@ -1399,7 +1837,6 @@ if $INTERACTIVE; then
 		fi
 	fi
 	[ -z "$shell_choice" ] && shell_choice="bash"
-	echo "$shell_choice" > "$SHELL_CONFIG"
 elif [ -n "$shell_prev" ]; then
 	shell_choice="$shell_prev"
 	case "$shell_choice" in
@@ -1408,37 +1845,128 @@ elif [ -n "$shell_prev" ]; then
 	esac
 else
 	shell_choice="bash"
-	echo "$shell_choice" > "$SHELL_CONFIG"
 fi
 
-_install_zsh_inner() {
-	apt_install zsh || return 1
-	command -v zsh >/dev/null 2>&1 || return 1
-	# Trust boundary: the Oh My Zsh installer manages its own files via HTTPS.
-	# We resolve the latest release tag at setup time (matching the trust model
-	# used elsewhere in setup.sh for optional tools) instead of tracking master,
-	# so the fetched installer is pinned to a known release rather than a
-	# moving branch. RUNZSH=no prevents launching a subshell, CHSH=no skips the
-	# chsh prompt (we handle shell switching via the .squarebox-use-zsh
-	# marker), and KEEP_ZSHRC=yes prevents it from writing a .zshrc we'd
-	# immediately overwrite.
-	if [ ! -f "$HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-		local omz_tag omz_ref
-		omz_tag=$(sb_gh_latest_tag ohmyzsh/ohmyzsh 2>/dev/null || true)
-		omz_ref="${omz_tag:-master}"
-		RUNZSH=no CHSH=no KEEP_ZSHRC=yes \
-			sh -c "$(curl -fsSL "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/${omz_ref}/tools/install.sh")" "" --unattended >/dev/null 2>&1 || return 1
+if ! $shell_cancelled; then
+
+_squarebox_github_default_sha() {
+	[ "$#" -eq 1 ] || { echo "Error: expected one GitHub repository" >&2; return 2; }
+	local repo="$1" api_base repo_body branch encoded_branch commit_body sha rc
+	[[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || {
+		echo "Error: invalid GitHub repository: $repo" >&2
+		return 1
+	}
+	api_base="${SB_GITHUB_API_BASE:-https://api.github.com}"
+	repo_body=$(_sb_gh_api_get "${api_base}/repos/${repo}" "${repo} repository metadata") || {
+		rc=$?; return "$rc"
+	}
+	branch=$(printf '%s' "$repo_body" | jq -er \
+		'.default_branch | select(type == "string" and length > 0)' 2>/dev/null) || {
+		echo "Error: no valid default branch in GitHub metadata for $repo" >&2
+		return 1
+	}
+	[[ "$branch" =~ ^[A-Za-z0-9._/-]+$ ]] \
+		&& [[ "$branch" != /* ]] && [[ "$branch" != */ ]] \
+		&& [[ "$branch" != *..* ]] && [[ "$branch" != *//* ]] || {
+		echo "Error: unsafe default branch in GitHub metadata for $repo" >&2
+		return 1
+	}
+	encoded_branch=$(printf '%s' "$branch" | jq -sRr '@uri') || return 1
+	commit_body=$(_sb_gh_api_get \
+		"${api_base}/repos/${repo}/commits/${encoded_branch}" \
+		"${repo} default branch ${branch}") || {
+		rc=$?; return "$rc"
+	}
+	sha=$(printf '%s' "$commit_body" | jq -er \
+		'.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' 2>/dev/null) || {
+		echo "Error: no valid commit SHA in GitHub metadata for $repo" >&2
+		return 1
+	}
+	printf '%s\n' "$sha"
+}
+
+_squarebox_checkout_github_sha() {
+	[ "$#" -eq 3 ] || { echo "Error: expected repository, SHA, and destination" >&2; return 2; }
+	local repo="$1" sha="$2" dest="$3" remote origin head dirty
+	[[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || return 1
+	[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || {
+		echo "Error: refusing unsafe GitHub commit SHA for $repo" >&2
+		return 1
+	}
+	case "$dest" in
+		"$HOME"/*) ;;
+		*) echo "Error: refusing Git checkout outside the Managed home: $dest" >&2; return 1 ;;
+	esac
+	remote="https://github.com/${repo}.git"
+	if [ -e "$dest" ] || [ -L "$dest" ]; then
+		if [ -L "$dest" ] || [ ! -d "$dest/.git" ]; then
+			echo "Error: refusing to replace non-repository path: $dest" >&2
+			return 1
+		fi
+		dirty=$(git -C "$dest" status --porcelain --untracked-files=all 2>/dev/null) || {
+			echo "Error: could not inspect managed repository state: $dest" >&2
+			return 1
+		}
+		[ -z "$dirty" ] || {
+			echo "Error: preserving local changes in managed repository: $dest" >&2
+			return 1
+		}
+	else
+		mkdir -p "${dest%/*}" || return 1
+		git init -q "$dest" >/dev/null 2>&1 || {
+			echo "Error: failed to initialize managed repository: $dest" >&2
+			return 1
+		}
+		git -C "$dest" remote add origin "$remote" >/dev/null 2>&1 || {
+			echo "Error: failed to configure managed repository: $dest" >&2
+			return 1
+		}
 	fi
+	origin=$(git -C "$dest" remote get-url origin 2>/dev/null) || {
+		echo "Error: managed repository has no readable origin: $dest" >&2
+		return 1
+	}
+	case "$origin" in
+		"$remote"|"${remote%.git}") ;;
+		*) echo "Error: refusing unexpected repository origin at $dest: $origin" >&2; return 1 ;;
+	esac
+	git -C "$dest" fetch --depth=1 --no-tags origin "$sha" >/dev/null 2>&1 || {
+		echo "Error: failed to fetch immutable revision $sha for $repo" >&2
+		return 1
+	}
+	git -C "$dest" checkout --detach "$sha" >/dev/null 2>&1 || {
+		echo "Error: failed to check out $sha for $repo (preserving local changes)" >&2
+		return 1
+	}
+	head=$(git -C "$dest" rev-parse --verify HEAD 2>/dev/null) || return 1
+	[ "$head" = "$sha" ] || {
+		echo "Error: repository HEAD verification failed for $repo" >&2
+		return 1
+	}
+	dirty=$(git -C "$dest" status --porcelain --untracked-files=all 2>/dev/null) || return 1
+	[ -z "$dirty" ] || {
+		echo "Error: managed repository is not clean after checkout: $dest" >&2
+		return 1
+	}
+}
+
+_install_zsh_inner() {
+	# Resolve every moving upstream name before installing a package or changing
+	# the Managed home. GitHub metadata failure is authoritative.
+	local omz_sha autosuggestions_sha syntax_highlighting_sha
+	omz_sha=$(_squarebox_github_default_sha ohmyzsh/ohmyzsh) || return 1
+	autosuggestions_sha=$(_squarebox_github_default_sha zsh-users/zsh-autosuggestions) || return 1
+	syntax_highlighting_sha=$(_squarebox_github_default_sha zsh-users/zsh-syntax-highlighting) || return 1
+
+	command -v zsh >/dev/null 2>&1 || apt_install zsh || return 1
+	command -v zsh >/dev/null 2>&1 || return 1
+	_squarebox_checkout_github_sha ohmyzsh/ohmyzsh "$omz_sha" "$HOME/.oh-my-zsh" || return 1
 	[ -f "$HOME/.oh-my-zsh/oh-my-zsh.sh" ] || return 1
 	local custom="$HOME/.oh-my-zsh/custom"
-	if [ ! -d "$custom/plugins/zsh-autosuggestions" ]; then
-		git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions \
-			"$custom/plugins/zsh-autosuggestions" >/dev/null 2>&1 || return 1
-	fi
-	if [ ! -d "$custom/plugins/zsh-syntax-highlighting" ]; then
-		git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting \
-			"$custom/plugins/zsh-syntax-highlighting" >/dev/null 2>&1 || return 1
-	fi
+	_squarebox_checkout_github_sha zsh-users/zsh-autosuggestions "$autosuggestions_sha" \
+		"$custom/plugins/zsh-autosuggestions" || return 1
+	_squarebox_checkout_github_sha zsh-users/zsh-syntax-highlighting "$syntax_highlighting_sha" \
+		"$custom/plugins/zsh-syntax-highlighting" || return 1
 	[ -d "$custom/plugins/zsh-autosuggestions" ] || return 1
 	[ -d "$custom/plugins/zsh-syntax-highlighting" ] || return 1
 	# Generate ~/.zshrc that mirrors ~/.bashrc, layered on Oh My Zsh.
@@ -1447,6 +1975,7 @@ _install_zsh_inner() {
 		export ZSH="$HOME/.oh-my-zsh"
 		ZSH_THEME=""
 		plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
+		zstyle ':omz:update' mode disabled
 		[ -f "$ZSH/oh-my-zsh.sh" ] && source "$ZSH/oh-my-zsh.sh"
 
 		eval "$(starship init zsh)"
@@ -1478,44 +2007,13 @@ _install_zsh_inner() {
 }
 
 install_zsh() {
-	# Always invoke the inner installer: each step is idempotent (guards with
-	# `-d` / `-f` before apt/curl/clone), and running it every time ensures any
-	# missing plugins from a previous partial install get re-cloned.
+	# Always reconcile the three managed repositories so a partial checkout is
+	# repaired and a rerun advances only to newly resolved immutable SHAs.
 	run_with_spinner "Installing Zsh + Oh My Zsh..." _install_zsh_inner
 }
 
-# Translate one bash-syntax line from a ~/.squarebox-* alias file into its
-# fish equivalent on stdout. Handles:
-#   export PATH="A:B:$PATH"          → set -x PATH A B $PATH
-#   export NAME='value'              → set -x NAME value
-#   alias name='cmd'                 → passed through (fish accepts this form)
-# Other constructs are dropped. SDK PATHs are now handled by `mise activate
-# fish` directly — this translator is only used for AI/editor/TUI aliases.
-_squarebox_bash_line_to_fish() {
-	local line="$1"
-	case "$line" in
-		"export PATH="*)
-			local val="${line#export PATH=}"
-			val="${val#\"}"; val="${val%\"}"
-			val="${val#\'}"; val="${val%\'}"
-			echo "set -x PATH ${val//:/ }"
-			;;
-		"export "*=*)
-			local rest="${line#export }"
-			local name="${rest%%=*}"
-			local val="${rest#*=}"
-			val="${val#\"}"; val="${val%\"}"
-			val="${val#\'}"; val="${val%\'}"
-			echo "set -x $name $val"
-			;;
-		"alias "*=*)
-			echo "$line"
-			;;
-	esac
-}
-
 _install_fish_inner() {
-	apt_install fish || return 1
+	command -v fish >/dev/null 2>&1 || apt_install fish || return 1
 	command -v fish >/dev/null 2>&1 || return 1
 	mkdir -p "$HOME/.config/fish/conf.d" || return 1
 	# Generate ~/.config/fish/config.fish mirroring the default bashrc in
@@ -1561,23 +2059,7 @@ _install_fish_inner() {
 	FISHRC
 	[ -f "$HOME/.config/fish/config.fish" ] || return 1
 
-	# Translate AI/editor/TUI bash-syntax files into a single fish conf.d
-	# snippet. Regenerated each install to reflect current selections.
-	# (SDK paths are no longer translated — mise handles that natively.)
-	local sel_out="$HOME/.config/fish/conf.d/squarebox-selections.fish"
-	{
-		echo "# Generated by setup.sh from ~/.squarebox-* bash files."
-		for src in \
-			"$HOME/.squarebox-ai-aliases" \
-			"$HOME/.squarebox-editor-aliases" \
-			"$HOME/.squarebox-tui-aliases"; do
-			[ -f "$src" ] || continue
-			echo "# --- from $(basename "$src") ---"
-			while IFS= read -r _sq_line; do
-				_squarebox_bash_line_to_fish "$_sq_line"
-			done < "$src"
-		done
-	} > "$sel_out" || return 1
+	_refresh_fish_selections || return 1
 }
 
 install_fish() {
@@ -1589,84 +2071,39 @@ case "$shell_choice" in
 		if install_zsh; then
 			touch ~/.squarebox-use-zsh
 			rm -f ~/.squarebox-use-fish
+			printf 'zsh\n' > "$SHELL_CONFIG"
 			echo "Zsh will take over at the end of this setup (next interactive shell)."
 		else
-			echo "Warning: Zsh installation failed; staying on bash."
-			rm -f ~/.squarebox-use-zsh ~/.squarebox-use-fish
+			record_failure "Zsh installation failed; prior shell Selection was preserved"
 		fi
 		;;
 	fish)
 		if install_fish; then
 			touch ~/.squarebox-use-fish
 			rm -f ~/.squarebox-use-zsh
+			printf 'fish\n' > "$SHELL_CONFIG"
 			echo "Fish will take over at the end of this setup (next interactive shell)."
 		else
-			echo "Warning: Fish installation failed; staying on bash."
-			rm -f ~/.squarebox-use-zsh ~/.squarebox-use-fish
+			record_failure "Fish installation failed; prior shell Selection was preserved"
 		fi
 		;;
 	bash|*)
 		rm -f ~/.squarebox-use-zsh ~/.squarebox-use-fish
+		printf 'bash\n' > "$SHELL_CONFIG"
 		;;
 esac
+fi # ! shell_cancelled
 fi # should_run shell
 
-# ── Learn mode ───────────────────────────────────────────────────────────────
-# Disabled: the learn feature is half-baked and not surfaced to users. To
-# re-enable, set SB_LEARN_ENABLED=true below and add `learn` back to the
-# SB_SECTIONS defaults above (and to sqrbx-setup's VALID_SECTIONS, motd.sh,
-# squarebox-help.sh, and the README).
-SB_LEARN_ENABLED=false
-if [ "$SB_LEARN_ENABLED" = true ] && should_run learn; then
-
-LEARN_CONFIG="/workspace/.squarebox/learn"
-
-learn_prev=""
-if [ -f "$LEARN_CONFIG" ]; then
-	learn_prev=$(cat "$LEARN_CONFIG")
+if ! _refresh_fish_selections; then
+	record_failure "Fish selection aliases could not be refreshed"
 fi
 
-if $INTERACTIVE; then
-	echo
-	if $HAS_GUM; then
-		gum style --foreground 212 --bold "Learn Mode"
-	else
-		echo "── Learn Mode ──────────────────────────────────────────────────────────────"
-	fi
-	echo "sqrbx-learn is an interactive guide to the tools in your squarebox,"
-	echo "covering their history and how to use them effectively. It can also"
-	echo "launch your AI agent in a hands-on coach mode that teaches as you work."
-	echo
-
-	if $HAS_GUM; then
-		gum_selected=""
-		[ "$learn_prev" = "enabled" ] && gum_selected="Enable learn mode (sqrbx-learn)"
-		gum_args=(--header "Enable learn mode?")
-		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
-		learn_pick=$(gum choose "${gum_args[@]}" \
-			"Enable learn mode (sqrbx-learn)" \
-			"Skip") || learn_pick=""
-		case "$learn_pick" in
-			"Enable"*) learn_choice="enabled" ;;
-			*)         learn_choice="" ;;
-		esac
-	else
-		if [ "$learn_prev" = "enabled" ]; then
-			read -rp "Keep learn mode enabled? [Y/n]: " _lr
-			case "${_lr:-Y}" in [Nn]*) learn_choice="" ;; *) learn_choice="enabled" ;; esac
-		else
-			read -rp "Enable learn mode (sqrbx-learn)? [y/N]: " _lr
-			case "${_lr:-N}" in [Yy]*) learn_choice="enabled" ;; *) learn_choice="" ;; esac
-		fi
-	fi
-else
-	learn_choice="$learn_prev"
+if [ "$SB_FAILURES" -gt 0 ]; then
+	echo >&2
+	echo "squarebox setup incomplete: $SB_FAILURES operation(s) failed." >&2
+	exit 1
 fi
-
-mkdir -p "$(dirname "$LEARN_CONFIG")"
-echo "$learn_choice" > "$LEARN_CONFIG"
-
-fi # should_run learn
 
 echo
 

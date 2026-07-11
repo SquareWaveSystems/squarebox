@@ -9,7 +9,7 @@ FROM ubuntu:24.04
 # /usr/share/bash-completion/ and is unaffected.
 RUN printf 'path-include=/usr/share/doc/fzf/examples/key-bindings.bash\n' \
 		> /etc/dpkg/dpkg.cfg.d/zz-squarebox-fzf \
-	&& apt-get update && apt-get install -y --no-install-recommends \
+	&& apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 	git \
 	# openssh-client: git only Recommends it, so --no-install-recommends drops it.
 	# Needed for SSH git remotes and the agent-forwarding mounts (SSH_AUTH_SOCK,
@@ -17,6 +17,7 @@ RUN printf 'path-include=/usr/share/doc/fzf/examples/key-bindings.bash\n' \
 	openssh-client \
 	curl \
 	unzip \
+	xz-utils \
 	jq \
 	less \
 	sudo \
@@ -33,6 +34,9 @@ RUN printf 'path-include=/usr/share/doc/fzf/examples/key-bindings.bash\n' \
 	toilet-fonts \
 	libicu-dev \
 	locales \
+	# Runtime package installs happen with /etc/localtime bind-mounted read-only.
+	# Configure tzdata in the image, then setup.sh holds it before Box-tier apt.
+	tzdata \
 	# Runtime deps for mise-managed SDKs:
 	#   gpg        — mise verifies upstream signatures (Node, etc.)
 	#   libatomic1 — required by official Node Linux builds
@@ -51,14 +55,14 @@ ENV LC_ALL=en_US.UTF-8
 
 # Pinned tool versions — update via: scripts/update-versions.sh
 ARG DELTA_VERSION=0.19.2
-ARG YQ_VERSION=4.53.2
-ARG XH_VERSION=0.25.3
-ARG STARSHIP_VERSION=1.24.2
+ARG YQ_VERSION=4.53.3
+ARG XH_VERSION=0.26.1
+ARG STARSHIP_VERSION=1.26.0
 ARG GLOW_VERSION=2.1.2
 ARG GUM_VERSION=0.17.0
-ARG JUST_VERSION=1.49.0
-ARG DIFFTASTIC_VERSION=0.68.0
-ARG MISE_VERSION=2026.5.4
+ARG JUST_VERSION=1.56.0
+ARG DIFFTASTIC_VERSION=0.69.0
+ARG MISE_VERSION=2026.7.5
 
 # Validate version ARGs are non-empty
 RUN test -n "$DELTA_VERSION"       || { echo "Error: DELTA_VERSION is empty" >&2; exit 1; } \
@@ -96,6 +100,11 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 	# Install from repos
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends gh eza \
+	# gh and eza are image-tier tools. Their repositories are build inputs, not
+	# runtime package sources: leaving them configured makes an unrelated outage
+	# prevent Box-tier installs such as tmux, zsh, and fish.
+	&& rm -f /etc/apt/sources.list.d/github-cli.list /etc/apt/sources.list.d/gierens.list \
+		/etc/apt/keyrings/githubcli-archive-keyring.gpg /etc/apt/keyrings/gierens.gpg \
 	# Note: gnupg is kept (also installed in layer 1 as `gpg`) — mise needs it
 	# at runtime to verify Node release signatures.
 	&& rm -rf /var/lib/apt/lists/*
@@ -119,9 +128,19 @@ RUN rm -f /tmp/checksums.txt /tmp/tools.yaml /tmp/tool-lib.sh /tmp/sb-init.sh
 
 # 4. User Setup
 
+# Runtime authority is intentionally split: apt/dpkg/chown support Box setup;
+# install stages an image-tier binary; mv may atomically promote only a
+# .<tool>.squarebox.* sibling into /usr/local/bin; rm may clean only that stage.
 RUN userdel -r ubuntu 2>/dev/null || true \
 	&& useradd -m -s /bin/bash -u 1000 dev \
-	&& echo 'dev ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/dpkg, /usr/bin/chown, /usr/bin/install' > /etc/sudoers.d/dev \
+	&& printf '%s\n' \
+		'Defaults:dev env_keep += "DEBIAN_FRONTEND"' \
+		'dev ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt-mark, /usr/bin/dpkg, /usr/bin/chown, /usr/bin/install' \
+		'dev ALL=(root) NOPASSWD: /usr/bin/mv ^-fT -- /usr/local/bin/\.[A-Za-z0-9._+-]+\.squarebox\.[0-9]+\.[0-9]+ /usr/local/bin/[A-Za-z0-9._+-]+$' \
+		'dev ALL=(root) NOPASSWD: /usr/bin/rm ^-f -- /usr/local/bin/\.[A-Za-z0-9._+-]+\.squarebox\.[0-9]+\.[0-9]+$' \
+		> /etc/sudoers.d/dev \
+	&& chmod 0440 /etc/sudoers.d/dev \
+	&& visudo -cf /etc/sudoers.d/dev \
 	&& mkdir -p /home/dev/.claude /home/dev/.config /home/dev/.ssh \
 	&& chown -R dev:dev /home/dev
 
@@ -143,13 +162,14 @@ COPY motd.sh /usr/local/lib/squarebox/motd.sh
 COPY setup.sh /usr/local/lib/squarebox/setup.sh
 COPY scripts/squarebox-update.sh /usr/local/bin/sqrbx-update
 COPY scripts/squarebox-setup.sh /usr/local/bin/sqrbx-setup
-COPY scripts/sqrbx-learn /usr/local/bin/sqrbx-learn
-COPY scripts/sqrbx-agent-tool-log /usr/local/bin/sqrbx-agent-tool-log
 COPY scripts/squarebox-help.sh /usr/local/bin/sqrbx-help
 COPY scripts/squarebox-entrypoint.sh /usr/local/bin/squarebox-entrypoint
 COPY scripts/squarebox-refresh-dotfiles.sh /usr/local/lib/squarebox/refresh-dotfiles.sh
 COPY scripts/lib/tools.yaml /usr/local/lib/squarebox/tools.yaml
 COPY scripts/lib/tool-lib.sh /usr/local/lib/squarebox/tool-lib.sh
+# This is the Candidate's vetted manifest. Runtime image-tier updates must
+# match it; advancing the manifest requires publishing a newer Candidate.
+COPY checksums.txt /usr/local/lib/squarebox/checksums.txt
 
 # Image-managed dotfiles also live under a non-volume path so the entrypoint can
 # refresh them into the squarebox-home volume on every start. Without this the
@@ -164,8 +184,6 @@ RUN chmod +x /usr/local/lib/squarebox/setup.sh \
 	/usr/local/lib/squarebox/refresh-dotfiles.sh \
 	/usr/local/bin/sqrbx-update \
 	/usr/local/bin/sqrbx-setup \
-	/usr/local/bin/sqrbx-learn \
-	/usr/local/bin/sqrbx-agent-tool-log \
 	/usr/local/bin/sqrbx-help \
 	/usr/local/bin/squarebox-entrypoint
 

@@ -32,7 +32,7 @@ usage() {
 	  git            Git identity (name, email)
 	  github         GitHub CLI authentication
 	  ai             AI coding assistants (claude, copilot, gemini, codex, opencode, pi, paseo)
-	  editors        Text editors (micro, edit, fresh, nvim)
+	  editors        Text editors (micro, edit, fresh, helix/hx, nvim)
 	  tuis           TUI tools (lazygit, gh-dash, yazi)
 	  multiplexers   Terminal multiplexers (tmux, zellij)
 	  sdks           SDKs (node, python, go, dotnet, rust)
@@ -43,7 +43,7 @@ usage() {
 	  sqrbx-setup sdks             Add or change SDK installations
 	  sqrbx-setup                  Re-run the full setup wizard
 
-	${DIM}Note: Run 'source ~/.bashrc' after setup to apply changes in the current shell.${RESET}
+	${DIM}Note: Start a new shell after setup to apply shell and alias changes.${RESET}
 
 	EOF
 }
@@ -62,7 +62,7 @@ show_list() {
 	# GitHub CLI
 	if gh auth status &>/dev/null 2>&1; then
 		echo -e "  ${CYAN}GitHub CLI:${RESET}       ${GREEN}authenticated${RESET}"
-	elif [ -f /workspace/.squarebox/gh-skip ]; then
+	elif [ -f "$HOME/.squarebox-gh-skip" ]; then
 		echo -e "  ${CYAN}GitHub CLI:${RESET}       ${DIM}skipped${RESET}"
 	else
 		echo -e "  ${CYAN}GitHub CLI:${RESET}       ${DIM}not configured${RESET}"
@@ -72,6 +72,7 @@ show_list() {
 	local configs=(
 		"ai-tool:AI assistants"
 		"editors:Text editors"
+		"editor-default:Default editor"
 		"tuis:TUI tools"
 		"multiplexer:Multiplexers"
 		"sdks:SDKs"
@@ -139,4 +140,4 @@ done
 /usr/local/lib/squarebox/setup.sh --rerun "$@"
 
 echo
-echo -e "${DIM}Run 'source ~/.bashrc' to apply changes in the current shell.${RESET}"
+echo -e "${DIM}Start a new shell to apply shell and alias changes.${RESET}"

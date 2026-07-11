@@ -1,0 +1,25 @@
+# id	description
+build.amd64	Candidate image builds for amd64
+build.arm64	Candidate image builds for arm64
+release.identity	Candidate source and image digest share one validated identity
+security.scan.amd64	Candidate linux/amd64 has no fixable critical vulnerabilities
+security.scan.arm64	Candidate linux/arm64 has no fixable critical vulnerabilities
+image.arm64-smoke	The exact Candidate starts and exposes pinned tools on arm64
+compose.lifecycle	Compose force-recreates the exact Candidate while Managed home and Workspace state persist
+podman.rootless	Rootless Podman maps the host user to dev, provisions Box-tier tools, and preserves Workspace and Managed-home state
+powershell.lifecycle	PowerShell lifecycle adapters parse and pass executable safety fixtures natively on Windows
+lifecycle.install-state	Lifecycle state, release identity, ownership, and static contracts pass isolated fixtures
+artifact.fail-closed	A rejected artifact cannot reach its destination
+setup.noninteractive	Noninteractive setup exits successfully without invoking an interactive prompt
+setup.box-tier	Selected Box-tier setup completes with production capabilities and the read-only timezone mount
+shell.interactive	The actual interactive shell configuration initializes
+lifecycle.restart	A stopped Box restarts with persisted Managed-home state and tmux availability
+lifecycle.recreate	A saved tmux Selection is reconciled after Box replacement
+update.installed-only	Bulk update excludes absent optional tools
+update.single	A named tool update follows named-tool semantics
+update.failure	Updater failures produce a nonzero aggregate result
+dotfiles.refresh	A stale Managed-home dotfile is safely refreshed
+dotfiles.symlink	Managed dotfile refresh rejects symlink destinations
+devcontainer.state	Dev Container configuration aligns Workspace and selection state under /workspace
+setup.rerun	The setup wrapper validates input and a noninteractive Git-section rerun succeeds
+learn.not-shipped	Disabled learn commands and hooks are absent from the default image

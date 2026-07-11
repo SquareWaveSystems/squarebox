@@ -1,127 +1,161 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Repository guidance for coding agents and maintainers.
 
-## Project Overview
+## Agent skills
 
-squarebox is a containerized development environment (Docker or Podman) combining modern CLI/TUI tools with Claude Code. It uses a persistent container model — the container suspends on exit and resumes on restart, preserving state. Workspace code lives on the host at `~/squarebox/workspace` via bind mount; per-user state (shell history, gh auth, claude-code data, mise toolchains) lives in the `squarebox-home` named Docker volume; image-managed config (`.bashrc`, `starship.toml`, `lazygit/`) is bind-mounted from `~/squarebox/dotfiles` so repo updates flow through.
+### Issue tracker
 
-## Build & Run
+Engineering issues and PRDs live in this repository's GitHub Issues. See `docs/agents/issue-tracker.md`.
 
-```bash
-# Build the image (docker or podman — both work)
-docker build -t squarebox .
+### Triage labels
 
-# Create and run a new container (SSH agent forwarding, capability-restricted)
-docker run -it --name squarebox \
-  --cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE \
-  --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --cap-add=KILL \
-  -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock \
-  -v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock" \
-  -v ~/.ssh/config:/home/dev/.ssh/config:ro \
-  -v ~/.ssh/known_hosts:/home/dev/.ssh/known_hosts:ro \
-  -v ~/squarebox/workspace:/workspace \
-  -v squarebox-home:/home/dev \
-  -v ~/squarebox/dotfiles/bashrc:/home/dev/.bashrc:ro \
-  -v ~/.config/git:/home/dev/.config/git \
-  -v ~/squarebox/.config/starship.toml:/home/dev/.config/starship.toml \
-  -v ~/squarebox/.config/lazygit:/home/dev/.config/lazygit \
-  -v /etc/localtime:/etc/localtime:ro \
-  squarebox
+Triage uses the canonical `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix` roles. See `docs/agents/triage-labels.md`.
 
-# Resume an existing container
-docker start -ai squarebox
-```
+### Domain docs
 
-The `squarebox-home` named volume holds per-user state. Bind mounts at sub-paths inside `/home/dev` (`.bashrc`, `.config/starship.toml`, `.config/lazygit`, `.config/git`) override the volume so repo-managed files stay in lockstep with the image.
+Squarebox uses a single repository context in `CONTEXT.md`, with decisions in `docs/adr/`. See `docs/agents/domain.md`.
 
-**Pull/compose path (no bind mounts):** the `docker-compose.yml` / GHCR install mounts only `squarebox-home:/home/dev`, so the named volume would otherwise shadow the image-baked dotfiles and they'd go stale on upgrade (issue #89). To prevent this, the managed dotfiles also ship to a non-volume path (`/usr/local/lib/squarebox/dotfiles/`), and `squarebox-entrypoint` runs `refresh-dotfiles.sh` on every start to re-seed `.bashrc`/`starship.toml` from there over the volume copy. The refresh skips any path the operator bind-mounted (the desktop path above), so it never clobbers host-managed files.
+## Project model
 
-Replace `docker` with `podman` above if using Podman. The `install.sh` script auto-detects the runtime; override with `SQUAREBOX_RUNTIME=docker|podman`.
+Read `CONTEXT.md` before changing behavior. The important state split is:
 
-The `install.sh` script automates initial setup (clone, build, create container, add `sqrbx` shell alias). A `.devcontainer/devcontainer.json` is also provided for VS Code Dev Containers / Codespaces.
+- **Workspace**: host project tree mounted at `/workspace`.
+- **Managed home**: named volume mounted at `/home/dev`; survives Box replacement.
+- **Box filesystem**: disposable image/container state; selected Box-tier packages
+  must be reconciled after replacement.
+- **Selection**: desired optional tools under `/workspace/.squarebox`.
+- **Observed state**: binaries/configuration actually usable in the current Box.
+- **Install identity**: `<SQUAREBOX_DIR>/.squarebox/install-state`, recording
+  runtime, paths, resource ownership, source revision, and image identity.
+  Release pulls use an immutable digest; source builds use a local image ID/ref.
+- **Candidate/Release**: one source SHA bound to one multi-architecture image
+  digest and matched assets in `release.json`.
 
-**Windows PowerShell**: Only PowerShell 7+ (`pwsh`) is supported. Windows PowerShell 5.1 is not supported. `install.ps1` is the recommended Windows entry point — it handles clone, build, container creation, and PowerShell profile setup natively without requiring Git Bash. Running `install.sh` directly from Git Bash still works but only sets up bash aliases; it prints instructions to run `install.ps1` for PowerShell.
+Relevant architecture decisions are in `docs/adr/`. Do not reintroduce raw-tag
+stable discovery, inferred test passes, default reconstruction during uninstall,
+or installation after a failed artifact-verification stage.
 
-## First-Run Setup
-
-`setup.sh` runs automatically on first container launch and prompts for:
-
-1. **Git identity** — name and email (skipped if already configured)
-2. **GitHub CLI auth** — persisted to `/workspace/.squarebox/gh` across rebuilds
-3. **AI coding assistant** — Claude Code, GitHub Copilot CLI, Google Gemini CLI, OpenAI Codex CLI, OpenCode (any combination)
-4. **Text editors** — micro, edit (Microsoft), fresh, nvim (nano is always available)
-5. **TUI tools** — lazygit, gh-dash, yazi (any combination)
-6. **Terminal multiplexers** — tmux, zellij
-7. **SDKs** — Node.js, Python, Go, .NET, Rust (all installed and managed by [mise](https://github.com/jdx/mise) via `~/.config/mise/config.toml`)
-8. **Shell** — bash (default) or zsh + Oh My Zsh + autosuggestions + syntax highlighting (experimental)
-
-Selections are saved to `/workspace/.squarebox/` and reused on subsequent rebuilds.
-
-### Re-running Setup
-
-`sqrbx-setup` re-runs the setup wizard inside a running container to add or change tool selections:
+## Build and local validation
 
 ```bash
-sqrbx-setup                  # Re-run all sections
-sqrbx-setup ai editors       # Re-run specific sections only
-sqrbx-setup --list            # Show current tool selections
-sqrbx-setup --help            # Show usage
+set -euo pipefail
+mapfile -t test_files < <(
+  find tests -maxdepth 1 -type f -name 'test-*.sh' -perm -u+x | sort
+)
+test "${#test_files[@]}" -gt 0
+for test_file in "${test_files[@]}"; do "$test_file"; done
+
+docker build --build-arg SQUAREBOX_VERSION=dev -t squarebox:test .
+docker run --rm \
+  -v "$PWD/scripts:/workspace/scripts:ro" \
+  squarebox:test bash -c 'scripts/e2e-test.sh smoke'
 ```
 
-Valid sections: `git`, `github`, `ai`, `editors`, `tuis`, `multiplexers`, `sdks`, `shell`.
+`scripts/e2e-test.sh all` also provisions optional network-backed tools. The
+Candidate workflow builds one digest, tests/scans it, collects assertion
+Evidence, and promotes that exact digest only after every required ID in
+`scripts/e2e-required.tsv` passes.
 
-Run `source ~/.bashrc` after setup to pick up new aliases and PATH changes in the current shell.
+## Lifecycle adapters
 
-### Getting Help
+`install.sh` and `install.ps1` resolve published Releases through GitHub release
+metadata and validate `release.json`. Stable uses `/releases/latest`; an
+explicit tag uses the corresponding published release; edge builds `main`.
+Only the v1.0 compatibility path may lack a manifest.
+Publishable versions are `vMAJOR.MINOR.PATCH[-prerelease]`; build metadata is
+excluded so the GitHub Release and OCI aliases share one unambiguous identity.
 
-`sqrbx-help` prints a one-screen overview of the `sqrbx-*` commands plus the fzf (`Ctrl+R`/`Ctrl+T`/`Alt+C`/`**<Tab>`) and zoxide (`z`/`zi`) keyboard shortcuts. The script (`scripts/squarebox-help.sh`) guards each command row with `command -v`, so it only lists tools actually installed. The MOTD (`motd.sh`) points to it on every shell start.
+Both adapters persist effective settings. Rebuild functions locate adjacent
+state and reuse paths/runtime/volume/UID/GID/build/channel choices. Uninstallers
+parse that state, verify resource labels, and refuse unrelated fixed-name
+resources. On Windows, `FORMAT=1` has an aligned closed field set but native
+PowerShell and Git Bash path/profile values are adapter-native; only the creating
+adapter may consume that state. Pre-v1.1 installs need explicit adoption; an
+adopted unlabeled volume also needs force before purge.
 
-## Updating Tool Versions
+The private Git identity at `.squarebox/identity/git` contains name/email only.
+Never mount, chown, or copy the host's real `~/.config/git`.
 
-```bash
-# Update pinned Dockerfile-tier versions, checksums, and Dockerfile ARGs
-scripts/update-versions.sh
+Compose uses `SQUAREBOX_IMAGE_REF`, explicit container/volume names, and
+ownership labels. Dev Containers mount the cloned repository at `/workspace`,
+which matches Selection state and setup assumptions.
 
-# Inside a running container, update tool binaries in-place from GitHub releases
-sqrbx-update
-```
+## Provisioning
 
-`scripts/update-versions.sh` only touches the Dockerfile tier (delta, yq, xh, glow, gum, starship, just, difftastic). It fetches latest GitHub releases, downloads artifacts for both architectures, computes SHA256 checksums, and updates `checksums.txt` and the Dockerfile ARGs.
+`setup.sh` supports interactive full/section reruns, saved noninteractive
+Selections, and `--reconcile-box` for entrypoint repair. A persistent
+setup-complete marker is not proof that Box-tier packages exist.
 
-Optional tools installed by `setup.sh` (opencode, editors, TUIs, zellij) are not pinned. They install the latest upstream release at setup time, so there is no checksum file or version variable to update in the repo. SDKs are installed by mise (a Dockerfile-tier pinned binary), so SDK trust is anchored to mise's own pinning rather than per-language installers.
+Key rules:
 
-## CI
+- Preserve old Selection on prompt cancellation; intentional empty selection is distinct.
+- Commit Selection/aliases from successful observed installs, not requested values.
+- Keep Bash, Zsh, and Fish derived configuration synchronized after section reruns.
+- Respect explicit user configuration during migrations (for example tmux mouse off).
+- Runtime APT must work with the read-only timezone mount and show actionable failures.
+- `sqrbx-learn` and its command logger are not shipped in the default v1.1 Box.
 
-GitHub Actions workflow (`.github/workflows/build.yml`) validates the Dockerfile builds on every push and PR using buildx with GitHub Actions cache. An E2E test suite (`scripts/e2e-test.sh`, `.github/workflows/e2e.yml`) runs the container and validates tool installations.
+GitHub authentication uses the normal Managed-home `~/.config/gh` plus
+`~/.squarebox-gh-skip`; legacy Workspace markers are migrated.
 
-## Dockerfile Architecture
+Supported assistant keys include `claude`, `copilot`, `gemini`, `codex`,
+`opencode`, `pi`, and `paseo`. Copilot is `@github/copilot`, binary `copilot`,
+and needs Node 22 or newer. SDKs are managed by mise. Editors include micro,
+edit, fresh, Helix (`hx`), and Neovim/LazyVim.
 
-The Dockerfile (Ubuntu 24.04 base) is organized into sequential stages:
+## Tool registry and verified installation
 
-1. **Base packages** — git, curl, ripgrep, bat, fzf, zoxide, fd, etc. via apt
-2. **External APT repos** — GitHub CLI, Eza via apt (requires gnupg, stays combined)
-3. **Per-tool binary installs** — one `RUN` layer per tool via `sb_install` from the shared library
-4. **User setup** — creates non-root `dev` user with workspace directory
-5. **Config files** — git config with delta as default pager (lazygit config is set up by setup.sh when lazygit is installed)
-6. **Setup script & configs** — copies `setup.sh`, `sqrbx-update`, starship.toml
-7. **Shell config** — bashrc with starship prompt, zoxide, aliases
+`scripts/lib/tools.yaml` owns artifact metadata, Tool tier, verification policy,
+and Docker ARG mapping. Observed version probes remain adapter functions in
+`scripts/squarebox-update.sh`. The awk reader avoids requiring yq to install yq.
 
-The Dockerfile uses `SHELL ["/bin/bash", "-c"]` because `tool-lib.sh` relies on bash parameter substitution. All tool versions are pinned via `ARG` directives and verified against SHA256 checksums.
+`scripts/lib/tool-lib.sh` is the deep artifact-install module. Its interface
+must remain fail-closed across metadata validation, download, verification,
+extraction, staging, atomic destination promotion, post-install hooks, and
+cleanup. Image-tier artifacts require Squarebox's pinned `sha256` manifest.
+Setup-tier GitHub artifacts require the digest attached to the exact release
+asset by GitHub; absent, malformed, duplicate, or mismatched digests fail closed.
 
-## Windows Support
+Runtime system-binary promotion uses narrowly matched sudo command forms with
+staged dotfiles in `/usr/local/bin`. Keep the implementation and Dockerfile
+sudoers patterns synchronized and validate sudoers during image build.
 
-- **PowerShell**: only PowerShell 7+ (`pwsh`) is supported. Windows PowerShell 5.1 (`powershell.exe`) is not supported.
-- **install.ps1** (recommended for Windows): handles clone, build, container creation, and PowerShell profile setup natively — no Git Bash dependency. Uses `$env:USERPROFILE` for the install directory (`C:\Users\<user>\squarebox`) and `$PROFILE` for shell integration.
-- **install.sh via Git Bash** (alternative): still works but only sets up bash aliases. Uses `MSYS_NO_PATHCONV=1` to prevent MSYS2 path mangling in Docker volume mounts. On Git Bash, `$HOME` (MSYS home) and `$USER_HOME` (from `USERPROFILE`) diverge — see comments in install.sh for details.
-- **Shell integration**: install.ps1 writes a managed sentinel block (`# >>> squarebox >>>` / `# <<< squarebox <<<`) to the PowerShell `$PROFILE`. install.sh writes bash/zsh function bodies to `~/.squarebox-shell-init` and adds a sentinel-marked source line to `~/.bashrc` / `~/.zshrc`. Both scrub and rewrite their blocks on every run.
+`scripts/update-versions.sh` generates checksums and Dockerfile pins as one
+transaction. `sqrbx-update --apply` updates installed tools only; an explicitly
+named absent tool requests installation. Aggregate failures return nonzero and
+diagnostic logs must survive long enough for the user to inspect them.
 
-## Tool Registry
+## Shell and dotfile behavior
 
-`scripts/lib/tools.yaml` is the single source of truth for tool metadata (repos, artifact patterns, arch mappings, extract methods). `scripts/lib/tool-lib.sh` is a shared shell library that consumes it.
+The image source for managed Bash/Starship files lives under
+`/usr/local/lib/squarebox/dotfiles`. Entrypoint refresh defeats stale
+Managed-home volume copies. Bind mounts remain host-managed and are skipped;
+a symlink destination is rejected with a visible startup failure. Never follow
+a persistent-home symlink as root.
 
-- **YAML parsing uses awk** (not yq) to avoid a bootstrap problem — yq is one of the tools being installed
-- **Architecture tokens**: `{dpkg_arch}` (amd64/arm64), `{zarch}` (x86_64/aarch64), `{larch}` (x86_64/arm64), `{goarch}`, `{ocarch}`, `{march}` — each tool uses whichever convention its upstream releases follow
-- **Build-time**: library at `/tmp/tool-lib.sh`, consumers override `sb_verify()` for checksum verification
-- **Runtime**: library at `/usr/local/lib/squarebox/tool-lib.sh`, used by `sqrbx-update` and `setup.sh`
-- **Adding a new tool**: add an entry to `tools.yaml`, then run `scripts/update-versions.sh`
+Bash is default. Experimental Zsh/Fish are selected with markers in the Managed
+home and must initialize Starship, Zoxide, the `fzf`/`ff` command path, aliases,
+and mise. The packaged Ctrl+R/Ctrl+T/Alt+C/** bindings are a Bash-only contract.
+
+## Security posture
+
+The Box is not a hostile-code sandbox. Passwordless `dpkg`/`install` and related
+package operations provide effective container-root authority. Document them as
+operational controls, not a security barrier. See `SECURITY.md` for mount,
+artifact, signing, and reporting details.
+
+## Windows and Podman
+
+PowerShell 7 is the supported native Windows adapter. Use
+CurrentUserAllHosts-compatible integration and validate the final Box start.
+It mounts the native user's `.ssh` directory read-only when present and does not
+forward `SSH_AUTH_SOCK`. Git Bash uses the separate Bash adapter and owns its
+MSYS shell integration and agent-socket translation. Keep the shared state field
+names and semantic intent aligned, but fail closed rather than cross-consuming
+adapter-native lifecycle state.
+
+Rootless Podman maps the host identity to `dev` with
+`keep-id:uid=1000,gid=1000` and leaves host labels unchanged via
+`label=disable`. Changes need automated Ubuntu coverage and manual Fedora
+enforcing UAT.

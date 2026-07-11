@@ -14,12 +14,17 @@
 
 services:
   squarebox:
-    image: ghcr.io/squarewavesystems/squarebox:${SQUAREBOX_TAG:-latest}
+    # Prefer the immutable image_ref from a published release.json. A mutable
+    # tag remains the compatibility default for operators who have not pinned.
+    image: ${SQUAREBOX_IMAGE_REF:-ghcr.io/squarewavesystems/squarebox:latest}
     # Bleeding edge / local source instead of the published image: comment the
     # `image:` line above and uncomment the build block below.
     # build:
     #   context: .
-    container_name: squarebox
+    container_name: ${SQUAREBOX_CONTAINER_NAME:-squarebox}
+    labels:
+      io.squarebox.managed: "true"
+      io.squarebox.install-id: ${SQUAREBOX_INSTALL_ID:-compose-squarebox}
     restart: unless-stopped
 
     # squarebox's default command is an interactive shell. Allocate a TTY and
@@ -57,3 +62,9 @@ services:
 
 volumes:
   squarebox-home:
+    # An explicit name keeps lifecycle commands and Compose on the same
+    # Managed-home identity instead of Compose project-prefixing the volume.
+    name: ${SQUAREBOX_HOME_VOLUME:-squarebox-home}
+    labels:
+      io.squarebox.managed: "true"
+      io.squarebox.install-id: ${SQUAREBOX_INSTALL_ID:-compose-squarebox}

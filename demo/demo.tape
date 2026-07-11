@@ -17,7 +17,6 @@ Set TypingSpeed 60ms
 Set WindowBar ""
 Set CursorBlink false
 Set LoopOffset 0
-Set LoopOffset 0%
 
 Sleep 500ms
 
@@ -56,6 +55,23 @@ Enter
 # Wait for editor "installs" (2 spinners)
 Sleep 3s
 
+# --- Default editor (nano, micro, fresh) ---
+# Choose fresh, the non-first option whose persistence is part of v1.1.
+Down
+Sleep 300ms
+Down
+Sleep 300ms
+Enter
+Sleep 1s
+
+# --- TUI tools ---
+# Select lazygit (1st)
+Sleep 500ms
+Space
+Sleep 500ms
+Enter
+Sleep 2s
+
 # --- Terminal multiplexer (gum choose --no-limit) ---
 # Select tmux (1st item)
 Sleep 500ms
@@ -79,6 +95,12 @@ Enter
 
 # Wait for SDK "installs" (2 spinners) + Done + MOTD
 Sleep 4s
+
+# --- Shell ---
+# Keep bash (1st)
+Sleep 500ms
+Enter
+Sleep 2s
 
 # Linger on MOTD
 Sleep 5s

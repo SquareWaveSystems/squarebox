@@ -35,7 +35,7 @@ section_header "AI Coding Assistants"
 selected=$(gum choose --no-limit \
     --header "Select AI coding assistants (space=toggle, enter=confirm):" \
     "Claude Code" "GitHub Copilot CLI" "Google Gemini CLI" \
-    "OpenAI Codex CLI" "OpenCode") || true
+    "OpenAI Codex CLI" "OpenCode" "Pi Coding Agent" "Paseo") || true
 
 node_installed=false
 while IFS= read -r line; do
@@ -44,15 +44,15 @@ while IFS= read -r line; do
         "Claude Code")
             run_with_spinner "Installing Claude Code..." 0.8
             ;;
-        "GitHub Copilot CLI"|"Google Gemini CLI"|"OpenAI Codex CLI")
+        "GitHub Copilot CLI"|"Google Gemini CLI"|"OpenAI Codex CLI"|"Pi Coding Agent"|"Paseo")
             if ! $node_installed; then
-                run_with_spinner "Installing Node.js (via nvm v0.40.3)..." 1
+                run_with_spinner "Installing Node.js (via mise)..." 1
                 node_installed=true
             fi
             run_with_spinner "Installing ${line}..." 0.8
             ;;
         "OpenCode")
-            run_with_spinner "Installing OpenCode v1.3.15..." 0.8
+            run_with_spinner "Installing OpenCode..." 0.8
             ;;
     esac
 done <<< "$selected"
@@ -60,19 +60,39 @@ done <<< "$selected"
 # Editors — real gum choose (same as setup.sh)
 echo
 section_header "Text Editors"
-echo "Nano is always available as the default editor."
+echo "Nano is always available and remains the fallback default unless you choose an installed editor instead."
 selected=$(gum choose --no-limit \
     --header "Select text editors to install:" \
-    "micro" "edit" "fresh" "nvim") || true
+    "micro" "edit" "fresh" "helix" "nvim") || true
 
+installed_editors=()
 while IFS= read -r line; do
     [ -z "$line" ] && continue
     case "$line" in
-        micro) run_with_spinner "Installing Micro v2.0.15..." 0.6 ;;
-        edit)  run_with_spinner "Installing Edit v1.2.1..." 0.6 ;;
-        fresh) run_with_spinner "Installing Fresh v0.2.21..." 0.6 ;;
-        nvim)  run_with_spinner "Installing Neovim v0.12.0..." 0.6 ;;
+        micro) run_with_spinner "Installing Micro..." 0.6; installed_editors+=(micro) ;;
+        edit)  run_with_spinner "Installing Edit..." 0.6; installed_editors+=(edit) ;;
+        fresh) run_with_spinner "Installing Fresh..." 0.6; installed_editors+=(fresh) ;;
+        helix) run_with_spinner "Installing Helix..." 0.6; installed_editors+=(hx) ;;
+        nvim)  run_with_spinner "Installing Neovim..." 0.6; installed_editors+=(nvim) ;;
     esac
+done <<< "$selected"
+
+if [ ${#installed_editors[@]} -gt 1 ]; then
+    echo
+    gum choose --header "Select default editor (\$EDITOR):" \
+        "nano" "${installed_editors[@]}" >/dev/null || true
+fi
+
+# TUI tools
+echo
+section_header "TUI Tools"
+selected=$(gum choose --no-limit \
+    --header "Select terminal tools to install:" \
+    "lazygit" "gh-dash" "yazi") || true
+
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    run_with_spinner "Installing ${line}..." 0.6
 done <<< "$selected"
 
 # Terminal multiplexer — real gum choose (same as setup.sh)
@@ -86,7 +106,7 @@ while IFS= read -r line; do
     [ -z "$line" ] && continue
     case "$line" in
         tmux)   run_with_spinner "Installing tmux..." 0.6 ;;
-        zellij) run_with_spinner "Installing Zellij v0.44.0..." 0.6 ;;
+        zellij) run_with_spinner "Installing Zellij..." 0.6 ;;
     esac
 done <<< "$selected"
 
@@ -104,27 +124,35 @@ while IFS= read -r line; do
             if $node_installed; then
                 echo "Node.js already installed, skipping."
             else
-                run_with_spinner "Installing Node.js (via nvm v0.40.3)..." 1
+                run_with_spinner "Installing Node.js (via mise)..." 1
                 node_installed=true
             fi
             ;;
-        "Python") run_with_spinner "Installing Python (via uv)..." 0.8 ;;
-        "Go")     run_with_spinner "Installing Go go1.26.1..." 0.8 ;;
-        ".NET")   run_with_spinner "Installing .NET..." 0.8 ;;
-        "Rust")   run_with_spinner "Installing Rust (via rustup)..." 0.8 ;;
+        "Python") run_with_spinner "Installing Python (via mise)..." 0.8 ;;
+        "Go")     run_with_spinner "Installing Go (via mise)..." 0.8 ;;
+        ".NET")   run_with_spinner "Installing .NET (via mise)..." 0.8 ;;
+        "Rust")   run_with_spinner "Installing Rust (via mise)..." 0.8 ;;
     esac
 done <<< "$selected"
 
+# Shell
 echo
-gum style --border double --padding "0 2" --border-foreground 212 "🟧📦 You're in the box."
+section_header "Shell"
+selected=$(gum choose --header "Select the default shell:" "bash" "zsh" "fish") || true
+[ -n "$selected" ] && run_with_spinner "Configuring ${selected}..." 0.7
+
+echo
+gum style --border double --padding "0 2" --border-foreground 208 "All boxed up 📦"
 
 # MOTD
 echo
 printf '\e[1;38;5;208m'
 toilet -f smblock --metal "squarebox"
 printf '\e[0m'
+printf '\e[38;5;208m  🟧📦 You'\''re in the box.\e[0m\e[38;5;245m  (v1.1.0-rc5)\e[0m\n'
 printf '\e[38;5;172m  %s\e[0m\n' "$(date '+%A, %B %d %Y  %H:%M')"
-printf '\e[38;5;172m  Node 24.14.1 ◆ Python uv 0.11.3\e[0m\n'
+printf '\e[38;5;245m  Node 22.x ◆ Python 3.x\e[0m\n'
+printf '\e[38;5;208m  ✦ sqrbx-help\e[0m\e[38;5;245m — commands and keyboard shortcuts\e[0m\n'
 
 # Fake starship prompt
 echo

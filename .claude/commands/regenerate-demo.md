@@ -11,13 +11,16 @@ If VHS is not installed, install it before proceeding. On macOS: `brew install v
 
 ## Steps
 
-1. Make sure you are on the `demo` branch. If not, check it out first.
+1. Work from the current review branch and keep the generated asset with the
+   source changes that produced it.
 
-2. If the user mentioned changes to the setup flow, update `demo/install-demo.sh` to reflect those changes. The script simulates the first-run setup experience — it should match what `setup.sh` actually does. Key sections to keep in sync:
+2. If the setup flow changed, update `demo/setup-demo.sh`. It simulates the
+   first-run experience and should match `setup.sh`. Keep these sections in sync:
    - Git identity prompts
    - GitHub CLI auth
-   - AI coding assistant selection (Claude Code, OpenCode, Both)
-   - Text editor selection (micro, edit, fresh, helix, nvim)
+   - AI coding assistant selection
+   - Text editor (including Helix), default-editor, and TUI selection
+   - Multiplexer and shell selection
    - SDK selection (Node.js, Python, Go, .NET, Rust)
 
 3. If the user wants to change the recording settings (dimensions, theme, timing), update `demo/demo.tape`.
@@ -26,10 +29,9 @@ If VHS is not installed, install it before proceeding. On macOS: `brew install v
    ```
    vhs demo/demo.tape
    ```
-   This produces `demo/squarebox-setup.webp`.
+   This produces `demo/squarebox-setup.gif`.
 
 5. Verify the output looks correct by checking the file size and extracting a few sample frames with ffmpeg if available.
 
-6. Commit the updated files and push to the `demo` branch.
-
-7. Remind the user that the README on `main` references this file via raw GitHub URL (`https://raw.githubusercontent.com/BrettKinny/SquareBox/demo/demo/squarebox-setup.webp`), so the update will be live as soon as the push lands.
+6. Confirm README references the tracked `demo/squarebox-setup.gif` asset and
+   include the regenerated GIF in the same review as the flow changes.

@@ -1,104 +1,187 @@
 # Contributing
 
-Thanks for your interest in squarebox! This guide covers the basics of building,
-testing, and submitting changes.
+Squarebox changes affect host installers, a disposable Box filesystem, a
+persistent Managed home, and several runtime adapters. Read `CONTEXT.md` and
+the relevant decisions under `docs/adr/` before changing lifecycle behavior.
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/)
-- [Git](https://git-scm.com/)
-- Bash shell (or PowerShell 7+ on Windows)
+- Docker with Buildx
+- Git and Bash
+- `jq`
+- A current GitHub CLI with `gh release verify`, plus Cosign, when preparing or
+  independently verifying a Release
+- ShellCheck for local static analysis
+- Ruby (YAML parsing) and Go (the pinned actionlint validator)
+- PowerShell 7 when changing PowerShell lifecycle adapters
+- Podman on a real rootless/SELinux host when changing Podman behavior
 
-## Build
+## Deterministic tests
 
-```bash
-docker build -t squarebox .
-```
-
-The build verifies all binary downloads against SHA256 checksums in
-`checksums.txt`. If a checksum doesn't match, the build fails immediately.
-
-## Test
-
-CI runs automatically on every push and PR via GitHub Actions
-(`.github/workflows/build.yml`). The workflow:
-
-1. Builds the Docker image
-2. Verifies all tools are installed
-3. Checks that shell config loads without errors
-4. Validates aliases resolve to the correct binaries
-5. Tests container stop/start persistence
-6. Validates devcontainer JSON
-
-To run a quick local smoke test:
+Run every executable module test:
 
 ```bash
-docker build -t squarebox:test .
-docker run --rm squarebox:test bash -c '
-  for cmd in bat curl delta difft eza fd fzf gh glow gum jq just nano rg starship xh yq zoxide; do
-    which "$cmd" || { echo "MISSING: $cmd"; exit 1; }
-  done
-  echo "All tools present"
-'
+set -euo pipefail
+mapfile -t test_files < <(
+  find tests -maxdepth 1 -type f -name 'test-*.sh' -perm -u+x | sort
+)
+test "${#test_files[@]}" -gt 0
+for test_file in "${test_files[@]}"; do
+  "$test_file"
+done
 ```
+
+Parse tracked Bash scripts and configuration:
+
+```bash
+mapfile -t project_files < <(
+  git ls-files --cached --others --exclude-standard
+)
+shell_files=()
+for file in "${project_files[@]}"; do
+  [ -f "$file" ] || continue
+  case "$file" in
+    *.sh) shell_files+=("$file") ;;
+    *)
+      first=$(head -n 1 "$file" 2>/dev/null || true)
+      case "$first" in '#!'*bash*) shell_files+=("$file") ;; esac
+      ;;
+  esac
+done
+for file in "${shell_files[@]}"; do bash -n "$file"; done
+shellcheck --severity=error "${shell_files[@]}"
+
+jq empty .devcontainer/devcontainer.json
+ruby -e 'require "yaml"; ARGV.each { |f| YAML.parse_file(f) }' \
+  .github/dependabot.yml .github/workflows/*.yml scripts/lib/tools.yaml
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+```
+
+CI runs these checks on every pull request. Tests should cross the same deep
+module interface used by production callers. Prefer local fake adapters for
+GitHub, runtimes, and filesystems; do not test past the interface by duplicating
+implementation steps in a workflow.
+
+## Image and E2E tests
+
+```bash
+docker build --build-arg SQUAREBOX_VERSION=dev -t squarebox:test .
+docker run --rm \
+  -v "$PWD/scripts:/workspace/scripts:ro" \
+  squarebox:test bash -c 'scripts/e2e-test.sh smoke'
+```
+
+`scripts/e2e-test.sh all` includes network-backed optional tool provisioning;
+use `smoke` for the base image. Assertions write machine-readable Evidence when
+`SQUAREBOX_EVIDENCE_DIR` is set. The release report refuses missing required
+Evidence rather than inferring a pass from job status.
+
+Changes to persistence, setup, ownership, Compose, Dev Containers, Windows, or
+Podman must update the automated scenarios where possible and the remaining
+manual matrix in `uat-checklist.md`.
 
 ## Project structure
 
-| File | Purpose |
-|------|---------|
-| `Dockerfile` | Image definition with pinned base-image tool versions |
-| `setup.sh` | First-run interactive setup (AI tools, editors, SDKs) |
-| `install.sh` | Host-side install script for Linux/macOS (clone, build, create container) |
-| `install.ps1` | Host-side install script for Windows/PowerShell 7+ |
-| `uninstall.sh` | Host-side uninstall script for Linux/macOS/Git Bash |
-| `uninstall.ps1` | Host-side uninstall script for Windows/PowerShell 7+ |
-| `scripts/squarebox-update.sh` | In-container tool updater (`sqrbx-update`) |
-| `scripts/update-versions.sh` | Fetches latest Dockerfile-tier releases and updates checksums |
-| `checksums.txt` | SHA256 checksums for Dockerfile binary tools |
+| Path | Purpose |
+| --- | --- |
+| `CONTEXT.md` | Squarebox domain language |
+| `docs/adr/` | Hard-to-reverse architecture decisions |
+| `Dockerfile` | Default Box image |
+| `install.sh`, `install.ps1` | Host lifecycle adapters and Install identity creation |
+| `uninstall.sh`, `uninstall.ps1` | Ownership-checked lifecycle cleanup |
+| `setup.sh` | Selection/Observed-state reconciliation |
+| `scripts/lib/tools.yaml` | Tool metadata and verification policy |
+| `scripts/lib/tool-lib.sh` | Verified artifact installation module |
+| `scripts/squarebox-update.sh` | Installed-tool update module |
+| `scripts/release-identity.sh` | Candidate/Release identity validation |
+| `scripts/e2e-evidence.sh` | Assertion Evidence writer |
+| `scripts/e2e-report.sh` | Required-Evidence report and gate |
+| `tests/` | Deterministic module-interface tests |
 
-## Making changes
+## Tool changes
 
-1. Fork and clone the repo.
-2. Create a feature branch: `git checkout -b my-change`
-3. Make your changes.
-4. Build and test locally (see above).
-5. Commit with a clear message describing *why*, not just *what*.
-6. Open a pull request against `main`.
+Every registry entry declares its Tool tier and verification policy.
 
-### Adding or updating a tool
+- Image-tier direct downloads use pinned versions and `sha256`; missing or
+  mismatched checksums must fail closed.
+- Managed-home GitHub release downloads use the SHA-256 digest on the exact
+  release asset. Missing, malformed, duplicate, or mismatched digests fail
+  before installation mutates the destination.
+- Box-tier packages must be reconciled after Box replacement; a saved Selection
+  is not proof the package exists.
 
-Dockerfile-tier tools (delta, yq, xh, glow, gum, starship, just, difftastic) are pinned via
-`ARG` directives and verified against `checksums.txt`. To bump them:
+Use `scripts/update-versions.sh` for image-tier refreshes. It generates and
+validates checksums and Dockerfile pins transactionally. Review upstream release
+notes and the complete diff before accepting a refresh.
 
-1. Run `./scripts/update-versions.sh` to fetch latest versions and checksums
-   for the Dockerfile tier.
-2. Review the diff. Verify version bumps and checksums look correct.
-3. Rebuild and test.
+Adding a tool requires updating every behavior represented by registry metadata
+or adding metadata so derived inventories remain consistent. Add deterministic
+tests for artifact naming on amd64 and arm64, failure propagation, version
+probing, installed-state detection, and the intended update lifecycle.
 
-Optional tools (editors, TUIs, opencode, zellij) track upstream latest at
-install time. To add a new optional tool, add an entry to
-`scripts/lib/tools.yaml` and call `sb_install <tool> latest` from `setup.sh`.
-No checksum file update is required.
+## Release changes
 
-SDKs (Node, Python, Go, .NET, Rust) are installed by mise itself, which is
-part of the Dockerfile-pinned tier — so SDK availability is gated by mise's
-own pinning, not the SDK installers individually.
+Before creating any release tag, an administrator must verify that immutable
+releases are enabled and that the active, no-bypass `Protect release tags`
+ruleset targets `refs/tags/v*` with update and deletion protection. The first
+check requires repository Administration access and therefore cannot run with
+the workflow's `GITHUB_TOKEN`:
 
-Never skip checksum verification for the Dockerfile tier.
+```bash
+test "$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+  repos/SquareWaveSystems/squarebox/immutable-releases --jq .enabled)" = true
 
-### Style
+ruleset_id=$(gh api repos/SquareWaveSystems/squarebox/rulesets \
+  --jq '.[] | select(.name == "Protect release tags" and .enforcement == "active" and .target == "tag") | .id')
+test -n "$ruleset_id"
+gh api "repos/SquareWaveSystems/squarebox/rulesets/$ruleset_id" | jq -e '
+  (.conditions.ref_name.include | index("refs/tags/v*")) != null and
+  ([.rules[].type] | index("update")) != null and
+  ([.rules[].type] | index("deletion")) != null and
+  (.bypass_actors | length) == 0
+' >/dev/null
+```
 
-- Shell scripts use `set -euo pipefail`.
-- Indent with 2 spaces in shell scripts and config files.
-- Keep Dockerfile layers logical and commented.
+Version tags must use `vMAJOR.MINOR.PATCH[-prerelease]`. The Candidate workflow builds and pushes
+one multi-architecture digest, attaches SBOM/provenance, scans both architecture
+variants, runs exact
+assertions, and produces `release.json`. It signs the digest and matched assets,
+creates a non-discoverable draft GitHub Release, and verifies the downloaded
+draft before publication can run. There is no release rebuild.
 
-## Pull requests
+Prerelease tags publish automatically after those automated gates. For a stable
+release, create the immutable final-version tag before physical qualification,
+test the prepared digest and draft assets, then approve the separate
+`publish-release` job. Repository administrators must configure
+`v1.1-production` with a required human reviewer and leave
+`v1.1-prerelease-auto` unprotected. Approval publishes the exact prepared bytes;
+if qualification fails, do not retarget or reuse the tag—fix forward with a new
+version. The workflow checks the peeled remote tag before draft preparation and
+again after approval, then requires GitHub's immutable flag and signed Release
+attestation before changing any GHCR alias.
 
-- Keep PRs focused — one logical change per PR.
-- Include a short description of what changed and why.
-- Make sure CI passes before requesting review.
+Do not add a second release rebuild, resolve stable from raw tags, or map a
+successful job to behavior it did not execute. Keep final GitHub publication
+and all GHCR convenience-alias mutations under the shared global concurrency
+group so a historical rerun cannot race or rewind `latest`. Determine SemVer
+latest before publishing the draft and pass it in that one mutable update;
+published immutable reruns must verify metadata without editing it.
 
-## Reporting issues
+## Style
 
-Open an issue on GitHub with steps to reproduce. Include your architecture
-(x86_64 or aarch64) and Docker version if relevant.
+- Shell scripts use `set -euo pipefail` unless a sourced library documents why
+  it cannot.
+- Existing production shell files use tabs for indentation; preserve local style.
+- Every fallible command in integrity and lifecycle code has explicit status
+  handling. Do not rely on `errexit` inside conditionals.
+- Preserve the original failure when cleanup also runs.
+- Use `apply_patch`-sized focused changes and keep unrelated user work intact.
+
+## Pull requests and issues
+
+Keep commits outcome-oriented and explain why the change is needed. Include
+tests, Evidence IDs, supported migration behavior, and any remaining manual UAT.
+
+GitHub Issues is the tracker. A ready implementation issue contains reproduction
+or design evidence, acceptance criteria, dependencies, and the relevant triage
+role from `docs/agents/triage-labels.md`.

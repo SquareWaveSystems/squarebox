@@ -34,7 +34,7 @@ EOF
 
 cat <<-EOF
 
-	${BOLD}Keyboard shortcuts:${RESET}
+	${BOLD}Keyboard shortcuts (Bash):${RESET}
 	  ${CYAN}Ctrl+R${RESET}         Fuzzy-search command history (fzf)
 	  ${CYAN}Ctrl+T${RESET}         Fuzzy-find a file/dir, paste path on the command line (fzf)
 	  ${CYAN}Alt+C${RESET}          Fuzzy-find a subdirectory and cd into it (fzf)

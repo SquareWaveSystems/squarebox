@@ -22,7 +22,16 @@ if [ -f "$sdk_config" ]; then
 	for sdk in $(tr ',' ' ' < "$sdk_config"); do
 		case "$sdk" in
 			node)   ver=$(node -v 2>/dev/null | tr -d 'v') && [ -n "$ver" ] && sdks+=("Node $ver") ;;
-			python) ver=$(python3 --version 2>/dev/null | awk '{print $2}'); [ -z "$ver" ] && ver=$(uv --version 2>/dev/null | awk '{print $2}') && ver="uv $ver"; [ -n "$ver" ] && sdks+=("Python $ver") ;;
+			python)
+				ver=""
+				if command -v python3 >/dev/null 2>&1; then
+					ver=$(python3 --version 2>/dev/null | awk '{print $2}')
+				elif command -v uv >/dev/null 2>&1; then
+					ver=$(uv --version 2>/dev/null | awk '{print $2}')
+					[ -z "$ver" ] || ver="uv $ver"
+				fi
+				[ -z "$ver" ] || sdks+=("Python $ver")
+				;;
 			go)     ver=$(go version 2>/dev/null | awk '{print $3}' | tr -d 'go') && [ -n "$ver" ] && sdks+=("Go $ver") ;;
 			dotnet) ver=$(DOTNET_NOLOGO=1 dotnet --version 2>/dev/null | tail -1) && [ -n "$ver" ] && sdks+=(".NET $ver") ;;
 			rust)   ver=$(rustc --version 2>/dev/null | awk '{print $2}') && [ -n "$ver" ] && sdks+=("Rust $ver") ;;
