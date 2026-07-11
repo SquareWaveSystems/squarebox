@@ -105,7 +105,20 @@ run_with_spinner() {
 # still refresh — and gate on the install itself, which is the real requirement.
 apt_install() {
 	sudo apt-get update -qq || true
-	sudo apt-get install -y -qq "$@" >/dev/null 2>&1
+	# /etc/localtime is a read-only bind-mount in the running container (see
+	# docker-compose.yml), so tzdata's postinst can never rewrite it: any apt
+	# run that pulls a tzdata upgrade dies on a "device or resource busy" mv,
+	# wedges dpkg half-configured, and cascades to every dependent (python3,
+	# fish, …) — silently, since we discard output. Freeze tzdata (the host
+	# owns the timezone via the mount) and install non-interactively so no
+	# postinst can block on a debconf prompt in this tty-less context.
+	sudo apt-mark hold tzdata >/dev/null 2>&1 || true
+	local _apt_log
+	if ! _apt_log=$(sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" 2>&1); then
+		echo "apt_install: failed to install: $*" >&2
+		printf '%s\n' "$_apt_log" | tail -20 >&2
+		return 1
+	fi
 }
 
 if $SB_RERUN; then
