@@ -59,7 +59,8 @@
 - CI reports claiming behavior that was not executed.
 - Release-candidate failures caused by a Compose UID-remap startup race,
   cross-UID Evidence file permissions, LazyGit's lowercase Linux asset name,
-  and Gum release binaries built with a vulnerable Go standard library.
+  Gum release binaries built with a vulnerable Go standard library, and raw
+  lifecycle assertions racing synchronous Box-tier reconciliation.
 
 ### Removed
 
