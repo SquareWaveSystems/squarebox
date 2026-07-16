@@ -160,6 +160,26 @@ for release_doc in \
 	grep -Fq 'immutable' "$release_doc"
 done
 
+# Docker's classic image store must release the shared manifest-list digest
+# only after each explicit-platform image has verified its embedded version.
+ruby - "$WORKFLOW" <<'RUBY'
+require "yaml"
+
+workflow = YAML.safe_load_file(ARGV.fetch(0), aliases: true)
+step = workflow.fetch("jobs").fetch("prepare-release").fetch("steps").find do |candidate|
+  candidate["name"] == "Verify exact Candidate identity and architecture content"
+end
+abort "Candidate identity verification step is missing" unless step
+script = step.fetch("run")
+loop_body = script[/for platform in linux\/amd64 linux\/arm64; do\n(?<body>.*?)\n\s*done/m, :body]
+abort "Candidate platform verification loop is missing" unless loop_body
+pull = loop_body.index('docker pull --platform "$platform" "$IMAGE@$DIGEST"')
+verify = loop_body.index('grep -qx "$GITHUB_REF_NAME" /usr/local/lib/squarebox/VERSION')
+remove = loop_body.index('docker image rm "$IMAGE@$DIGEST"')
+ordered = pull && verify && remove && pull < verify && verify < remove
+abort "Candidate platform images are not isolated after verification" unless ordered
+RUBY
+
 # Stable Release preparation and publication are deliberately separate jobs.
 # The final job selects the protected production environment only for stable
 # versions; prereleases use an unprotected environment and continue

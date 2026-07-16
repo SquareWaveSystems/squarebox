@@ -668,6 +668,9 @@ jobs:
             docker pull --platform "$platform" "$IMAGE@$DIGEST"
             docker run --rm --platform "$platform" "$IMAGE@$DIGEST" \
               grep -qx "$GITHUB_REF_NAME" /usr/local/lib/squarebox/VERSION
+            # Docker's classic image store cannot associate two platform
+            # members with the same manifest-list digest at once.
+            docker image rm "$IMAGE@$DIGEST" >/dev/null
           done
 
       - name: Create, sign, and verify digest-bound release assets
