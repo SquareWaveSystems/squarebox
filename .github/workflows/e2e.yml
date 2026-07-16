@@ -420,8 +420,8 @@ jobs:
           export SQUAREBOX_WORKSPACE
           cleanup() { docker compose down -v --remove-orphans >/dev/null 2>&1 || true; }
           wait_for_compose_workspace() {
-            local attempt
-            for attempt in {1..30}; do
+            local _
+            for _ in {1..30}; do
               if docker compose exec -T -u "$PUID:$PGID" squarebox sh -c \
                 'test "$(stat -c %u /proc/1)" = "$1" && test -w /workspace' _ "$PUID"; then
                 return 0
