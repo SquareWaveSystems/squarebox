@@ -46,5 +46,9 @@ printf '%s\t%s\t%s\t%s\n' \
 	"$status" \
 	"$(clean_field "$description")" \
 	"$(clean_field "$detail")" > "$tmp"
+# Evidence crosses the container/runner UID boundary before artifact upload.
+# mktemp honours the container's restrictive umask, so normalize the completed
+# file while it is still staged and preserve the atomic rename below.
+chmod 0644 "$tmp"
 mv -f "$tmp" "$evidence_dir/${safe_id}.evidence"
 trap - EXIT

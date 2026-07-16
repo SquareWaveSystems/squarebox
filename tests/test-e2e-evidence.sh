@@ -20,7 +20,11 @@ report() {
 		"$ROOT/scripts/e2e-report.sh" "$TMP/evidence"
 }
 
-record pass alpha "Alpha requirement"
+(umask 077; record pass alpha "Alpha requirement")
+test "$(stat -c %a "$TMP/evidence/alpha.evidence")" = 644 || {
+	echo "FAIL: container-created Evidence is not readable by the artifact runner" >&2
+	exit 1
+}
 
 if report > "$TMP/missing.md"; then
 	echo "FAIL: report accepted missing required evidence" >&2
@@ -107,6 +111,8 @@ grep -Fq 'interactive prompt detected' "$RUNNER"
 # Compose Evidence must observe actual replacement and both persistent stores.
 grep -Fq 'docker compose up -d --force-recreate --no-deps squarebox' "$WORKFLOW"
 grep -Fq 'test "$replacement_box" != "$original_box"' "$WORKFLOW"
+test "$(grep -Fc 'wait_for_compose_workspace' "$WORKFLOW")" -eq 3
+grep -Fq 'test "$(stat -c %u /proc/1)" = "$1" && test -w /workspace' "$WORKFLOW"
 grep -Fq '~/.squarebox-compose-e2e' "$WORKFLOW"
 grep -Fq '$SQUAREBOX_WORKSPACE/from-compose' "$WORKFLOW"
 grep -Fq -- '--cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE' "$WORKFLOW"

@@ -6,7 +6,7 @@
 - Complete the real-host matrix in `uat-checklist.md`, especially Windows,
   macOS, Fedora rootless Podman/SELinux, Dev Containers/Codespaces, and
   physical arm64 (tracked by GitHub issues #99–#105).
-- Cut `v1.1.0-rc5` as the automatic publication rehearsal.
+- `v1.1.0-rc5` completed the automatic publication rehearsal.
 - Keep GitHub immutable Releases enabled, keep the no-bypass `v*` update and
   deletion ruleset active, and verify the stable/prerelease environment
   protections before creating a final tag.

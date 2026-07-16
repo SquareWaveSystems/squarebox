@@ -104,15 +104,21 @@ Every registry entry declares its Tool tier and verification policy.
 
 - Image-tier direct downloads use pinned versions and `sha256`; missing or
   mismatched checksums must fail closed.
+- Image-tier OCI inputs use an exact multi-architecture digest and assert their
+  reviewed binary identity during the image build. Gum currently uses this path
+  because its latest stable release tar embeds a vulnerable Go standard library;
+  `tests/test-gum-image-policy.sh` locks the reviewed exception.
 - Managed-home GitHub release downloads use the SHA-256 digest on the exact
   release asset. Missing, malformed, duplicate, or mismatched digests fail
   before installation mutates the destination.
 - Box-tier packages must be reconciled after Box replacement; a saved Selection
   is not proof the package exists.
 
-Use `scripts/update-versions.sh` for image-tier refreshes. It generates and
-validates checksums and Dockerfile pins transactionally. Review upstream release
-notes and the complete diff before accepting a refresh.
+Use `scripts/update-versions.sh` for release-asset image-tier refreshes. It
+generates and validates checksums and Dockerfile pins transactionally. Review
+upstream release notes and the complete diff before accepting a refresh. Review
+OCI-sourced exceptions by digest, per-architecture binary identity, and scan
+result instead of adding a mutable tag to the release-asset registry.
 
 Adding a tool requires updating every behavior represented by registry metadata
 or adding metadata so derived inventories remain consistent. Add deterministic

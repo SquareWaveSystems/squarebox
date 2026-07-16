@@ -1,3 +1,10 @@
+# Gum v0.17.0's release binaries embed vulnerable Go 1.25.1. Upstream has not
+# published a newer stable release, so copy the fixed development binary from
+# its exact multi-architecture OCI manifest. The build below asserts the
+# expected v0.17.1-devel commit identity before the binary enters the Box.
+ARG GUM_IMAGE=ghcr.io/charmbracelet/gum@sha256:426c1e40739f11083e06d58ffaac910289eeace709a3d9bddcb8d4566140c93c
+FROM ${GUM_IMAGE} AS gum-source
+
 FROM ubuntu:24.04
 
 # 1. Base Packages & Rust CLI Tools (consolidated, slimmed)
@@ -59,10 +66,11 @@ ARG YQ_VERSION=4.53.3
 ARG XH_VERSION=0.26.1
 ARG STARSHIP_VERSION=1.26.0
 ARG GLOW_VERSION=2.1.2
-ARG GUM_VERSION=0.17.0
 ARG JUST_VERSION=1.56.0
 ARG DIFFTASTIC_VERSION=0.69.0
 ARG MISE_VERSION=2026.7.5
+ARG GUM_EXPECTED_VERSION=v0.17.1-devel
+ARG GUM_EXPECTED_COMMIT=591ded2
 
 # Validate version ARGs are non-empty
 RUN test -n "$DELTA_VERSION"       || { echo "Error: DELTA_VERSION is empty" >&2; exit 1; } \
@@ -70,10 +78,11 @@ RUN test -n "$DELTA_VERSION"       || { echo "Error: DELTA_VERSION is empty" >&2
  && test -n "$XH_VERSION"          || { echo "Error: XH_VERSION is empty" >&2; exit 1; } \
  && test -n "$STARSHIP_VERSION"    || { echo "Error: STARSHIP_VERSION is empty" >&2; exit 1; } \
  && test -n "$GLOW_VERSION"        || { echo "Error: GLOW_VERSION is empty" >&2; exit 1; } \
- && test -n "$GUM_VERSION"         || { echo "Error: GUM_VERSION is empty" >&2; exit 1; } \
  && test -n "$JUST_VERSION"        || { echo "Error: JUST_VERSION is empty" >&2; exit 1; } \
  && test -n "$DIFFTASTIC_VERSION"  || { echo "Error: DIFFTASTIC_VERSION is empty" >&2; exit 1; } \
- && test -n "$MISE_VERSION"        || { echo "Error: MISE_VERSION is empty" >&2; exit 1; }
+ && test -n "$MISE_VERSION"        || { echo "Error: MISE_VERSION is empty" >&2; exit 1; } \
+ && test -n "$GUM_EXPECTED_VERSION" || { echo "Error: GUM_EXPECTED_VERSION is empty" >&2; exit 1; } \
+ && test -n "$GUM_EXPECTED_COMMIT" || { echo "Error: GUM_EXPECTED_COMMIT is empty" >&2; exit 1; }
 
 # Checksum verification infrastructure
 COPY checksums.txt /tmp/checksums.txt
@@ -117,7 +126,8 @@ RUN . /tmp/sb-init.sh && sb_install delta "$DELTA_VERSION"
 RUN . /tmp/sb-init.sh && sb_install yq "$YQ_VERSION"
 RUN . /tmp/sb-init.sh && sb_install xh "$XH_VERSION"
 RUN . /tmp/sb-init.sh && sb_install glow "$GLOW_VERSION"
-RUN . /tmp/sb-init.sh && sb_install gum "$GUM_VERSION"
+COPY --from=gum-source /usr/local/bin/gum /usr/local/bin/gum
+RUN test "$(gum --version)" = "gum version ${GUM_EXPECTED_VERSION} (${GUM_EXPECTED_COMMIT})"
 RUN . /tmp/sb-init.sh && sb_install starship "$STARSHIP_VERSION"
 RUN . /tmp/sb-init.sh && sb_install just "$JUST_VERSION"
 RUN . /tmp/sb-init.sh && sb_install difftastic "$DIFFTASTIC_VERSION"

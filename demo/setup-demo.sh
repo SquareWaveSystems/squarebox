@@ -149,7 +149,7 @@ echo
 printf '\e[1;38;5;208m'
 toilet -f smblock --metal "squarebox"
 printf '\e[0m'
-printf '\e[38;5;208m  🟧📦 You'\''re in the box.\e[0m\e[38;5;245m  (v1.1.0-rc5)\e[0m\n'
+printf '\e[38;5;208m  🟧📦 You'\''re in the box.\e[0m\e[38;5;245m  (v1.1.0)\e[0m\n'
 printf '\e[38;5;172m  %s\e[0m\n' "$(date '+%A, %B %d %Y  %H:%M')"
 printf '\e[38;5;245m  Node 22.x ◆ Python 3.x\e[0m\n'
 printf '\e[38;5;208m  ✦ sqrbx-help\e[0m\e[38;5;245m — commands and keyboard shortcuts\e[0m\n'

@@ -419,9 +419,22 @@ jobs:
           SQUAREBOX_WORKSPACE=$(mktemp -d)
           export SQUAREBOX_WORKSPACE
           cleanup() { docker compose down -v --remove-orphans >/dev/null 2>&1 || true; }
+          wait_for_compose_workspace() {
+            local _
+            for _ in {1..30}; do
+              if docker compose exec -T -u "$PUID:$PGID" squarebox sh -c \
+                'test "$(stat -c %u /proc/1)" = "$1" && test -w /workspace' _ "$PUID"; then
+                return 0
+              fi
+              sleep 1
+            done
+            docker compose logs squarebox >&2
+            return 1
+          }
           trap cleanup EXIT
           docker compose config >/dev/null
           docker compose up -d
+          wait_for_compose_workspace
           original_box=$(docker compose ps -q squarebox)
           test -n "$original_box"
           test "$(docker inspect --format '{{.Config.Image}}' "$original_box")" = "$SQUAREBOX_IMAGE_REF"
@@ -432,6 +445,7 @@ jobs:
           test -f "$SQUAREBOX_WORKSPACE/from-compose"
 
           docker compose up -d --force-recreate --no-deps squarebox
+          wait_for_compose_workspace
           replacement_box=$(docker compose ps -q squarebox)
           test -n "$replacement_box"
           test "$replacement_box" != "$original_box"

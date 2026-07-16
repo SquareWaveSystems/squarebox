@@ -286,6 +286,44 @@ else
 	not_ok "exact release tag and exact asset name select the authoritative digest"
 fi
 
+LAZYGIT_CASE="$TMP/lazygit-linux-asset"
+mkdir -p "$LAZYGIT_CASE/home" "$LAZYGIT_CASE/cache" "$LAZYGIT_CASE/archive"
+printf '#!/usr/bin/env bash\necho "lazygit version 0.63.0"\n' > "$LAZYGIT_CASE/archive/lazygit"
+chmod +x "$LAZYGIT_CASE/archive/lazygit"
+tar -czf "$LAZYGIT_CASE/lazygit_0.63.0_linux_x86_64.tar.gz" -C "$LAZYGIT_CASE/archive" lazygit
+LAZYGIT_HASH=$(sha256sum "$LAZYGIT_CASE/lazygit_0.63.0_linux_x86_64.tar.gz" | awk '{print $1}')
+if (
+	export HOME="$LAZYGIT_CASE/home" SB_TOOLS_YAML="$REPO_ROOT/scripts/lib/tools.yaml" SB_DPKG_ARCH=amd64
+	export SB_GITHUB_API_BASE=https://api.test SB_GH_METADATA_CACHE_DIR="$LAZYGIT_CASE/cache"
+	export LAZYGIT_CASE LAZYGIT_HASH
+	source "$REPO_ROOT/scripts/lib/tool-lib.sh"
+	curl() {
+		local output="" url=""
+		while [ "$#" -gt 0 ]; do
+			case "$1" in
+				-w) shift 2 ;;
+				-o) output=$2; shift 2 ;;
+				-*o) output=$2; shift 2 ;;
+				-*) shift ;;
+				*) url=$1; shift ;;
+			esac
+		done
+		printf '%s\n' "$url" >> "$LAZYGIT_CASE/curl.log"
+		if [[ "$url" == https://api.test/* ]]; then
+			printf '{"tag_name":"v0.63.0","assets":[{"name":"lazygit_0.63.0_linux_x86_64.tar.gz","digest":"sha256:%s"}]}\n200\n' "$LAZYGIT_HASH"
+		else
+			cp "$LAZYGIT_CASE/lazygit_0.63.0_linux_x86_64.tar.gz" "$output"
+		fi
+	}
+	sb_install lazygit 0.63.0 >/dev/null \
+		&& [ "$("$HOME/.local/bin/lazygit")" = 'lazygit version 0.63.0' ] \
+		&& grep -q '/releases/download/v0.63.0/lazygit_0.63.0_linux_x86_64.tar.gz$' "$LAZYGIT_CASE/curl.log"
+); then
+	ok "production LazyGit registry installs the lowercase Linux release asset"
+else
+	not_ok "production LazyGit registry installs the lowercase Linux release asset"
+fi
+
 run_github_digest_case duplicate-asset 1.0.0 \
 	'{"tag_name":"v1.0.0","assets":[{"name":"sample-1.0.0-amd64","digest":"sha256:'"$PAYLOAD_HASH"'"},{"name":"sample-1.0.0-amd64","digest":"sha256:'"$PAYLOAD_HASH"'"}]}'
 if [ "$(<"$TMP/duplicate-asset/rc")" -ne 0 ] \
