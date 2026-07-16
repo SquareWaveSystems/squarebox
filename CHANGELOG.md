@@ -60,7 +60,8 @@
 - Release-candidate failures caused by a Compose UID-remap startup race,
   cross-UID Evidence file permissions, LazyGit's lowercase Linux asset name,
   Gum release binaries built with a vulnerable Go standard library, and raw
-  lifecycle assertions racing synchronous Box-tier reconciliation.
+  lifecycle assertions racing synchronous Box-tier reconciliation; release
+  preparation now isolates multi-platform pulls in Docker's local image store.
 
 ### Removed
 
