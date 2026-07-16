@@ -14,9 +14,6 @@ c411f07a0b204ca07858a67473d0f5c77e332226430d4d84d1d2afd351a425f2  xh-v0.26.1-x86
 # Glow 2.1.2
 6063d4f2af8a82a5f4bba0831e165de9381660aa8b41df4816d0106a265b07d5  glow_2.1.2_Linux_x86_64.tar.gz
 cf63abebcb50b72909db965d78290e7cecbf17a900e84705dc84addbb6952099  glow_2.1.2_Linux_arm64.tar.gz
-# Gum 0.17.0
-69ee169bd6387331928864e94d47ed01ef649fbfe875baed1bbf27b5377a6fdb  gum_0.17.0_Linux_x86_64.tar.gz
-b0b9ed95cbf7c8b7073f17b9591811f5c001e33c7cfd066ca83ce8a07c576f9c  gum_0.17.0_Linux_arm64.tar.gz
 # Starship 1.26.0
 b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3  starship-x86_64-unknown-linux-musl.tar.gz
 dc30189378d2f2e287384e8a692d3f95ad1df64cf0e8c36aa9201516028aed6b  starship-aarch64-unknown-linux-musl.tar.gz

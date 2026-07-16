@@ -97,7 +97,7 @@ Flags: `--build` (build from source), `--edge` (latest `main`), `--adopt`
 |----------|---------|---------|
 | `SQUAREBOX_DIR` | `~/squarebox` | Install location (repo + workspace). Point at durable storage on hosts where `$HOME` is volatile — e.g. Unraid `/mnt/user/appdata/squarebox`. |
 | `SQUAREBOX_WORKSPACE` | `$SQUAREBOX_DIR/workspace` | Host path mounted as `/workspace`. |
-| `SQUAREBOX_TAG` | latest published stable | Published Release to install (for example `v1.1.0-rc5`). Tags use `vMAJOR.MINOR.PATCH[-prerelease]`; build metadata is not published. |
+| `SQUAREBOX_TAG` | latest published stable | Published Release to install (for example `v1.1.0`). Tags use `vMAJOR.MINOR.PATCH[-prerelease]`; build metadata is not published. |
 | `SQUAREBOX_IMAGE` | value from `release.json` | Optional image-repository override for development/testing. |
 | `SQUAREBOX_BUILD` | `0` | `1` is equivalent to `--build`. |
 | `PUID` / `PGID` | invoking Linux user | Host uid/gid that should own bind-mounted files. Docker/rootful hosts may override these (Unraid/NAS: `99` / `100`); rootless Podman requires the invoking host identity. |

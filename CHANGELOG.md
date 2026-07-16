@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.1.0 — unreleased
+## v1.1.0 — 2026-07-16
 
 ### Added
 
@@ -57,6 +57,9 @@
   state, and image-tier updates advertised without Candidate-authorized bytes.
 - Fish derived aliases becoming stale after section-only setup reruns.
 - CI reports claiming behavior that was not executed.
+- Release-candidate failures caused by a Compose UID-remap startup race,
+  cross-UID Evidence file permissions, LazyGit's lowercase Linux asset name,
+  and Gum release binaries built with a vulnerable Go standard library.
 
 ### Removed
 

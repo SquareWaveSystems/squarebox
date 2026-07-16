@@ -106,9 +106,12 @@ edit, fresh, Helix (`hx`), and Neovim/LazyVim.
 
 ## Tool registry and verified installation
 
-`scripts/lib/tools.yaml` owns artifact metadata, Tool tier, verification policy,
-and Docker ARG mapping. Observed version probes remain adapter functions in
-`scripts/squarebox-update.sh`. The awk reader avoids requiring yq to install yq.
+`scripts/lib/tools.yaml` owns release-asset metadata, Tool tier, verification
+policy, and Docker ARG mapping. Observed version probes remain adapter functions
+in `scripts/squarebox-update.sh`. The awk reader avoids requiring yq to install
+yq. Gum is the sole OCI-sourced exception: Dockerfile pins its exact upstream
+multi-architecture digest and asserts the reviewed version/commit, while
+`tests/test-gum-image-policy.sh` rejects mutable or unreviewed references.
 
 `scripts/lib/tool-lib.sh` is the deep artifact-install module. Its interface
 must remain fail-closed across metadata validation, download, verification,

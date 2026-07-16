@@ -65,17 +65,9 @@ tools:
     verification: sha256
     docker_arg: GLOW_VERSION
 
-  gum:
-    repo: charmbracelet/gum
-    version_prefix: v
-    artifact: gum_{version}_Linux_{larch}.tar.gz
-    method: tar.gz
-    binaries: gum
-    find_binary: true
-    dest: system
-    group: dockerfile
-    verification: sha256
-    docker_arg: GUM_VERSION
+  # Gum is copied from an immutable, multi-architecture upstream OCI manifest
+  # in Dockerfile. It is intentionally outside the release-tar updater because
+  # upstream's latest stable tar embeds a vulnerable Go standard library.
 
   starship:
     repo: starship/starship
@@ -129,7 +121,7 @@ tools:
   lazygit:
     repo: jesseduffield/lazygit
     version_prefix: v
-    artifact: lazygit_{version}_Linux_{larch}.tar.gz
+    artifact: lazygit_{version}_linux_{larch}.tar.gz
     method: tar.gz
     binaries: lazygit
     tar_extract: lazygit

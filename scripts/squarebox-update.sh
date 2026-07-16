@@ -297,7 +297,6 @@ yazi_current() { yazi --version 2>/dev/null | _extract_first_version; }
 starship_current() { starship --version 2>/dev/null | _extract_first_version; }
 ghdash_current() { gh-dash --version 2>/dev/null | _extract_first_version; }
 glow_current() { glow --version 2>/dev/null | _extract_first_version; }
-gum_current() { gum --version 2>/dev/null | _extract_first_version; }
 micro_current() { micro --version 2>/dev/null | _extract_first_version; }
 fresh_current() { fresh --version 2>/dev/null | _extract_first_version; }
 edit_current() { edit --version 2>/dev/null | _extract_first_version; }
