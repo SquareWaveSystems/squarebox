@@ -113,6 +113,10 @@ grep -Fq 'docker compose up -d --force-recreate --no-deps squarebox' "$WORKFLOW"
 grep -Fq 'test "$replacement_box" != "$original_box"' "$WORKFLOW"
 test "$(grep -Fc 'wait_for_compose_workspace' "$WORKFLOW")" -eq 3
 grep -Fq 'test "$(stat -c %u /proc/1)" = "$1" && test -w /workspace' "$WORKFLOW"
+# Raw Docker lifecycle assertions must wait for the entrypoint's synchronous
+# Box-tier reconciliation after create, restart, and replacement.
+test "$(grep -Fc 'wait_for_box_ready' "$WORKFLOW")" -eq 4
+grep -Fq 'test "$(cat /proc/1/comm)" = sleep' "$WORKFLOW"
 grep -Fq '~/.squarebox-compose-e2e' "$WORKFLOW"
 grep -Fq '$SQUAREBOX_WORKSPACE/from-compose' "$WORKFLOW"
 grep -Fq -- '--cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE' "$WORKFLOW"

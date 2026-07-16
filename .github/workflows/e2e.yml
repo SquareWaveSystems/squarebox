@@ -312,6 +312,17 @@ jobs:
             --cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE
             --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --cap-add=KILL
           )
+          wait_for_box_ready() {
+            local _
+            for _ in {1..60}; do
+              if docker exec "$box" sh -c 'test "$(cat /proc/1/comm)" = sleep'; then
+                return 0
+              fi
+              sleep 1
+            done
+            docker logs "$box" >&2
+            return 1
+          }
           docker volume create "$home_volume" >/dev/null
           docker volume create "$workspace_volume" >/dev/null
           docker run -d --name "$box" \
@@ -320,6 +331,7 @@ jobs:
             -v "$workspace_volume:/workspace" \
             -v /etc/localtime:/etc/localtime:ro \
             squarebox:test sleep infinity
+          wait_for_box_ready
           docker exec -u dev "$box" bash -c '
             mkdir -p /workspace/.squarebox
             printf "tmux\n" > /workspace/.squarebox/multiplexer
@@ -329,6 +341,7 @@ jobs:
           '
           docker stop "$box" >/dev/null
           docker start "$box" >/dev/null
+          wait_for_box_ready
           docker exec -u dev "$box" bash -c \
             'grep -qx restart-ok ~/.squarebox-e2e-state && command -v tmux >/dev/null'
           scripts/e2e-evidence.sh pass lifecycle.restart \
@@ -341,6 +354,7 @@ jobs:
             -v "$workspace_volume:/workspace" \
             -v /etc/localtime:/etc/localtime:ro \
             squarebox:test sleep infinity
+          wait_for_box_ready
           docker exec -u dev "$box" bash -c \
             'grep -qx restart-ok ~/.squarebox-e2e-state && command -v tmux >/dev/null'
           scripts/e2e-evidence.sh pass lifecycle.recreate \
