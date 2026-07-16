@@ -5,7 +5,7 @@
 ARG GUM_IMAGE=ghcr.io/charmbracelet/gum@sha256:426c1e40739f11083e06d58ffaac910289eeace709a3d9bddcb8d4566140c93c
 FROM ${GUM_IMAGE} AS gum-source
 
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 # 1. Base Packages & Rust CLI Tools (consolidated, slimmed)
 
