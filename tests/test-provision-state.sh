@@ -122,6 +122,18 @@ assert_true "grep -qx 'set -g mouse on' '$HOME_DIR/.config/tmux/tmux.conf'" "rec
 assert_true "[ \"\$(cat '$STATE/multiplexer')\" = tmux ]" "successful reconciliation preserves the saved Selection"
 assert_true "[ \"\$(cat '$STATE/editor-default')\" = fresh ] && grep -qx \"export EDITOR='fresh'\" '$HOME_DIR/.squarebox-editor-aliases'" "reconcile preserves a non-first default editor Selection"
 
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/codex"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/npm"
+chmod +x "$BIN/codex" "$BIN/npm"
+printf 'codex,removed-assistant\n' > "$STATE/ai-tool"
+if HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun ai >"$TMP/reconcile-ai.out" 2>"$TMP/reconcile-ai.err"; then
+	assert_true "[ \"\$(cat '$STATE/ai-tool')\" = codex ] && grep -q 'removing unsupported AI assistant' '$TMP/reconcile-ai.err'" "reconcile removes unsupported assistants from a saved Selection"
+else
+	not_ok "reconcile removes unsupported assistants from a saved Selection"
+fi
+
 printf 'set -g mouse off\n' > "$HOME_DIR/.config/tmux/tmux.conf"
 HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \

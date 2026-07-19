@@ -65,7 +65,7 @@ Tracking issues: [Linux desktop #99](https://github.com/SquareWaveSystems/square
 - [ ] Deliberately choose an empty Selection and confirm it is saved distinctly from cancel
 - [ ] Fail one assistant install and confirm aliases target the first successfully observed assistant
 - [ ] GitHub device authentication succeeds; decline marker and credentials survive Box replacement
-- [ ] Claude, Copilot, Gemini, Codex, OpenCode, Pi, and Paseo launch after installation
+- [ ] Claude, Copilot, Gemini, Codex, OpenCode, and Pi launch after installation
 - [ ] Copilot uses the supported `copilot` command
 - [ ] Bash initializes Starship, Zoxide, fzf keybindings/completion, aliases, and mise shims
 - [ ] Zsh and Fish initialize Starship, Zoxide, the `fzf`/`ff` command path, aliases, and mise shims
