@@ -684,8 +684,13 @@ _git_cfg="$GIT_CONFIG_DIR/config"
 }
 _existing_name="$(git config --file "$_git_cfg" user.name 2>/dev/null || true)"
 _existing_email="$(git config --file "$_git_cfg" user.email 2>/dev/null || true)"
-_host_name="$(git config --global user.name 2>/dev/null || true)"
-_host_email="$(git config --global user.email 2>/dev/null || true)"
+# `git config --global` ignores the XDG config file whenever ~/.gitconfig
+# exists, so hosts keeping their identity under ~/.config/git/config need the
+# explicit fallback read.
+_host_name="$(git config --global user.name 2>/dev/null \
+	|| git config --file "${XDG_CONFIG_HOME:-$HOME/.config}/git/config" user.name 2>/dev/null || true)"
+_host_email="$(git config --global user.email 2>/dev/null \
+	|| git config --file "${XDG_CONFIG_HOME:-$HOME/.config}/git/config" user.email 2>/dev/null || true)"
 [ -n "${SQUAREBOX_GIT_NAME:-}" ] && _host_name="$SQUAREBOX_GIT_NAME"
 [ -n "${SQUAREBOX_GIT_EMAIL:-}" ] && _host_email="$SQUAREBOX_GIT_EMAIL"
 [ -n "$_host_name" ] || _host_name="$_existing_name"

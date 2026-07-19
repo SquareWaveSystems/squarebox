@@ -56,6 +56,16 @@ join_csv() {
 	echo "$*"
 }
 
+# Effective global git identity. Once ~/.gitconfig exists (gh auth setup-git
+# creates it holding only credential helpers), `git config --global <key>`
+# reads that file alone and never consults the XDG file this script writes,
+# so a configured identity would look unset. Fall back to the XDG file.
+current_git_identity() {
+	git config --global "$1" 2>/dev/null \
+		|| git config --file "$HOME/.config/git/config" "$1" 2>/dev/null \
+		|| true
+}
+
 should_run() {
 	# In first-run mode (no --rerun), always run all sections
 	$SB_RERUN || return 0
@@ -218,8 +228,8 @@ if should_run git; then
 	# be absent inside the squarebox-home volume (issue: setup fails with
 	# "could not lock config file .../.config/git/config: No such file or directory").
 	mkdir -p ~/.config/git
-	_current_name=$(git config --global user.name 2>/dev/null || true)
-	_current_email=$(git config --global user.email 2>/dev/null || true)
+	_current_name=$(current_git_identity user.name)
+	_current_email=$(current_git_identity user.email)
 
 	if $SB_RERUN && [ -n "$_current_name" ] && $INTERACTIVE; then
 		# Existing identity on re-run: present it pre-filled so you can edit

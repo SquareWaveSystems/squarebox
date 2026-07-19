@@ -51,5 +51,25 @@ else
 	not_ok "setup and demo describe Nano as the fallback default"
 fi
 
+# Regression: the configured git identity must stay visible after gh auth
+# setup-git creates ~/.gitconfig — `git config --global` stops consulting the
+# XDG file once ~/.gitconfig exists, so every identity reader needs the
+# explicit XDG-file fallback.
+assert grep -Fq 'git config --file "$HOME/.config/git/config" user.name' "$ROOT/scripts/squarebox-setup.sh"
+assert grep -Fq 'git config --file "$HOME/.config/git/config" user.email' "$ROOT/scripts/squarebox-setup.sh"
+assert grep -Fq 'git config --file "${XDG_CONFIG_HOME:-$HOME/.config}/git/config" user.name' "$ROOT/install.sh"
+_id_fn=$(sed -n '/^current_git_identity() {/,/^}/p' "$ROOT/setup.sh")
+_id_home=$(mktemp -d)
+mkdir -p "$_id_home/.config/git"
+printf '[user]\n\tname = XDG Name\n' >"$_id_home/.config/git/config"
+printf '[credential]\n\thelper = x\n' >"$_id_home/.gitconfig"
+if [ -n "$_id_fn" ] \
+	&& [ "$(env -u XDG_CONFIG_HOME HOME="$_id_home" bash -c "$_id_fn"$'\ncurrent_git_identity user.name')" = "XDG Name" ]; then
+	ok "setup identity read survives a credential-only ~/.gitconfig"
+else
+	not_ok "setup identity read survives a credential-only ~/.gitconfig"
+fi
+rm -rf "$_id_home"
+
 printf '1..%d\n' "$((PASS + FAIL))"
 [ "$FAIL" -eq 0 ]
