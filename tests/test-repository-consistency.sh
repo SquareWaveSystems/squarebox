@@ -14,6 +14,11 @@ if grep -E '(@githubnext/github-copilot-cli|github-copilot-cli)' \
 	fail "production surfaces still reference deprecated Copilot CLI"
 fi
 
+if grep -Eqi 'paseo' setup.sh README.md CLAUDE.md uat-checklist.md \
+	demo/setup-demo.sh scripts/squarebox-setup.sh scripts/e2e-test.sh; then
+	fail "current product surfaces still reference removed Paseo support"
+fi
+
 if grep -F 'COPY scripts/sqrbx-learn' Dockerfile >/dev/null \
 	|| grep -F 'COPY scripts/sqrbx-agent-tool-log' Dockerfile >/dev/null; then
 	fail "disabled learn implementation is still shipped"

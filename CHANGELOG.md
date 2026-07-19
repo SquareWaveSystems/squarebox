@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- Paseo assistant installation and Selection support.
+
 ## v1.1.0 — 2026-07-16
 
 ### Added
