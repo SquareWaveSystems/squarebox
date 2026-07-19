@@ -55,8 +55,15 @@ show_list() {
 
 	# Git identity
 	local git_name git_email
-	git_name=$(git config --global user.name 2>/dev/null || echo "(not set)")
-	git_email=$(git config --global user.email 2>/dev/null || echo "(not set)")
+	# `git config --global` reads only ~/.gitconfig once that file exists
+	# (gh auth setup-git creates it with credential helpers only), so also
+	# check the XDG file where setup.sh records the identity.
+	git_name=$(git config --global user.name 2>/dev/null \
+		|| git config --file "$HOME/.config/git/config" user.name 2>/dev/null \
+		|| echo "(not set)")
+	git_email=$(git config --global user.email 2>/dev/null \
+		|| git config --file "$HOME/.config/git/config" user.email 2>/dev/null \
+		|| echo "(not set)")
 	echo -e "  ${CYAN}Git identity:${RESET}     $git_name <$git_email>"
 
 	# GitHub CLI
