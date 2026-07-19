@@ -8,7 +8,7 @@
 - Bash, experimental Zsh, and experimental Fish selection.
 - tmux and Zellij selection with aligned keybindings.
 - SSH client availability in the base image.
-- Pi and Paseo assistant options.
+- Pi assistant options.
 - Version display in the MOTD and image metadata.
 - Durable Install identity for safe rebuild and uninstall behavior.
 - Assertion-backed release Evidence, SBOM/provenance, vulnerability scanning,

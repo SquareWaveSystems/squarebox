@@ -111,7 +111,7 @@ scripted installs). Values use the same keys as `sqrbx-setup`:
 
 | Variable | Selects |
 |----------|---------|
-| `SQUAREBOX_AI` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,paseo`) |
+| `SQUAREBOX_AI` | AI assistants (`claude,copilot,gemini,codex,opencode,pi`) |
 | `SQUAREBOX_SDKS` | language SDKs (`node,python,go,dotnet,rust`) |
 | `SQUAREBOX_EDITORS` | editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
 | `SQUAREBOX_TUIS` | TUI tools (`lazygit,gh-dash,yazi`) |
@@ -256,7 +256,6 @@ pre-selected non-interactively via the `SQUAREBOX_AI`/`SQUAREBOX_SDKS`/… env v
 | [OpenAI Codex CLI](https://github.com/openai/codex) | Rust | OpenAI Codex in the terminal * |
 | [opencode](https://github.com/anomalyco/opencode) | TypeScript/Bun | AI coding TUI |
 | [Pi Coding Agent](https://github.com/earendil-works/pi) | TypeScript | Minimal terminal coding harness (Earendil) * |
-| [Paseo](https://paseo.sh) | TypeScript | Remote control for AI CLI agents * |
 
 \* Requires Node.js (auto-installed if needed).
 
@@ -472,7 +471,6 @@ First-run selections add to that:
 | OpenAI Codex CLI | ~50 MB |
 | OpenCode | ~30 MB |
 | Pi Coding Agent | ~50 MB |
-| Paseo | Varies by npm release |
 | lazygit / gh-dash / yazi | ~10 / ~10 / ~10 MB |
 | micro / edit | ~12 / ~7 MB |
 | fresh / nvim | ~10 / ~45 MB |
@@ -504,7 +502,7 @@ updating an already observed registered tool to a newer authorized release.
 SDKs (Node, Python, Go, .NET, Rust) are installed by [mise](https://github.com/jdx/mise),
 which is itself a Dockerfile-tier pinned binary. mise downloads each SDK
 toolchain from its upstream over HTTPS using its own integrity checks. npm-based
-AI tools (Copilot CLI, Gemini CLI, Codex CLI, Pi, and Paseo) use npm's built-in
+AI tools (Copilot CLI, Gemini CLI, Codex CLI, Pi) use npm's built-in
 integrity verification.
 
 For the full trust model (what `install.sh` does on your machine, how each
@@ -528,7 +526,7 @@ container environment variables (set to an empty string to opt out of a tier):
 
 | Variable | Default | Selects |
 |----------|---------|---------|
-| `SQUAREBOX_DC_AI` | `claude` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,paseo`) |
+| `SQUAREBOX_DC_AI` | `claude` | AI assistants (`claude,copilot,gemini,codex,opencode,pi`) |
 | `SQUAREBOX_DC_SDKS` | `node` | SDKs (`node,python,go,dotnet,rust`) |
 | `SQUAREBOX_DC_EDITORS` | _(none)_ | Editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
 | `SQUAREBOX_DC_TUIS` | _(none)_ | TUI tools (`lazygit,gh-dash,yazi`) |

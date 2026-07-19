@@ -530,14 +530,13 @@ if $INTERACTIVE; then
 				codex)    gum_selected="${gum_selected:+$gum_selected,}OpenAI Codex CLI" ;;
 				opencode) gum_selected="${gum_selected:+$gum_selected,}OpenCode" ;;
 				pi)       gum_selected="${gum_selected:+$gum_selected,}Pi Coding Agent" ;;
-				paseo)    gum_selected="${gum_selected:+$gum_selected,}Paseo" ;;
 			esac
 		done
 		gum_args=(--no-limit --header "Select AI coding assistants (space=toggle, enter=confirm):")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		if ! selected=$(gum choose "${gum_args[@]}" \
 			"Claude Code" "GitHub Copilot CLI" "Google Gemini CLI" \
-			"OpenAI Codex CLI" "OpenCode" "Pi Coding Agent" "Paseo"); then
+			"OpenAI Codex CLI" "OpenCode" "Pi Coding Agent"); then
 			cancel_setup
 		fi
 		ai_choice=""
@@ -549,12 +548,11 @@ if $INTERACTIVE; then
 				"OpenAI Codex CLI")   ai_choice="${ai_choice:+$ai_choice,}codex" ;;
 				"OpenCode")           ai_choice="${ai_choice:+$ai_choice,}opencode" ;;
 				"Pi Coding Agent")    ai_choice="${ai_choice:+$ai_choice,}pi" ;;
-				"Paseo")              ai_choice="${ai_choice:+$ai_choice,}paseo" ;;
 			esac
 		done <<< "$selected"
 	else
 		echo "Select AI coding assistants (comma-separated, 'all', or press Enter to skip):"
-		for ai_item in "1:claude:Claude Code" "2:copilot:GitHub Copilot CLI" "3:gemini:Google Gemini CLI" "4:codex:OpenAI Codex CLI" "5:opencode:OpenCode" "6:pi:Pi Coding Agent" "7:paseo:Paseo"; do
+		for ai_item in "1:claude:Claude Code" "2:copilot:GitHub Copilot CLI" "3:gemini:Google Gemini CLI" "4:codex:OpenAI Codex CLI" "5:opencode:OpenCode" "6:pi:Pi Coding Agent"; do
 			num="${ai_item%%:*}"; rest="${ai_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
 			if [[ ",$ai_prev," == *",${key},"* ]]; then
 				echo "  ${num}) ${label} [installed]"
@@ -568,7 +566,7 @@ if $INTERACTIVE; then
 		else
 			ai_choice=""
 			if [ "$ai_selection" = "all" ]; then
-				ai_choice="claude,copilot,gemini,codex,opencode,pi,paseo"
+				ai_choice="claude,copilot,gemini,codex,opencode,pi"
 			elif [ -n "$ai_selection" ]; then
 				for item in $(echo "$ai_selection" | tr ',' ' '); do
 					case "$item" in
@@ -578,7 +576,6 @@ if $INTERACTIVE; then
 						4) ai_choice="${ai_choice:+$ai_choice,}codex" ;;
 						5) ai_choice="${ai_choice:+$ai_choice,}opencode" ;;
 						6) ai_choice="${ai_choice:+$ai_choice,}pi" ;;
-					7) ai_choice="${ai_choice:+$ai_choice,}paseo" ;;
 					esac
 				done
 			fi
@@ -621,12 +618,6 @@ install_pi() {
 	command -v pi >/dev/null 2>&1
 }
 
-install_paseo() {
-	if command -v paseo &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "Paseo already installed, skipping."; return 0; fi
-	ensure_node_for_npm || return 1
-	run_with_spinner "Installing/updating Paseo..." npm install -g --silent @getpaseo/cli || return 1
-	command -v paseo >/dev/null 2>&1
-}
 
 install_claude() {
 	if command -v claude >/dev/null 2>&1 && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then
@@ -647,7 +638,6 @@ ai_command_present() {
 		codex) command -v codex >/dev/null 2>&1 ;;
 		opencode) command -v opencode >/dev/null 2>&1 ;;
 		pi) command -v pi >/dev/null 2>&1 ;;
-		paseo) command -v paseo >/dev/null 2>&1 ;;
 		*) return 1 ;;
 	esac
 }
@@ -676,7 +666,6 @@ for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 		gemini)  install_gemini  && ai_ok=true ;;
 		codex)   install_codex   && ai_ok=true ;;
 		pi)      install_pi      && ai_ok=true ;;
-		paseo)   install_paseo   && ai_ok=true ;;
 	esac
 	if $ai_ok; then
 		installed_ai+=("$ai_tool")
@@ -695,7 +684,7 @@ printf '%s\n' "$ai_choice" > "$AI_CONFIG"
 # Set aliases based on selection — c maps to first selected tool in priority order
 {
 	c_target=""
-	for ai_tool in claude copilot gemini codex opencode pi paseo; do
+	for ai_tool in claude copilot gemini codex opencode pi; do
 		if [[ ",$observed_ai," == *",$ai_tool,"* ]]; then
 			[ -z "$c_target" ] && c_target="$ai_tool"
 			case "$ai_tool" in
