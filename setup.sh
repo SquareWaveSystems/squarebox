@@ -1105,16 +1105,21 @@ _install_zellij_inner() {
 		            };
 		        }
 
-		        // Prefix-style bindings via Ctrl+Space (tmux-like leader)
+		        // Prefix-style bindings via Ctrl+Space (tmux-like leader).
+		        // Ctrl+b as well: Ctrl+Space is a NUL byte some clients never
+		        // deliver (iPadOS grabs it for input-source switching)
 		        bind "Ctrl Space" { SwitchToMode "Tmux"; }
+		        bind "Ctrl b" { SwitchToMode "Tmux"; }
 		    }
 
 		    locked {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		        bind "Ctrl b" { SwitchToMode "Normal"; }
 		    }
 
 		    tmux {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		        bind "Ctrl b" { SwitchToMode "Normal"; }
 		        bind "Esc" { SwitchToMode "Normal"; }
 
 		        // Pane splitting (h=horizontal, v=vertical — matching tmux)
@@ -1222,6 +1227,7 @@ _install_zellij_inner() {
 		    // Allow Ctrl+Space to return to normal from any non-normal mode
 		    shared_except "normal" "locked" "tmux" {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		        bind "Ctrl b" { SwitchToMode "Normal"; }
 		    }
 		}
 		ZELLIJCONF
@@ -1247,6 +1253,10 @@ _ensure_zellij_defaults() {
 	sed -i 's/^on_force_close "quit"/on_force_close "detach"/' "$conf"
 	if ! grep -q 'bind "?"' "$conf"; then
 		sed -i '/bind "\[" { SwitchToMode "Scroll"; }/a\        bind "?" { LaunchOrFocusPlugin "configuration" { floating true; }; SwitchToMode "Normal"; }' "$conf"
+	fi
+	if ! grep -q 'bind "Ctrl b" { SwitchToMode "Tmux"; }' "$conf"; then
+		sed -i 's|^\(\s*\)bind "Ctrl Space" { SwitchToMode "Tmux"; }$|&\n\1bind "Ctrl b" { SwitchToMode "Tmux"; }|' "$conf"
+		sed -i 's|^\(\s*\)bind "Ctrl Space" { SwitchToMode "Normal"; }$|&\n\1bind "Ctrl b" { SwitchToMode "Normal"; }|' "$conf"
 	fi
 }
 
