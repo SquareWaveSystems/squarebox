@@ -1023,7 +1023,9 @@ _install_zellij_inner() {
 		scroll_buffer_size 50000
 		pane_frames false
 		auto_layout true
-		on_force_close "quit"
+		// "detach" not "quit" — a dropped client (ssh/mosh dying) must not kill
+		// the session and everything running in it
+		on_force_close "detach"
 		simplified_ui true
 		session_serialization true
 		support_kitty_keyboard_protocol true
@@ -1161,6 +1163,9 @@ _install_zellij_inner() {
 
 		        // Enter scroll/copy mode (vi-style — like tmux [ )
 		        bind "[" { SwitchToMode "Scroll"; }
+
+		        // Keybinding help — floating configuration plugin
+		        bind "?" { LaunchOrFocusPlugin "configuration" { floating true; }; SwitchToMode "Normal"; }
 		    }
 
 		    // ── Scroll mode (vi-style copy mode) ────────────────────────
@@ -1236,9 +1241,19 @@ _install_zellij_inner() {
 	fi
 }
 
+_ensure_zellij_defaults() {
+	local conf="$HOME/.config/zellij/config.kdl"
+	[ -f "$conf" ] || return 0
+	sed -i 's/^on_force_close "quit"/on_force_close "detach"/' "$conf"
+	if ! grep -q 'bind "?"' "$conf"; then
+		sed -i '/bind "\[" { SwitchToMode "Scroll"; }/a\        bind "?" { LaunchOrFocusPlugin "configuration" { floating true; }; SwitchToMode "Normal"; }' "$conf"
+	fi
+}
+
 install_zellij() {
-	if command -v zellij &>/dev/null; then echo "Zellij already installed, skipping."; return 0; fi
+	if command -v zellij &>/dev/null; then echo "Zellij already installed, skipping."; _ensure_zellij_defaults; return 0; fi
 	run_with_spinner "Installing Zellij..." _install_zellij_inner
+	_ensure_zellij_defaults
 }
 
 for mux in $(echo "$mux_list" | tr ',' ' '); do
