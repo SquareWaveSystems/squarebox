@@ -101,6 +101,41 @@ reconcile_box_as_current_user() {
 	fi
 }
 
+# The Codex app-server daemon (`codex app-server daemon start`, used for the
+# experimental remote-control feature) keeps its state in /home/dev — which
+# survives in the home volume — but the process itself dies with the container,
+# so remote control silently drops on every restart and has to be brought back
+# by hand. Restart it at boot, but only when its state file shows the operator
+# used it before; boxes that never ran the daemon skip this entirely.
+start_codex_app_server() {
+	local codex_home="${SQUAREBOX_MANAGED_HOME:-/home/dev}/.codex"
+	[ -f "$codex_home/app-server-daemon/settings.json" ] || return 0
+
+	# A fresh container has no codex processes, so any control socket or pid
+	# file left in the volume is stale — the daemon's bind would fail with
+	# EADDRINUSE, or chase a socket symlink into the wiped /tmp.
+	rm -f "$codex_home/app-server-daemon/app-server.pid" \
+		"$codex_home/app-server-daemon/app-server.pid.lock" \
+		"$codex_home/app-server-control/app-server-control.sock" \
+		"$codex_home/app-server-control/app-server-startup.lock"
+
+	# Run as dev when still root (redirection included, so the log stays
+	# dev-owned). codex is user-installed, so mise shims and ~/.local/bin must
+	# be on PATH; missing codex is a silent no-op. `daemon start` waits for
+	# the control socket to come up — cap it so a broken install or dead
+	# network can never wedge boot. Best-effort by design: never fail boot.
+	local drop=()
+	if [ "$(id -u)" = "0" ]; then
+		drop=(setpriv --reuid "$PUID" --regid "$PGID" --init-groups --)
+	fi
+	timeout 30 "${drop[@]}" /usr/bin/env HOME=/home/dev USER=dev \
+		PATH="/home/dev/.local/share/mise/shims:/home/dev/.local/bin:$PATH" \
+		bash -c 'command -v codex >/dev/null 2>&1 || exit 0
+			codex app-server daemon start \
+				>>"$HOME/.codex/app-server-daemon/autostart.log" 2>&1' \
+		|| echo "squarebox: codex app-server autostart failed (non-fatal)" >&2
+}
+
 # Tests source the pure selection/validation helpers without performing user
 # remapping or exec. Production never sets this variable.
 if [ "${SQUAREBOX_ENTRYPOINT_FUNCTIONS_ONLY:-}" = "1" ]; then
@@ -153,6 +188,8 @@ if [ "$(id -u)" = "0" ]; then
 			}
 	fi
 
+	start_codex_app_server
+
 	# Drop to dev. --init-groups picks up dev's supplementary groups; numeric
 	# ids resolve back to the (now-remapped) dev passwd entry.
 	exec setpriv --reuid "$PUID" --regid "$PGID" --init-groups -- "$@"
@@ -162,4 +199,5 @@ fi
 # still refresh managed dotfiles (owned by the running user; no chown needed).
 /usr/local/lib/squarebox/refresh-dotfiles.sh
 reconcile_box_as_current_user
+start_codex_app_server
 exec "$@"
