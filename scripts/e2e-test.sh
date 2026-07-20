@@ -72,7 +72,7 @@ suite_tools() {
 	# Candidate suite so publication cannot depend on the separate PR workflow.
 	local command_name
 	local -a core_commands=(
-		bat curl delta difft eza fd fzf gh glow gum jq just mise nano rg
+		bat bwrap curl delta difft eza fd fzf gh glow gum jq just mise nano rg
 		starship xh yq zoxide
 	)
 	for command_name in "${core_commands[@]}"; do
