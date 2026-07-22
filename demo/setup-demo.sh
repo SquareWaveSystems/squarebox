@@ -100,13 +100,14 @@ echo
 section_header "Terminal Multiplexers"
 selected=$(gum choose --no-limit \
     --header "Select terminal multiplexer:" \
-    "tmux" "zellij") || true
+    "tmux" "zellij" "herdr") || true
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue
     case "$line" in
         tmux)   run_with_spinner "Installing tmux..." 0.6 ;;
         zellij) run_with_spinner "Installing Zellij..." 0.6 ;;
+        herdr)  run_with_spinner "Installing Herdr..." 0.6 ;;
     esac
 done <<< "$selected"
 

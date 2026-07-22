@@ -230,3 +230,13 @@ tools:
     dest: user
     group: setup
     verification: github-release-digest
+
+  herdr:
+    repo: ogulcancelik/herdr
+    version_prefix: v
+    artifact: herdr-linux-{zarch}
+    method: binary
+    binaries: herdr
+    dest: user
+    group: setup
+    verification: github-release-digest

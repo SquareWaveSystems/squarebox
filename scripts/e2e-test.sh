@@ -227,7 +227,7 @@ suite_setup_editors() {
 	echo "opencode,pi" > /workspace/.squarebox/ai-tool
 	echo "micro,edit,fresh,helix,nvim" > /workspace/.squarebox/editors
 	echo "lazygit,gh-dash,yazi" > /workspace/.squarebox/tuis
-	echo "tmux,zellij" > /workspace/.squarebox/multiplexer
+	echo "tmux,zellij,herdr" > /workspace/.squarebox/multiplexer
 	echo "node,go" > /workspace/.squarebox/sdks
 	# Shell section (experimental): exercise the bash path here. The zsh
 	# install (apt zsh + Oh My Zsh + two plugin clones) is network-heavy and
@@ -278,6 +278,7 @@ suite_setup_editors() {
 	# 3.8 multiplexers installed
 	run_test "3.8a tmux installed" command -v tmux
 	run_test "3.8b zellij installed" command -v zellij
+	run_test "3.8c herdr installed" command -v herdr
 
 	# 3.9 SDKs installed (via mise)
 	run_test "3.9a node installed (via mise)" command -v node

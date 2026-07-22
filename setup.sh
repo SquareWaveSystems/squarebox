@@ -1212,12 +1212,13 @@ if $INTERACTIVE; then
 			case "$mux" in
 				tmux)   gum_selected="${gum_selected:+$gum_selected,}tmux" ;;
 				zellij) gum_selected="${gum_selected:+$gum_selected,}zellij" ;;
+				herdr)  gum_selected="${gum_selected:+$gum_selected,}herdr" ;;
 			esac
 		done
 		gum_args=(--no-limit --header "Select terminal multiplexer:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		if ! selected=$(gum choose "${gum_args[@]}" \
-			"tmux" "zellij"); then
+			"tmux" "zellij" "herdr"); then
 			cancel_setup
 		fi
 		mux_list=""
@@ -1227,7 +1228,7 @@ if $INTERACTIVE; then
 		done <<< "$selected"
 	else
 		echo "Select terminal multiplexer (comma-separated, or 'all', or press Enter to skip):"
-		for mux_item in "1:tmux:classic terminal multiplexer" "2:zellij:friendly terminal workspace"; do
+		for mux_item in "1:tmux:classic terminal multiplexer" "2:zellij:friendly terminal workspace" "3:herdr:agent multiplexer for coding agents"; do
 			num="${mux_item%%:*}"; rest="${mux_item#*:}"; key="${rest%%:*}"; desc="${rest#*:}"
 			if [[ ",$mux_prev," == *",${key},"* ]]; then
 				echo "  ${num}) ${key} — ${desc} [installed]"
@@ -1235,18 +1236,19 @@ if $INTERACTIVE; then
 				echo "  ${num}) ${key} — ${desc}"
 			fi
 		done
-		read -rp "Selection [1,2/all/skip]: " mux_selection
+		read -rp "Selection [1,2,3/all/skip]: " mux_selection
 		if [ -z "$mux_selection" ] && [ -n "$mux_prev" ]; then
 			mux_list="$mux_prev"
 		else
 			mux_list=""
 			if [ "$mux_selection" = "all" ]; then
-				mux_list="tmux,zellij"
+				mux_list="tmux,zellij,herdr"
 			elif [ -n "$mux_selection" ]; then
 				for item in $(echo "$mux_selection" | tr ',' ' '); do
 					case "$item" in
 						1) mux_list="${mux_list:+$mux_list,}tmux" ;;
 						2) mux_list="${mux_list:+$mux_list,}zellij" ;;
+						3) mux_list="${mux_list:+$mux_list,}herdr" ;;
 					esac
 				done
 			fi
@@ -1650,6 +1652,19 @@ install_zellij() {
 	run_with_spinner "Installing Zellij..." _install_zellij_inner
 }
 
+_install_herdr_inner() {
+	command -v herdr >/dev/null 2>&1 || sb_install herdr latest || return 1
+	command -v herdr >/dev/null 2>&1 || return 1
+}
+
+install_herdr() {
+	if command -v herdr &>/dev/null; then
+		echo "Herdr already installed, skipping."
+		return 0
+	fi
+	run_with_spinner "Installing Herdr..." _install_herdr_inner
+}
+
 installed_mux=()
 committed_mux=()
 for mux in $(echo "$mux_list" | tr ',' ' '); do
@@ -1666,6 +1681,13 @@ for mux in $(echo "$mux_list" | tr ',' ' '); do
 			else
 				record_failure "Zellij installation failed; new Selection was not committed"
 				[[ ",$mux_prev," == *",zellij,"* ]] && committed_mux+=("zellij")
+			fi
+			;;
+		herdr)
+			if install_herdr; then installed_mux+=("herdr"); committed_mux+=("herdr")
+			else
+				record_failure "Herdr installation failed; new Selection was not committed"
+				[[ ",$mux_prev," == *",herdr,"* ]] && committed_mux+=("herdr")
 			fi
 			;;
 	esac

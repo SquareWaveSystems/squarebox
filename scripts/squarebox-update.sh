@@ -304,6 +304,7 @@ helix_current() { hx --version 2>/dev/null | _extract_first_version; }
 nvim_current() { nvim --version 2>/dev/null | _extract_first_version; }
 opencode_current() { opencode --version 2>/dev/null | _extract_first_version; }
 zellij_current() { zellij --version 2>/dev/null | _extract_first_version; }
+herdr_current() { herdr --version 2>/dev/null | _extract_first_version; }
 just_current() { just --version 2>/dev/null | _extract_first_version; }
 difftastic_current() { difft --version 2>/dev/null | _extract_first_version; }
 mise_current() { mise --version 2>/dev/null | _extract_first_version; }
