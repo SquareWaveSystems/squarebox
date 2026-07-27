@@ -7,6 +7,8 @@
 - `bubblewrap` in the base image so the OpenAI Codex CLI uses the system
   `bwrap` for its Linux sandbox instead of warning and falling back to its
   bundled helper.
+- `elio` as a selectable TUI file manager alongside Yazi, installed from its
+  verified GitHub release asset into the Managed home.
 
 ### Removed
 

@@ -1072,12 +1072,13 @@ if $INTERACTIVE; then
 				lazygit) gum_selected="${gum_selected:+$gum_selected,}lazygit" ;;
 				gh-dash) gum_selected="${gum_selected:+$gum_selected,}gh-dash" ;;
 				yazi)    gum_selected="${gum_selected:+$gum_selected,}yazi" ;;
+				elio)    gum_selected="${gum_selected:+$gum_selected,}elio" ;;
 			esac
 		done
 		gum_args=(--no-limit --header "Select TUI tools to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		if ! selected=$(gum choose "${gum_args[@]}" \
-			"lazygit" "gh-dash" "yazi"); then
+			"lazygit" "gh-dash" "yazi" "elio"); then
 			cancel_setup
 		fi
 		tui_list=""
@@ -1087,7 +1088,7 @@ if $INTERACTIVE; then
 		done <<< "$selected"
 	else
 		echo "Select TUI tools to install (comma-separated, or 'all', or press Enter to skip):"
-		for tui_item in "1:lazygit:git terminal UI" "2:gh-dash:GitHub dashboard for the terminal" "3:yazi:terminal file manager"; do
+		for tui_item in "1:lazygit:git terminal UI" "2:gh-dash:GitHub dashboard for the terminal" "3:yazi:terminal file manager" "4:elio:terminal file manager with rich previews"; do
 			num="${tui_item%%:*}"; rest="${tui_item#*:}"; key="${rest%%:*}"; desc="${rest#*:}"
 			if [[ ",$tui_prev," == *",${key},"* ]]; then
 				echo "  ${num}) ${key} — ${desc} [installed]"
@@ -1095,19 +1096,20 @@ if $INTERACTIVE; then
 				echo "  ${num}) ${key} — ${desc}"
 			fi
 		done
-		read -rp "Selection [1,2,3/all/skip]: " tui_selection
+		read -rp "Selection [1,2,3,4/all/skip]: " tui_selection
 		if [ -z "$tui_selection" ] && [ -n "$tui_prev" ]; then
 			tui_list="$tui_prev"
 		else
 			tui_list=""
 			if [ "$tui_selection" = "all" ]; then
-				tui_list="lazygit,gh-dash,yazi"
+				tui_list="lazygit,gh-dash,yazi,elio"
 			elif [ -n "$tui_selection" ]; then
 				for item in $(echo "$tui_selection" | tr ',' ' '); do
 					case "$item" in
 						1) tui_list="${tui_list:+$tui_list,}lazygit" ;;
 						2) tui_list="${tui_list:+$tui_list,}gh-dash" ;;
 						3) tui_list="${tui_list:+$tui_list,}yazi" ;;
+						4) tui_list="${tui_list:+$tui_list,}elio" ;;
 					esac
 				done
 			fi
@@ -1163,6 +1165,12 @@ install_yazi() {
 	command -v yazi >/dev/null 2>&1 && command -v ya >/dev/null 2>&1
 }
 
+install_elio() {
+	if command -v elio &>/dev/null; then echo "elio already installed, skipping."; return 0; fi
+	run_with_spinner "Installing elio..." sb_install elio latest || return 1
+	command -v elio >/dev/null 2>&1
+}
+
 installed_tuis=()
 committed_tuis=()
 for tui in $(echo "$tui_list" | tr ',' ' '); do
@@ -1176,6 +1184,9 @@ for tui in $(echo "$tui_list" | tr ',' ' '); do
 		yazi)
 			if install_yazi; then installed_tuis+=("yazi"); committed_tuis+=("yazi")
 			else record_failure "Yazi installation failed; new Selection was not committed"; [[ ",$tui_prev," == *",yazi,"* ]] && committed_tuis+=("yazi"); fi ;;
+		elio)
+			if install_elio; then installed_tuis+=("elio"); committed_tuis+=("elio")
+			else record_failure "elio installation failed; new Selection was not committed"; [[ ",$tui_prev," == *",elio,"* ]] && committed_tuis+=("elio"); fi ;;
 	esac
 done
 tui_list=$(join_csv "${committed_tuis[@]}")
