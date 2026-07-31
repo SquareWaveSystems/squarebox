@@ -20,6 +20,6 @@ update.single	A named tool update follows named-tool semantics
 update.failure	Updater failures produce a nonzero aggregate result
 dotfiles.refresh	A stale Managed-home dotfile is safely refreshed
 dotfiles.symlink	Managed dotfile refresh rejects symlink destinations
-devcontainer.state	Dev Container configuration aligns Workspace and selection state under /workspace
+devcontainer.state	Dev Container configuration aligns Workspace state under /workspace and declares an isolated rebuild-stable Managed-home volume
 setup.rerun	The setup wrapper validates input and a noninteractive Git-section rerun succeeds
 learn.not-shipped	Disabled learn commands and hooks are absent from the default image

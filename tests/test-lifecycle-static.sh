@@ -10,6 +10,11 @@ python3 -m json.tool .devcontainer/devcontainer.json >/dev/null
 
 grep -q 'workspaceMount.*target=/workspace' .devcontainer/devcontainer.json
 grep -q '"workspaceFolder": "/workspace"' .devcontainer/devcontainer.json
+test "$(jq '[.mounts[]? | select(
+  .source == "squarebox-home-${devcontainerId}" and
+  .target == "/home/dev" and
+  .type == "volume"
+)] | length' .devcontainer/devcontainer.json)" = 1
 grep -q 'name: ${SQUAREBOX_HOME_VOLUME:-squarebox-home}' docker-compose.yml
 grep -q 'image: ${SQUAREBOX_IMAGE_REF:-ghcr.io/squarewavesystems/squarebox:latest}' docker-compose.yml
 grep -q 'io.squarebox.managed: "true"' docker-compose.yml

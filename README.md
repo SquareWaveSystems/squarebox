@@ -525,7 +525,10 @@ Open this repo in VS Code with the
 or launch it in [GitHub Codespaces](https://github.com/features/codespaces).
 The included `.devcontainer/devcontainer.json` builds the full **squarebox** image
 automatically and mounts the cloned repository at `/workspace`, matching setup
-and Selection state.
+and Selection state. A per-Box named volume, derived from the stable
+Dev Container identity, mounts at `/home/dev` so authentication, history, and
+mise toolchains survive container rebuilds without being shared across
+unrelated workspaces.
 
 The interactive first-run wizard can't run in devcontainer mode (no TTY at
 create time), so a default toolset — **Claude Code + Node.js** — is installed

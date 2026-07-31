@@ -28,6 +28,12 @@ test "$(jq -r .workspaceFolder .devcontainer/devcontainer.json)" = /workspace \
 	|| fail "Dev Container Workspace differs from setup state"
 jq -r .workspaceMount .devcontainer/devcontainer.json | grep -Fq 'target=/workspace' \
 	|| fail "Dev Container mount does not target /workspace"
+test "$(jq '[.mounts[]? | select(
+	.source == "squarebox-home-${devcontainerId}" and
+	.target == "/home/dev" and
+	.type == "volume"
+)] | length' .devcontainer/devcontainer.json)" = 1 \
+	|| fail "Dev Container Managed home is not a rebuild-stable, per-Box volume"
 
 if grep -E '(USER_HOME|\$HOME|USERPROFILE).*[.]config/git' \
 	install.sh install.ps1 docker-compose.yml >/dev/null; then
