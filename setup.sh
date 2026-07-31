@@ -1410,7 +1410,7 @@ _install_zellij_inner() {
 		scroll_buffer_size 50000
 		pane_frames false
 		auto_layout true
-		on_force_close "quit"
+		on_force_close "detach"
 		simplified_ui true
 		session_serialization true
 		support_kitty_keyboard_protocol true
@@ -1642,14 +1642,48 @@ _install_zellij_inner() {
 	fi
 }
 
+_migrate_zellij_force_close_default() {
+	local conf="$HOME/.config/zellij/config.kdl"
+	local legacy_sha256="03ebc2170a89802b6452dcdb5d91dd724fe108f0c5ccfbe070edea4e5b2d6242"
+	local observed_sha256
+
+	[ -f "$conf" ] || return 0
+	# A symlink or any content change is user-managed state. Only the exact
+	# Squarebox v1.1 generated default is eligible for automatic migration.
+	[ ! -L "$conf" ] || return 0
+	command -v sha256sum >/dev/null 2>&1 || return 0
+	observed_sha256=$(sha256sum -- "$conf" 2>/dev/null | awk '{print $1}') || return 0
+	[ "$observed_sha256" = "$legacy_sha256" ] || return 0
+
+	if ! (
+		config_tmp=""
+		cleanup_zellij_migration() {
+			[ -z "$config_tmp" ] || rm -f -- "$config_tmp"
+		}
+		trap cleanup_zellij_migration EXIT
+		config_tmp=$(mktemp "$HOME/.config/zellij/.config.kdl.squarebox-migrate.XXXXXX") || exit 1
+		sed 's/^\([[:space:]]*\)on_force_close "quit"[[:space:]]*$/\1on_force_close "detach"/' \
+			"$conf" > "$config_tmp" || exit 1
+		grep -Fqx 'on_force_close "detach"' "$config_tmp" || exit 1
+		chmod --reference="$conf" "$config_tmp" || exit 1
+		mv -fT -- "$config_tmp" "$conf" || exit 1
+		config_tmp=""
+	); then
+		return 1
+	fi
+}
+
 install_zellij() {
 	if command -v zellij &>/dev/null \
 		&& [ -f "$HOME/.config/zellij/config.kdl" ] \
 		&& [ -f "$HOME/.config/zellij/layouts/default.kdl" ]; then
-		echo "Zellij already installed, skipping."
+		_migrate_zellij_force_close_default || return 1
+		echo "Zellij already installed, configuration reconciled."
 		return 0
 	fi
-	run_with_spinner "Installing Zellij..." _install_zellij_inner
+	run_with_spinner "Installing Zellij..." _install_zellij_inner || return 1
+	_migrate_zellij_force_close_default || return 1
+	command -v zellij >/dev/null 2>&1
 }
 
 _install_herdr_inner() {
