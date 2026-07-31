@@ -6,6 +6,13 @@
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
   "workspaceFolder": "/workspace",
+  "mounts": [
+    {
+      "source": "squarebox-home-${devcontainerId}",
+      "target": "/home/dev",
+      "type": "volume"
+    }
+  ],
   "remoteUser": "dev",
   "containerEnv": {
     "DEVCONTAINER": "1"
