@@ -218,6 +218,12 @@ The `dev` user can invoke passwordless package-management/install commands.
 inside the Box, so the sudo allowlist is an operational control, not a security
 barrier against a malicious Box user.
 
+Dev Container and Codespaces builds add the digest-locked official SSH server
+Feature to the derived development image; the published Squarebox Candidate
+does not contain that server. The upstream Feature enables root login in its
+SSHD configuration, but Squarebox publishes no SSH host port or password, and
+restricts remote-forwarded listeners to loopback.
+
 Linux capabilities are reduced, but the Box has network access and the host
 resources explicitly mounted by its Install identity. Treat code and tools run
 inside it as having access to:
