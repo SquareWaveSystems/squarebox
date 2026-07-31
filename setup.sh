@@ -2,18 +2,24 @@
 set -euo pipefail
 
 # ── Argument parsing ────────────────────────────────────────────────────
-# When called from sqrbx-setup wrapper: setup.sh --rerun [section ...]
-# When called from .bashrc first-run:   setup.sh (no args)
+# When called from sqrbx-setup wrapper:  setup.sh --rerun [section ...]
+# When called from Dev Containers:       setup.sh --reconcile-selection [section ...]
+# When called from .bashrc first-run:    setup.sh (no args)
 
 SB_RERUN=false
-SB_RECONCILE_BOX=false
+SB_RECONCILE=false
 SB_SECTIONS=()
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--rerun) SB_RERUN=true; shift ;;
+		--reconcile-selection)
+			SB_RECONCILE=true
+			SB_RERUN=true
+			shift
+			;;
 		--reconcile-box)
-			SB_RECONCILE_BOX=true
+			SB_RECONCILE=true
 			SB_RERUN=true
 			SB_SECTIONS=(editors multiplexers shell)
 			shift
@@ -22,7 +28,14 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-# If --rerun with no specific sections, run all sections
+# Selection reconciliation is an internal, section-scoped orchestration path;
+# silently expanding it to interactive-only sections would hide caller bugs.
+if $SB_RECONCILE && [ ${#SB_SECTIONS[@]} -eq 0 ]; then
+	echo "ERROR: --reconcile-selection requires at least one section" >&2
+	exit 64
+fi
+
+# An ordinary maintainer --rerun with no specific sections runs all sections.
 if $SB_RERUN && [ ${#SB_SECTIONS[@]} -eq 0 ]; then
 	SB_SECTIONS=(git github ai editors tuis multiplexers sdks shell)
 fi
@@ -134,9 +147,10 @@ done
 export SB_TOOLS_YAML="${SQUAREBOX_TOOLS_YAML:-/usr/local/lib/squarebox/tools.yaml}"
 source "$SB_TOOL_LIB"
 
-# Detect interactive terminal
+# Reconciliation consumes existing Selection state even when an orchestrator
+# assigns a pseudo-TTY. Interactive reruns continue to prompt as before.
 INTERACTIVE=false
-if ! $SB_RECONCILE_BOX && [ -t 0 ]; then
+if ! $SB_RECONCILE && [ -t 0 ]; then
 	INTERACTIVE=true
 fi
 
@@ -456,7 +470,7 @@ _install_mise_sdk() {
 		echo "Error: mise is not installed (expected at /usr/local/bin/mise)" >&2
 		return 1
 	fi
-	if mise which "$tool" >/dev/null 2>&1 && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then
+	if mise which "$tool" >/dev/null 2>&1 && { ! $SB_RERUN || $SB_RECONCILE; }; then
 		echo "${label} already installed, skipping."
 		return 0
 	fi
@@ -611,29 +625,33 @@ for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 done
 ai_choice=$(join_csv "${supported_ai[@]}")
 
+# npm- and mise-hosted assistants live behind mise's shims. Reconciliation
+# must observe them before deciding whether a successful install can be reused.
+_squarebox_mise_activate
+
 install_copilot() {
-	if command -v copilot &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "GitHub Copilot CLI already installed, skipping."; return 0; fi
+	if command -v copilot &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE; }; then echo "GitHub Copilot CLI already installed, skipping."; return 0; fi
 	ensure_node_major_for_npm 22 || return 1
 	run_with_spinner "Installing/updating GitHub Copilot CLI..." npm install -g --silent @github/copilot || return 1
 	command -v copilot >/dev/null 2>&1
 }
 
 install_gemini() {
-	if command -v gemini &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "Google Gemini CLI already installed, skipping."; return 0; fi
+	if command -v gemini &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE; }; then echo "Google Gemini CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm || return 1
 	run_with_spinner "Installing/updating Google Gemini CLI..." npm install -g --silent @google/gemini-cli || return 1
 	command -v gemini >/dev/null 2>&1
 }
 
 install_codex() {
-	if command -v codex &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "OpenAI Codex CLI already installed, skipping."; return 0; fi
+	if command -v codex &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE; }; then echo "OpenAI Codex CLI already installed, skipping."; return 0; fi
 	ensure_node_for_npm || return 1
 	run_with_spinner "Installing/updating OpenAI Codex CLI..." npm install -g --silent @openai/codex || return 1
 	command -v codex >/dev/null 2>&1
 }
 
 install_pi() {
-	if command -v pi &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "Pi Coding Agent already installed, skipping."; return 0; fi
+	if command -v pi &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE; }; then echo "Pi Coding Agent already installed, skipping."; return 0; fi
 	ensure_node_for_npm || return 1
 	# --ignore-scripts is the upstream-recommended install flag (see pi.dev).
 	run_with_spinner "Installing/updating Pi Coding Agent..." npm install -g --silent --ignore-scripts @earendil-works/pi-coding-agent || return 1
@@ -641,14 +659,14 @@ install_pi() {
 }
 
 install_omp() {
-	if command -v omp &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "Oh My Pi already installed, skipping."; return 0; fi
+	if command -v omp &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE; }; then echo "Oh My Pi already installed, skipping."; return 0; fi
 	run_with_spinner "Installing/updating Oh My Pi (via mise)..." mise use -g github:can1357/oh-my-pi || return 1
 	_squarebox_mise_activate
 	command -v omp >/dev/null 2>&1
 }
 
 install_claude() {
-	if command -v claude >/dev/null 2>&1 && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then
+	if command -v claude >/dev/null 2>&1 && { ! $SB_RERUN || $SB_RECONCILE; }; then
 		echo "Claude Code already installed, skipping."
 		return 0
 	fi
@@ -683,7 +701,7 @@ for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 			run_with_spinner "Installing/updating Claude Code..." install_claude && ai_ok=true
 			;;
 		opencode)
-			if command -v opencode &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then
+			if command -v opencode &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE; }; then
 				echo "OpenCode already installed, skipping."
 				ai_ok=true
 			else

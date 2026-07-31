@@ -3,10 +3,10 @@
 # Dev Containers / GitHub Codespaces.
 #
 # The interactive first-run wizard (setup.sh via .bashrc) is skipped when
-# DEVCONTAINER=1, because there is no TTY at container-create time and the
-# gum-based picker can't run. This script installs a sensible default toolset
-# non-interactively instead, by pre-seeding the selection files that
-# setup.sh reads and then running the relevant sections in --rerun mode.
+# DEVCONTAINER=1. Orchestrators may still allocate a pseudo-TTY to post-create
+# commands, so this script explicitly installs a sensible default toolset
+# without prompting by pre-seeding Selection files and reconciling only the
+# relevant sections.
 #
 # Override the defaults via containerEnv in devcontainer.json (or Codespaces
 # secrets/variables). Set a variable to an empty string to opt out of that
@@ -87,7 +87,10 @@ if [ ${#sections[@]} -eq 0 ]; then
 fi
 
 echo "squarebox: installing default toolset (${sections[*]})..."
-if ! "$SETUP" --rerun "${sections[@]}"; then
+# Codespaces and other orchestrators may allocate a pseudo-TTY to post-create
+# commands. Reconciliation is explicitly noninteractive, and closing stdin
+# makes any accidental future read fail instead of hanging container creation.
+if ! "$SETUP" --reconcile-selection "${sections[@]}" </dev/null; then
 	# setup.sh reconciles each requested Selection independently and rewrites
 	# that section to the successfully observed subset. Preserve those results:
 	# deleting every newly seeded file here would erase a successful SDK merely

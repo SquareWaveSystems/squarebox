@@ -136,6 +136,8 @@ jobs:
             "Lifecycle state, release identity, ownership, and static contracts pass isolated fixtures"
 
       - name: Provisioning, release, and Evidence module tests
+        env:
+          SQUAREBOX_EVIDENCE_DIR: evidence
         run: |
           set -euo pipefail
           tests/test-provision-contract.sh
@@ -146,6 +148,8 @@ jobs:
           tests/test-repository-consistency.sh
           tests/test-e2e-evidence.sh
           tests/test-devcontainer-postcreate.sh
+          scripts/e2e-evidence.sh pass devcontainer.postcreate-noninteractive \
+            "Dev Container post-create defaults reconcile without prompts even when the orchestrator allocates a pseudo-TTY"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
