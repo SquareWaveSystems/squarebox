@@ -295,6 +295,14 @@ jobs:
           scripts/e2e-evidence.sh pass devcontainer.state \
             "Dev Container configuration aligns Workspace state under /workspace and declares an isolated rebuild-stable Managed-home volume"
 
+      - name: Non-default identity handles read-only Managed-home binds
+        env:
+          SQUAREBOX_EVIDENCE_DIR: evidence
+        run: |
+          scripts/test-nondefault-id.sh squarebox:test
+          scripts/e2e-evidence.sh pass lifecycle.nondefault-id \
+            "A non-default Docker identity starts twice with its lifecycle-managed Bash profile mounted read-only under a writable Managed home"
+
       - name: Real stop/start and replacement reconciliation
         env:
           SQUAREBOX_EVIDENCE_DIR: evidence

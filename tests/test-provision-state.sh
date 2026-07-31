@@ -28,6 +28,51 @@ else
 fi
 assert_true "(validate_id PUID 001000) >/dev/null 2>&1" "entrypoint accepts a positive decimal PUID"
 
+run_uid_remap_fixture() (
+	local failure_call="$1" mock_home=/home/dev mock_uid=1000 mock_calls=0
+	getent() {
+		[ "$1" = passwd ] && [ "$2" = dev ] || return 2
+		printf 'dev:x:%s:1000::%s:/bin/bash\n' "$mock_uid" "$mock_home"
+	}
+	mktemp() {
+		[ "$1" = '-d' ] || return 2
+		printf '/run/squarebox-usermod.MOCK\n'
+	}
+	rmdir() { return 0; }
+	usermod() {
+		mock_calls=$((mock_calls + 1))
+		[ "$mock_calls" != "$failure_call" ] || return 1
+		case "$1 $2" in
+			'-d /run/squarebox-usermod.MOCK') mock_home="$2" ;;
+			'-d /home/dev') mock_home="$2" ;;
+			'-o -u') mock_uid="$3" ;;
+			*) return 2 ;;
+		esac
+	}
+
+	case "$failure_call" in
+		0)
+			remap_dev_uid 12345
+			[ "$mock_uid" = 12345 ] && [ "$mock_home" = /home/dev ] && [ "$mock_calls" = 3 ]
+			;;
+		2)
+			if remap_dev_uid 12345 >/dev/null 2>&1; then return 1; fi
+			[ "$mock_uid" = 1000 ] && [ "$mock_home" = /home/dev ] && [ "$mock_calls" = 3 ]
+			;;
+		3)
+			if remap_dev_uid 12345 >/dev/null 2>&1; then return 1; fi
+			[ "$mock_uid" = 12345 ] && [ "$mock_home" = /run/squarebox-usermod.MOCK ] || return 1
+			failure_call=0
+			ensure_dev_home
+			[ "$mock_uid" = 12345 ] && [ "$mock_home" = /home/dev ] && [ "$mock_calls" = 4 ]
+			;;
+	esac
+)
+
+assert_true "run_uid_remap_fixture 0" "UID remap restores the canonical Managed home"
+assert_true "run_uid_remap_fixture 2" "failed UID mutation still restores the canonical Managed home"
+assert_true "run_uid_remap_fixture 3" "a subsequent start repairs an interrupted home restoration"
+
 OUTSIDE_SELECTION="$TMP/outside-selection"
 LINKED_SELECTION="$TMP/linked-selection"
 mkdir -p "$OUTSIDE_SELECTION"

@@ -146,6 +146,9 @@ jobs:
           docker exec sqrbx-persist grep -q "persist-ok" /home/dev/testfile
           echo "Persistence test passed"
 
+      - name: Non-default identity handles read-only Managed-home binds
+        run: scripts/test-nondefault-id.sh squarebox:test
+
       - name: In-image smoke assertions
         run: |
           docker run --rm \
