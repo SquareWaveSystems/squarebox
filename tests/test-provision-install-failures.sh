@@ -158,6 +158,13 @@ assert_true "[ ! -e '$ZELLIJ_CASE/home/.config/zellij/config.kdl' ]" \
 assert_true "grep -qx 'zellij latest' '$ZELLIJ_CASE/sb-install.calls'" \
 	"Zellij regression exercises the sb_install seam"
 
+HERDR_CASE="$TMP/herdr"
+run_selected_section multiplexers herdr "$HERDR_CASE"
+assert_true "[ \"\$(cat '$HERDR_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$HERDR_CASE/state/multiplexer')\" ]" \
+	"Herdr sb_install failure propagates without committing a Selection"
+assert_true "grep -qx 'herdr latest' '$HERDR_CASE/sb-install.calls'" \
+	"Herdr failure audit exercises its sb_install caller"
+
 # Audit every adjacent setup-tier sb_install caller, not just the two callers
 # that originally had a successful config write after the failed install.
 EDITORS_CASE="$TMP/editors"

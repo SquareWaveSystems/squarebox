@@ -7,6 +7,8 @@
 - `bubblewrap` in the base image so the OpenAI Codex CLI uses the system
   `bwrap` for its Linux sandbox instead of warning and falling back to its
   bundled helper.
+- Herdr is available as a selectable agent multiplexer, installed from its
+  verified GitHub release asset into the Managed home.
 
 ### Fixed
 

@@ -232,7 +232,7 @@ tools:
     verification: github-release-digest
 
   herdr:
-    repo: ogulcancelik/herdr
+    repo: herdrdev/herdr
     version_prefix: v
     artifact: herdr-linux-{zarch}
     method: binary
