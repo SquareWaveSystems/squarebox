@@ -22,8 +22,9 @@ Qualification issues: [Linux desktop #126](https://github.com/SquareWaveSystems/
 
 - [ ] Fresh Bash installer: launch, interactive setup, exit, resume, rebuild, uninstall
 - [ ] Existing v1.1 Managed home upgrade: no repeated prompts; Selections reconcile
-- [ ] Host UID/GID other than 1000: Workspace and managed files remain host-owned
-- [ ] Non-default Docker PUID/PGID starts with lifecycle-managed read-only files mounted beneath `/home/dev`
+- [ ] Genuine host UID/GID other than 1000: default identity, Workspace, and managed files remain host-owned through rebuild and purge
+- [ ] Unprivileged Linux PUID/PGID mismatch fails before checkout, config, Install-state, or runtime mutation; a stale recorded identity can be adopted to the current account
+- [ ] Root-run rootful Docker/Podman PUID/PGID override starts with lifecycle-managed read-only files mounted beneath `/home/dev`
 - [ ] Custom install path, Workspace, and Managed-home volume survive rebuild and purge correctly
 - [ ] Purge refuses an unrelated directory/container/image/volume with a colliding name
 - [ ] Docker daemon unavailable during uninstall produces a clear nonzero partial-cleanup result

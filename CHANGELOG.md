@@ -34,8 +34,10 @@ stable v1.2 release and includes that fix.
   SSH server Feature, so `gh codespace ssh` can attach as documented.
 - Codespaces reconcile their post-create default Selections without opening
   interactive pickers when the orchestrator assigns a pseudo-TTY.
-- Docker Boxes can remap `dev` to a non-default PUID/PGID even when lifecycle
-  adapters mount managed files read-only beneath the Managed home.
+- Docker Boxes can remap `dev` to a non-default PUID/PGID even with read-only
+  managed files beneath the Managed home. Native unprivileged Linux lifecycle
+  installs now require those IDs to match the invoking account; intentional
+  NAS/Unraid remapping remains available to root-run rootful runtimes.
 
 ### Changed
 

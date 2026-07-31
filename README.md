@@ -100,7 +100,7 @@ Flags: `--build` (build from source), `--edge` (latest `main`), `--adopt`
 | `SQUAREBOX_TAG` | latest published stable | Published Release to install (for example `v1.2.1`). Tags use `vMAJOR.MINOR.PATCH[-prerelease]`; build metadata is not published. |
 | `SQUAREBOX_IMAGE` | value from `release.json` | Optional image-repository override for development/testing. |
 | `SQUAREBOX_BUILD` | `0` | `1` is equivalent to `--build`. |
-| `PUID` / `PGID` | invoking Linux user | Host uid/gid that should own bind-mounted files. Docker/rootful hosts may override these (Unraid/NAS: `99` / `100`); rootless Podman requires the invoking host identity. |
+| `PUID` / `PGID` | invoking Linux user | Host uid/gid that should own bind-mounted files. Unprivileged Linux installs must match the invoking account. Root-run rootful runtimes, including Docker or Podman on NAS and Unraid, may override these (typically `99` / `100`); rootless Podman also requires the invoking host identity. |
 | `SQUAREBOX_RUNTIME` | auto | Force `docker` or `podman`. |
 | `SQUAREBOX_HOME_VOLUME` | `squarebox-home` | Name of the named volume backing `/home/dev`. |
 | `SQUAREBOX_EDGE` | `0` | `1` is equivalent to `--edge`. |
