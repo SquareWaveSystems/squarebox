@@ -73,6 +73,7 @@ Qualification issues: [Linux desktop #126](https://github.com/SquareWaveSystems/
 - [ ] Section-only AI/editor/TUI reruns refresh Fish derived configuration
 - [ ] A non-first default editor survives Box replacement and noninteractive reconciliation
 - [ ] Explicit `set -g mouse off` remains respected during tmux migration
+- [ ] Herdr launches after installation and survives Box replacement from the Managed home
 
 ## Interactive tools
 
