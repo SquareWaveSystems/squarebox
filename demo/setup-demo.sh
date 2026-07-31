@@ -88,7 +88,7 @@ echo
 section_header "TUI Tools"
 selected=$(gum choose --no-limit \
     --header "Select terminal tools to install:" \
-    "lazygit" "gh-dash" "yazi") || true
+    "lazygit" "gh-dash" "yazi" "elio") || true
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue

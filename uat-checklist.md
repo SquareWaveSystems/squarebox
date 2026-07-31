@@ -76,7 +76,7 @@ Qualification issues: [Linux desktop #126](https://github.com/SquareWaveSystems/
 
 ## Interactive tools
 
-- [ ] `lazygit`, `yazi`, `gh-dash`, and Helix (`hx`) render and accept input
+- [ ] `lazygit`, `yazi`, `elio`, `gh-dash`, and Helix (`hx`) render and accept input
 - [ ] `gum` and `fzf` interactive modes work with the host terminal
 - [ ] tmux and Zellij keybindings match the documentation
 - [ ] Neovim/LazyVim first launch completes without wedging dpkg under the timezone mount
