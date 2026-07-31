@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.2.0 — 2026-07-31
 
 ### Added
 
@@ -21,6 +21,17 @@
 - New managed Zellij configuration detaches sessions when a client disappears;
   exact unmodified legacy defaults migrate without overwriting user-edited or
   symlinked configuration.
+
+### Changed
+
+- Image-tier pins and their reviewed amd64/arm64 checksums were refreshed for
+  xh 0.26.2, just 1.57.0, and mise 2026.7.18.
+- Stable and prerelease publication use reusable protected and automated
+  environments while preserving the same immutable-Candidate promotion model.
+
+### Migration notes
+
+See [`docs/releases/v1.2.0.md`](docs/releases/v1.2.0.md).
 
 ## v1.1.0 — 2026-07-16
 

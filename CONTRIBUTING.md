@@ -159,8 +159,8 @@ Prerelease tags publish automatically after those automated gates. For a stable
 release, create the immutable final-version tag before physical qualification,
 test the prepared digest and draft assets, then approve the separate
 `publish-release` job. Repository administrators must configure
-`v1.1-production` with a required human reviewer and leave
-`v1.1-prerelease-auto` unprotected. Approval publishes the exact prepared bytes;
+`stable-release` with a required human reviewer and leave
+`prerelease-auto` unprotected. Approval publishes the exact prepared bytes;
 if qualification fails, do not retarget or reuse the tag—fix forward with a new
 version. The workflow checks the peeled remote tag before draft preparation and
 again after approval, then requires GitHub's immutable flag and signed Release
