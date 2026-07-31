@@ -8,6 +8,12 @@
   `bwrap` for its Linux sandbox instead of warning and falling back to its
   bundled helper.
 
+### Fixed
+
+- New managed Zellij configuration detaches sessions when a client disappears;
+  exact unmodified legacy defaults migrate without overwriting user-edited or
+  symlinked configuration.
+
 ### Removed
 
 - Paseo assistant installation and Selection support.
