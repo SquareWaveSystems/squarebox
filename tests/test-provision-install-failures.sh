@@ -237,7 +237,14 @@ assert_true "[ \"\$(cat '$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE/setup.rc')\" -eq 0 ] 
 
 ZELLIJ_MIGRATION_FAILURE_CASE="$TMP/zellij-migration-failure"
 run_selected_section multiplexers zellij "$ZELLIJ_MIGRATION_FAILURE_CASE" 0
-sed -i 's/on_force_close "detach"/on_force_close "quit"/' \
+sed -i \
+	-e 's#// Prefix-style bindings\. Ctrl+B is available for clients that#// Prefix-style bindings via Ctrl+Space (tmux-like leader)#' \
+	-e '/\/\/ cannot deliver Ctrl+Space (for example, some mobile stacks)./d' \
+	-e '/bind "Ctrl b" { SwitchToMode "Tmux"; }/d' \
+	-e '/bind "Ctrl b" { SwitchToMode "Normal"; }/d' \
+	-e '/\/\/ Discoverable help for this clear-defaults configuration\./,/^[[:space:]]*}[[:space:]]*$/d' \
+	-e '/\/\/ Scroll\/search reserve Ctrl+B for page-up\./,/^[[:space:]]*}[[:space:]]*$/d' \
+	-e 's/on_force_close "detach"/on_force_close "quit"/' \
 	"$ZELLIJ_MIGRATION_FAILURE_CASE/home/.config/zellij/config.kdl"
 run_selected_section multiplexers zellij "$ZELLIJ_MIGRATION_FAILURE_CASE" 0 fail expected clean config.kdl
 assert_true "[ \"\$(cat '$ZELLIJ_MIGRATION_FAILURE_CASE/setup.rc')\" -ne 0 ] && grep -Fqx 'on_force_close \"quit\"' '$ZELLIJ_MIGRATION_FAILURE_CASE/home/.config/zellij/config.kdl'" \
