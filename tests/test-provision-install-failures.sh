@@ -185,6 +185,13 @@ assert_true "[ \"\$(cat '$OPENCODE_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$
 assert_true "grep -qx 'opencode latest' '$OPENCODE_CASE/sb-install.calls'" \
 	"OpenCode failure audit exercises its sb_install caller"
 
+OMP_CASE="$TMP/omp"
+run_selected_section ai "Oh My Pi" "$OMP_CASE"
+assert_true "[ \"\$(cat '$OMP_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$OMP_CASE/state/ai-tool')\" ]" \
+	"Oh My Pi mise failure propagates without committing a Selection"
+assert_true "grep -Fq 'mise: command not found' '$OMP_CASE/setup.out'" \
+	"Oh My Pi failure audit exercises its mise installer"
+
 # sb_install owns artifact installation, but setup owns Observed state. A
 # buggy/no-op installer returning zero must still not commit an absent command.
 NO_BINARY_CASE="$TMP/no-binary"
