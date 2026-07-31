@@ -269,12 +269,20 @@ set -euo pipefail
 case "${SQUAREBOX_DIR:-}" in /*) ;; *) exit 64 ;; esac
 [ "$SQUAREBOX_DIR" != / ] && [ ! -L "$SQUAREBOX_DIR" ] || exit 64
 state="$SQUAREBOX_DIR/.squarebox/install-state"
-sudo test -f "$state" || exit 1
-workspace=$(sudo awk -F= '$1 == "WORKSPACE_DIR" {
-  print substr($0, index($0, "=") + 1); exit
-}' "$state")
+sudo test -f "$state" && sudo test ! -L "$state" || exit 1
+state_value() {
+  sudo awk -F= -v wanted="$1" '
+    $1 == wanted { count++; value = substr($0, index($0, "=") + 1) }
+    END { if (count != 1) exit 1; print value }
+  ' "$state"
+}
+format=$(state_value FORMAT)
+recorded_install=$(state_value INSTALL_DIR)
+workspace=$(state_value WORKSPACE_DIR)
+[ "$format" = 1 ] && [ "$recorded_install" = "$SQUAREBOX_DIR" ] || exit 64
 case "$workspace" in /*) ;; *) exit 64 ;; esac
-[ "$workspace" != / ] && [ ! -L "$workspace" ] || exit 64
+[ "$workspace" != / ] && sudo test -d "$workspace" \
+  && sudo test ! -L "$workspace" || exit 64
 
 git_identity="$SQUAREBOX_DIR/.squarebox/identity/git"
 lazygit_config="$SQUAREBOX_DIR/.config/lazygit"
