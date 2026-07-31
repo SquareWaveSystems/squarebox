@@ -42,7 +42,9 @@ than a hostile-code sandbox. Host DAC permissions and the declared mounts
 remain the access boundary.
 Because the entrypoint is already unprivileged in this mode, rootless Podman
 rejects PUID/PGID overrides that differ from the invoking host identity;
-Docker and rootful runtimes retain their remapping behavior.
+the native Linux POSIX lifecycle adapter rejects the same mismatch for every
+unprivileged runtime before it mutates host state. Root-run rootful runtimes
+retain explicit remapping for administered NAS and Unraid installations.
 
 The installer does not install host packages. On legacy Linux installs it may
 need to repair ownership that an older Squarebox release changed; any host
@@ -241,9 +243,54 @@ SSH files as a fallback—or as native PowerShell's current SSH path—exposes t
 contents read-only to Box processes.
 
 The entrypoint validates numeric UID/GID inputs and refuses unsafe Managed-home
-dotfile symlinks. Rootless Podman maps keep-id to the image's `dev` account and
-leaves host SELinux labels untouched by disabling label separation for the Box;
-validate this tradeoff on the target host before using sensitive credentials.
+dotfile symlinks. On native Linux, an unprivileged lifecycle install also
+requires PUID/PGID to match the invoking account because a different Box owner
+cannot safely share its private host-bound lifecycle files. Explicit ownership
+remapping is reserved for root-run rootful runtimes, including Docker or Podman
+on NAS and Unraid.
+Rootless Podman maps keep-id to the image's `dev` account and leaves host SELinux
+labels untouched by disabling label separation for the Box; validate this
+tradeoff on the target host before using sensitive credentials.
+
+If an existing POSIX Install identity records IDs that no longer match the
+invoking Linux account, adopt the current account without changing channels or
+paths:
+
+```bash
+PUID="$(id -u)" PGID="$(id -g)" "$SQUAREBOX_DIR/install.sh"
+```
+
+An older Box may already have changed the specific host binds that it mounted
+beneath `/home/dev`. Stop the recorded Box, then restore only those paths after
+validating the recorded install and Workspace identities:
+
+```bash
+set -euo pipefail
+case "${SQUAREBOX_DIR:-}" in /*) ;; *) exit 64 ;; esac
+[ "$SQUAREBOX_DIR" != / ] && [ ! -L "$SQUAREBOX_DIR" ] || exit 64
+state="$SQUAREBOX_DIR/.squarebox/install-state"
+sudo test -f "$state" || exit 1
+workspace=$(sudo awk -F= '$1 == "WORKSPACE_DIR" {
+  print substr($0, index($0, "=") + 1); exit
+}' "$state")
+case "$workspace" in /*) ;; *) exit 64 ;; esac
+[ "$workspace" != / ] && [ ! -L "$workspace" ] || exit 64
+
+git_identity="$SQUAREBOX_DIR/.squarebox/identity/git"
+lazygit_config="$SQUAREBOX_DIR/.config/lazygit"
+starship_config="$SQUAREBOX_DIR/.config/starship.toml"
+sudo test -d "$git_identity" && sudo test ! -L "$git_identity" || exit 1
+sudo test -d "$lazygit_config" && sudo test ! -L "$lazygit_config" || exit 1
+sudo test -f "$starship_config" && sudo test ! -L "$starship_config" || exit 1
+
+owner="$(id -u):$(id -g)"
+sudo chown -R --preserve-root -- "$owner" "$git_identity" "$lazygit_config"
+sudo chown --no-dereference -- "$owner" "$starship_config" "$workspace"
+PUID="$(id -u)" PGID="$(id -g)" "$SQUAREBOX_DIR/install.sh"
+```
+
+Do not replace these resolved paths with the home directory, the install root,
+or another broad recursive target.
 
 ## Safe lifecycle deletion
 

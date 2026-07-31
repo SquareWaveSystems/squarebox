@@ -238,8 +238,10 @@ if [ "$HAD_STATE" = 1 ] && [ "$HOME_VOLUME" != "$STATE_HOME_VOLUME" ]; then
 	echo "Error: cannot change the recorded Managed-home name during rebuild; uninstall this identity first." >&2; exit 1
 fi
 
-if [ "$(uname -s)" = Linux ]; then
-	_host_uid="$(id -u)"; _host_gid="$(id -g)"
+_host_os="$(uname -s)"
+_invoking_uid="$(id -u)"; _invoking_gid="$(id -g)"
+if [ "$_host_os" = Linux ]; then
+	_host_uid="$_invoking_uid"; _host_gid="$_invoking_gid"
 	# The image cannot safely remap dev to uid/gid zero.
 	[ "$_host_uid" -gt 0 ] || _host_uid=1000
 	[ "$_host_gid" -gt 0 ] || _host_gid=1000
@@ -255,6 +257,12 @@ validate_id() {
 }
 validate_id PUID "$PUID"; validate_id PGID "$PGID"
 PUID="$((10#$PUID))"; PGID="$((10#$PGID))"
+if [ "$_host_os" = Linux ] && [ "$_invoking_uid" -ne 0 ] \
+	&& { [ "$PUID" != "$_invoking_uid" ] || [ "$PGID" != "$_invoking_gid" ]; }; then
+	echo "Error: an unprivileged Linux install requires PUID/PGID to match the invoking host identity ($_invoking_uid:$_invoking_gid); requested $PUID:$PGID." >&2
+	echo "       Run the installer as the target account. Only root-run rootful runtimes, including Docker or Podman on NAS and Unraid, may remap ownership." >&2
+	exit 64
+fi
 case "$EDGE:$BUILD" in 0:0|0:1|1:1) ;; *) echo "Error: EDGE/BUILD must be 0 or 1." >&2; exit 64 ;; esac
 for _path in "$INSTALL_DIR" "$WORKSPACE_DIR" "$GIT_CONFIG_DIR"; do
 	is_absolute_state_path "$_path" || { echo "Error: lifecycle paths must be absolute and normalized (got '$_path')." >&2; exit 64; }

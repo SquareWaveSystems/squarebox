@@ -160,12 +160,71 @@ cat >"$TMP/bin/winpty" <<'EOF'
 printf '%s|%s|%s\n' "${MSYS_NO_PATHCONV:-}" "${MSYS2_ARG_CONV_EXCL:-}" "$*" >>"$MOCK_RUNTIME/winpty-calls"
 exec "$@"
 EOF
+cat >"$TMP/bin/id" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  -u) [ -z "${MOCK_ID_UID:-}" ] || { printf '%s\n' "$MOCK_ID_UID"; exit 0; } ;;
+  -g) [ -z "${MOCK_ID_GID:-}" ] || { printf '%s\n' "$MOCK_ID_GID"; exit 0; } ;;
+esac
+exec /usr/bin/id "$@"
+EOF
+cat >"$TMP/bin/uname" <<'EOF'
+#!/usr/bin/env bash
+if [ "${1:-}" = -s ] && [ -n "${MOCK_UNAME_S:-}" ]; then
+  printf '%s\n' "$MOCK_UNAME_S"
+  exit 0
+fi
+exec /usr/bin/uname "$@"
+EOF
 ln -s docker "$TMP/bin/podman"
 chmod +x "$TMP/bin/"*
 
 INSTALL="$TMP/custom squarebox=managed"
 export PATH="$TMP/bin:$PATH" HOME="$TMP/home" SHELL=/bin/bash
 PRIMARY_HOME="$HOME"
+
+# A native unprivileged Linux adapter cannot safely manage host-owned private
+# config after asking the Box to use a different numeric identity. Reject that
+# split before the checkout or any runtime resource exists.
+HOST_UID=12345; HOST_GID=23456
+BAD_UID=12346; BAD_GID=23457
+mismatch_index=0
+for requested_identity in "$BAD_UID:$HOST_GID" "$HOST_UID:$BAD_GID"; do
+  mismatch_index=$((mismatch_index + 1))
+  requested_uid=${requested_identity%%:*}
+  requested_gid=${requested_identity#*:}
+  MISMATCH_RUNTIME="$TMP/runtime-puid-mismatch-$mismatch_index"
+  MISMATCH_INSTALL="$TMP/puid-mismatch-$mismatch_index"
+  mkdir -p "$MISMATCH_RUNTIME"
+  set +e
+  HOME="$TMP/home" MOCK_RUNTIME="$MISMATCH_RUNTIME" \
+    MOCK_UNAME_S=Linux MOCK_ID_UID="$HOST_UID" MOCK_ID_GID="$HOST_GID" \
+    SQUAREBOX_DIR="$MISMATCH_INSTALL" SQUAREBOX_RUNTIME=docker SQUAREBOX_TAG=v1.1.0 \
+    PUID="$requested_uid" PGID="$requested_gid" \
+    "$ROOT/install.sh" </dev/null >"$TMP/puid-mismatch-$mismatch_index.out" 2>&1
+  mismatch_rc=$?
+  set -e
+  if [ "$mismatch_rc" -ne 64 ]; then
+    echo "installer returned $mismatch_rc for an unsafe unprivileged PUID/PGID mismatch; expected 64" >&2
+    cat "$TMP/puid-mismatch-$mismatch_index.out" >&2
+    exit 1
+  fi
+  grep -q "requires PUID/PGID to match the invoking host identity ($HOST_UID:$HOST_GID)" \
+    "$TMP/puid-mismatch-$mismatch_index.out"
+  grep -q "requested $requested_uid:$requested_gid" "$TMP/puid-mismatch-$mismatch_index.out"
+  test ! -e "$MISMATCH_INSTALL"
+  test ! -e "$MISMATCH_RUNTIME/calls"
+done
+
+MATCH_RUNTIME="$TMP/runtime-puid-match"
+mkdir -p "$MATCH_RUNTIME" "$TMP/puid-match-home"
+HOME="$TMP/puid-match-home" MOCK_RUNTIME="$MATCH_RUNTIME" \
+  MOCK_UNAME_S=Linux MOCK_ID_UID="$HOST_UID" MOCK_ID_GID="$HOST_GID" \
+  SQUAREBOX_DIR="$TMP/puid-match" SQUAREBOX_RUNTIME=docker SQUAREBOX_TAG=v1.1.0 \
+  PUID="$HOST_UID" PGID="$HOST_GID" "$ROOT/install.sh" </dev/null
+grep -qxF "PUID=$HOST_UID" "$TMP/puid-match/.squarebox/install-state"
+grep -qxF "PGID=$HOST_GID" "$TMP/puid-match/.squarebox/install-state"
+
 if SQUAREBOX_DIR="$TMP/unsafe" SQUAREBOX_WORKSPACE=/ SQUAREBOX_RUNTIME=docker SQUAREBOX_TAG=v1.1.0 \
     "$ROOT/install.sh" </dev/null >"$TMP/unsafe-workspace.out" 2>&1; then
   echo 'installer accepted a root Workspace before recording state' >&2
@@ -189,9 +248,12 @@ GIT_BASH_RUNTIME="$TMP/runtime-git-bash"
 mkdir -p "$GIT_BASH_HOME" "$GIT_BASH_RUNTIME"
 (cd "$TMP" && HOME="$GIT_BASH_HOME" MSYSTEM=MINGW64 USERPROFILE='C:/Users/Test' \
 	SQUAREBOX_DIR="$GIT_BASH_INSTALL" SQUAREBOX_RUNTIME=docker SQUAREBOX_TAG=v1.1.0 \
-	MOCK_RUNTIME="$GIT_BASH_RUNTIME" "$ROOT/install.sh" </dev/null)
+	MOCK_RUNTIME="$GIT_BASH_RUNTIME" MOCK_UNAME_S=MINGW64_NT-10.0 \
+	PUID=4242 PGID=4243 "$ROOT/install.sh" </dev/null)
 GIT_BASH_STATE="$TMP/$GIT_BASH_INSTALL/.squarebox/install-state"
 grep -qxF "INSTALL_DIR=$GIT_BASH_INSTALL" "$GIT_BASH_STATE"
+grep -qxF 'PUID=4242' "$GIT_BASH_STATE"
+grep -qxF 'PGID=4243' "$GIT_BASH_STATE"
 (cd "$TMP" && HOME="$GIT_BASH_HOME" MSYSTEM=MINGW64 USERPROFILE='C:/Users/Test' \
 	SQUAREBOX_DIR="$GIT_BASH_INSTALL" MOCK_RUNTIME="$GIT_BASH_RUNTIME" \
 	"$ROOT/uninstall.sh" --yes >/dev/null)
@@ -203,6 +265,26 @@ if (cd "$TMP" && env -u MSYSTEM -u USERPROFILE HOME="$GIT_BASH_HOME" \
 	echo 'Linux uninstaller accepted a Git Bash drive-form identity' >&2; exit 1
 fi
 grep -q 'invalid Install identity' "$TMP/linux-uninstall-drive.out"
+
+# Root-run rootful runtimes may intentionally assign NAS/Unraid ownership, and
+# non-Linux Docker Desktop adapters retain their adapter-native Box identity.
+ROOTFUL_RUNTIME="$TMP/runtime-rootful-override"
+mkdir -p "$ROOTFUL_RUNTIME" "$TMP/rootful-home"
+HOME="$TMP/rootful-home" MOCK_RUNTIME="$ROOTFUL_RUNTIME" \
+  MOCK_UNAME_S=Linux MOCK_ID_UID=0 MOCK_ID_GID=0 \
+  SQUAREBOX_DIR="$TMP/rootful-override" SQUAREBOX_RUNTIME=docker SQUAREBOX_TAG=v1.1.0 \
+  PUID=99 PGID=100 "$ROOT/install.sh" </dev/null
+grep -qxF 'PUID=99' "$TMP/rootful-override/.squarebox/install-state"
+grep -qxF 'PGID=100' "$TMP/rootful-override/.squarebox/install-state"
+
+DARWIN_RUNTIME="$TMP/runtime-darwin-identity"
+mkdir -p "$DARWIN_RUNTIME" "$TMP/darwin-home"
+HOME="$TMP/darwin-home" MOCK_RUNTIME="$DARWIN_RUNTIME" \
+  MOCK_UNAME_S=Darwin MOCK_ID_UID=501 MOCK_ID_GID=20 \
+  SQUAREBOX_DIR="$TMP/darwin-identity" SQUAREBOX_RUNTIME=docker SQUAREBOX_TAG=v1.1.0 \
+  PUID=1000 PGID=1000 "$ROOT/install.sh" </dev/null
+grep -qxF 'PUID=1000' "$TMP/darwin-identity/.squarebox/install-state"
+grep -qxF 'PGID=1000' "$TMP/darwin-identity/.squarebox/install-state"
 
 # Noninteractive Selection seeding must not follow a repository-controlled
 # Workspace .squarebox link or any known Selection-file link.
@@ -299,7 +381,10 @@ grep -qxE '[0-9a-f]{40}' "$SQUAREBOX_DIR/.squarebox/managed-config/lazygit-confi
 export HOME="$PRIMARY_HOME" MOCK_RUNTIME="$TMP/runtime"
 
 export SQUAREBOX_DIR="$INSTALL" SQUAREBOX_RUNTIME=docker SQUAREBOX_TAG=v1.1.0 SQUAREBOX_AI=codex
-"$ROOT/install.sh" </dev/null
+EXPECTED_PUID=$(id -u); EXPECTED_PGID=$(id -g)
+[ "$EXPECTED_PUID" -gt 0 ] || EXPECTED_PUID=1000
+[ "$EXPECTED_PGID" -gt 0 ] || EXPECTED_PGID=1000
+PUID="$EXPECTED_PUID" PGID="$EXPECTED_PGID" "$ROOT/install.sh" </dev/null
 
 STATE="$INSTALL/.squarebox/install-state"
 test -f "$STATE"
@@ -309,6 +394,8 @@ grep -qxF 'SOURCE_COMMIT=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$STATE"
 grep -qxF 'IMAGE_REF=ghcr.io/squarewavesystems/squarebox@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' "$STATE"
 grep -qxF 'IMAGE_DIGEST=ghcr.io/squarewavesystems/squarebox@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' "$STATE"
 grep -qxE 'INSTALL_ID=[A-Za-z0-9._-]{8,128}' "$STATE"
+grep -qxF "PUID=$EXPECTED_PUID" "$STATE"
+grep -qxF "PGID=$EXPECTED_PGID" "$STATE"
 EXPECTED_KEYS='BUILD CONTAINER_NAME EDGE FORMAT GIT_CONFIG_DIR HOME_VOLUME HOME_VOLUME_ADOPTED IMAGE_ALIAS IMAGE_DIGEST IMAGE_ID IMAGE_REF IMAGE_REPOSITORY INSTALL_DIR INSTALL_ID ORIGIN PGID PUID RELEASE_TAG REQUESTED_TAG RUNTIME SHELL_INIT SHELL_RC SOURCE_COMMIT SOURCE_REF WORKSPACE_DIR'
 ACTUAL_KEYS=$(cut -d= -f1 "$STATE" | sort | tr '\n' ' ' | sed 's/ $//')
 [ "$ACTUAL_KEYS" = "$EXPECTED_KEYS" ]
@@ -316,6 +403,28 @@ ACTUAL_KEYS=$(cut -d= -f1 "$STATE" | sort | tr '\n' ' ' | sed 's/ $//')
 test -f "$INSTALL/.squarebox/identity/git/config"
 grep -q 'user.name=Lifecycle Test' "$INSTALL/.squarebox/identity/git/config"
 test ! -e "$HOME/.config/git"
+
+# A recorded mismatch is the same unsafe ownership split on rebuild. Refuse it
+# before rewriting private config or contacting the runtime.
+cp "$STATE" "$TMP/state-before-recorded-mismatch"
+sed -i "s/^PUID=.*/PUID=$BAD_UID/; s/^PGID=.*/PGID=$BAD_GID/" "$STATE"
+cp "$STATE" "$TMP/state-recorded-mismatch"
+git_config_before=$(sha256sum "$INSTALL/.squarebox/identity/git/config")
+: >"$MOCK_RUNTIME/calls"
+set +e
+MOCK_UNAME_S=Linux MOCK_ID_UID="$HOST_UID" MOCK_ID_GID="$HOST_GID" \
+  "$INSTALL/install.sh" </dev/null >"$TMP/recorded-puid-mismatch.out" 2>&1
+recorded_mismatch_rc=$?
+set -e
+test "$recorded_mismatch_rc" -eq 64
+grep -q "requires PUID/PGID to match the invoking host identity ($HOST_UID:$HOST_GID)" \
+  "$TMP/recorded-puid-mismatch.out"
+grep -q "requested $BAD_UID:$BAD_GID" "$TMP/recorded-puid-mismatch.out"
+test ! -s "$MOCK_RUNTIME/calls"
+test "$git_config_before" = "$(sha256sum "$INSTALL/.squarebox/identity/git/config")"
+cmp -s "$STATE" "$TMP/state-recorded-mismatch"
+mv "$TMP/state-before-recorded-mismatch" "$STATE"
+
 MOCK_EMPTY_GIT_ID=1 "$INSTALL/install.sh" </dev/null
 grep -q 'user.name=Lifecycle Test' "$INSTALL/.squarebox/identity/git/config"
 grep -q 'user.email=lifecycle@example.test' "$INSTALL/.squarebox/identity/git/config"
@@ -472,9 +581,11 @@ if "$ROOT/install.sh" --not-a-real-option >/dev/null 2>&1; then
 fi
 
 # Rootless Podman maps the invoking host user to the image's dev identity and
-# disables SELinux relabeling for this home-mounting development Box. Private
-# :Z labels on Workspace/config/SSH paths make those host paths unusable by
-# other consumers and do not compose with this mount model.
+# disables SELinux relabeling for this home-mounting development Box. Native
+# unprivileged identity mismatches are rejected before runtime inspection; the
+# runtime-specific check remains the fail-closed control for root invocation.
+# Private :Z labels on Workspace/config/SSH paths make those host paths
+# unusable by other consumers and do not compose with this mount model.
 export MOCK_RUNTIME="$TMP/runtime-podman"; mkdir -p "$MOCK_RUNTIME"
 export MOCK_ROOTLESS=1 MOCK_RELEASE_TAG=v1.1.0 MOCK_MANIFEST_MISSING=0
 export HOME="$TMP/podman-home"; mkdir -p "$HOME"
@@ -487,7 +598,8 @@ grep -q -- '--userns=keep-id:uid=1000,gid=1000' "$MOCK_RUNTIME/calls"
 export MOCK_RUNTIME="$TMP/runtime-podman-bad-id"; mkdir -p "$MOCK_RUNTIME"
 export HOME="$TMP/podman-bad-id-home"; mkdir -p "$HOME"
 export SQUAREBOX_DIR="$TMP/podman-bad-id"
-if PUID=99 PGID=100 "$ROOT/install.sh" </dev/null >"$TMP/podman-bad-id.out" 2>&1; then
+if MOCK_UNAME_S=Linux MOCK_ID_UID=0 MOCK_ID_GID=0 PUID=99 PGID=100 \
+    "$ROOT/install.sh" </dev/null >"$TMP/podman-bad-id.out" 2>&1; then
   echo 'rootless Podman accepted an ineffective PUID/PGID remap' >&2; exit 1
 fi
 grep -q 'rootless Podman maps the invoking host identity' "$TMP/podman-bad-id.out"
