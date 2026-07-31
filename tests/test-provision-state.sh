@@ -154,6 +154,12 @@ HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 ZELLIJ_CONF="$HOME_DIR/.config/zellij/config.kdl"
 assert_true "grep -Fqx 'on_force_close \"detach\"' '$ZELLIJ_CONF' && ! grep -Fq 'on_force_close \"quit\"' '$ZELLIJ_CONF'" \
 	"fresh managed Zellij config detaches on client loss"
+assert_true "[ \"\$(grep -Fc 'bind \"Ctrl b\" { SwitchToMode \"Tmux\"; }' '$ZELLIJ_CONF')\" -eq 1 ] && [ \"\$(grep -Fc 'bind \"Ctrl b\" { SwitchToMode \"Normal\"; }' '$ZELLIJ_CONF')\" -eq 3 ]" \
+	"fresh managed Zellij config provides Ctrl+B leader entry and exits"
+assert_true "grep -Fq 'LaunchOrFocusPlugin \"configuration\" { floating true; };' '$ZELLIJ_CONF' && grep -Fq 'shared_except \"normal\" \"locked\" \"tmux\" \"scroll\" \"search\"' '$ZELLIJ_CONF'" \
+	"fresh managed Zellij config exposes help without shadowing scroll/search Ctrl+B"
+assert_true "[ \"\$(grep -Fc 'bind \"Ctrl b\" \"PageUp\" { PageScrollUp; }' '$ZELLIJ_CONF')\" -eq 2 ]" \
+	"scroll and search retain Ctrl+B page-up"
 
 sed -i \
 	-e 's#// Prefix-style bindings\. Ctrl+B is available for clients that#// Prefix-style bindings via Ctrl+Space (tmux-like leader)#' \

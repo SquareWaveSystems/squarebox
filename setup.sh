@@ -1511,16 +1511,20 @@ _install_zellij_inner() {
 		            };
 		        }
 
-		        // Prefix-style bindings via Ctrl+Space (tmux-like leader)
+		        // Prefix-style bindings. Ctrl+B is available for clients that
+		        // cannot deliver Ctrl+Space (for example, some mobile stacks).
 		        bind "Ctrl Space" { SwitchToMode "Tmux"; }
+		        bind "Ctrl b" { SwitchToMode "Tmux"; }
 		    }
 
 		    locked {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		        bind "Ctrl b" { SwitchToMode "Normal"; }
 		    }
 
 		    tmux {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		        bind "Ctrl b" { SwitchToMode "Normal"; }
 		        bind "Esc" { SwitchToMode "Normal"; }
 
 		        // Pane splitting (h=horizontal, v=vertical — matching tmux)
@@ -1569,6 +1573,11 @@ _install_zellij_inner() {
 
 		        // Enter scroll/copy mode (vi-style — like tmux [ )
 		        bind "[" { SwitchToMode "Scroll"; }
+		        // Discoverable help for this clear-defaults configuration.
+		        bind "?" {
+		            LaunchOrFocusPlugin "configuration" { floating true; };
+		            SwitchToMode "Normal";
+		        }
 		    }
 
 		    // ── Scroll mode (vi-style copy mode) ────────────────────────
@@ -1625,6 +1634,10 @@ _install_zellij_inner() {
 		    // Allow Ctrl+Space to return to normal from any non-normal mode
 		    shared_except "normal" "locked" "tmux" {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		    }
+		    // Scroll/search reserve Ctrl+B for page-up.
+		    shared_except "normal" "locked" "tmux" "scroll" "search" {
+		        bind "Ctrl b" { SwitchToMode "Normal"; }
 		    }
 		}
 			ZELLIJCONF
