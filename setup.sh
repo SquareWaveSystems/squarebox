@@ -89,6 +89,17 @@ should_run() {
 	return 1
 }
 
+# postCreate seeds defaults into otherwise absent Selection files so this
+# reconciliation pass can consume them. Those values are requested choices,
+# not prior user Selections, and must not be retained when installation fails.
+reconcile_selection_was_newly_seeded() {
+	$SB_RECONCILE || return 1
+	case ",${SQUAREBOX_RECONCILE_NEW_SELECTIONS-}," in
+		*",$1,"*) return 0 ;;
+	esac
+	return 1
+}
+
 SB_TMPDIR=$(mktemp -d)
 export SB_TMPDIR
 trap 'rm -rf "$SB_TMPDIR"' EXIT
@@ -616,6 +627,8 @@ else
 	ai_choice="claude"
 fi
 
+reconcile_selection_was_newly_seeded ai-tool && ai_prev=""
+
 supported_ai=()
 for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 	case "$ai_tool" in
@@ -842,6 +855,8 @@ else
 	echo "Skipping editor selection (non-interactive)"
 	editor_list=""
 fi
+
+reconcile_selection_was_newly_seeded editors && editor_prev=""
 
 if ! $editor_cancelled; then
 
@@ -1153,6 +1168,8 @@ else
 	tui_list=""
 fi
 
+reconcile_selection_was_newly_seeded tuis && tui_prev=""
+
 if ! $tui_cancelled; then
 
 install_lazygit() {
@@ -1302,6 +1319,8 @@ else
 	echo "Skipping multiplexer selection (non-interactive)"
 	mux_list=""
 fi
+
+reconcile_selection_was_newly_seeded multiplexer && mux_prev=""
 
 if ! $mux_cancelled; then
 
@@ -1867,6 +1886,8 @@ else
 	echo "Skipping SDK selection (non-interactive)"
 	sdk_list=""
 fi
+
+reconcile_selection_was_newly_seeded sdks && sdk_prev=""
 
 if ! $sdk_cancelled; then
 

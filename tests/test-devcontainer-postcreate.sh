@@ -69,7 +69,7 @@ if HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	exit 1
 fi
 grep -qx -- '--reconcile-selection ai sdks multiplexers' "$TMP/setup.call"
-test -f "$STATE/ai-tool" && test ! -s "$STATE/ai-tool"
+test ! -e "$STATE/ai-tool"
 grep -qx node "$STATE/sdks"
 grep -qx zellij "$STATE/multiplexer"
 test ! -e "$HOME_DIR/.squarebox-setup-done"
@@ -168,5 +168,128 @@ if bash "$ROOT/setup.sh" --reconcile-selection >"$TMP/reconcile-no-sections.out"
 	exit 1
 fi
 grep -q -- '--reconcile-selection requires at least one section' "$TMP/reconcile-no-sections.out"
+
+# Exercise the real postCreate -> setup transaction for a newly seeded default.
+# A failed install must leave the Selection absent so the next postCreate can
+# retry it, while a pre-existing user Selection must remain preserved.
+DEFAULT_FAILURE_STATE="$TMP/default-failure-state"
+DEFAULT_FAILURE_HOME="$TMP/default-failure-home"
+DEFAULT_FAILURE_BIN="$TMP/default-failure-bin"
+DEFAULT_FAILURE_TOOL_LIB="$TMP/default-failure-tool-lib.sh"
+DEFAULT_FAILURE_LOG="$TMP/default-failure-install.log"
+mkdir -p "$DEFAULT_FAILURE_STATE" "$DEFAULT_FAILURE_HOME" "$DEFAULT_FAILURE_BIN"
+cat > "$DEFAULT_FAILURE_TOOL_LIB" <<'EOF'
+# Keep the probe independent of optional tools installed on the test host.
+command() {
+	if [ "${1:-}" = -v ]; then
+		case "${2:-}" in
+			yazi|ya|elio|hx)
+				[ -x "$SQUAREBOX_FAKE_BIN/${2}" ] || return 1
+				;;
+		esac
+	fi
+	builtin command "$@"
+}
+
+sb_install() {
+	printf '%s\n' "$*" >> "$SQUAREBOX_FAKE_INSTALL_LOG"
+	if [ "$SQUAREBOX_FAKE_INSTALL_MODE" = success ]; then
+		case "$1" in
+			yazi)
+				for tool in yazi ya; do
+					printf '#!/usr/bin/env bash\nexit 0\n' > "$SQUAREBOX_FAKE_BIN/$tool"
+					chmod +x "$SQUAREBOX_FAKE_BIN/$tool"
+				done
+				return 0
+				;;
+			helix)
+				printf '#!/usr/bin/env bash\nexit 0\n' > "$SQUAREBOX_FAKE_BIN/hx"
+				chmod +x "$SQUAREBOX_FAKE_BIN/hx"
+				mkdir -p "$HOME/.config/helix/runtime"
+				return 0
+				;;
+		esac
+	fi
+	return 1
+}
+EOF
+
+run_default() {
+	local mode=$1 state=${2:-$DEFAULT_FAILURE_STATE} home=${3:-$DEFAULT_FAILURE_HOME}
+	HOME="$home" \
+		PATH="$DEFAULT_FAILURE_BIN:/usr/bin:/bin" \
+		SQUAREBOX_STATE_DIR="$state" \
+		SQUAREBOX_SETUP_SCRIPT="$ROOT/setup.sh" \
+		SQUAREBOX_TOOL_LIB="$DEFAULT_FAILURE_TOOL_LIB" \
+		SQUAREBOX_TOOLS_YAML=/dev/null \
+		SQUAREBOX_FAKE_BIN="$DEFAULT_FAILURE_BIN" \
+		SQUAREBOX_FAKE_INSTALL_MODE="$mode" \
+		SQUAREBOX_FAKE_INSTALL_LOG="$DEFAULT_FAILURE_LOG" \
+		SQUAREBOX_DC_AI= SQUAREBOX_DC_SDKS= \
+		SQUAREBOX_DC_EDITORS= SQUAREBOX_DC_TUIS=yazi \
+		SQUAREBOX_DC_MULTIPLEXERS= \
+		bash "$ROOT/scripts/devcontainer-postcreate.sh" \
+		>"$TMP/default-$mode.out" 2>&1
+}
+
+if run_default fail; then
+	echo "FAIL: post-create accepted a failed newly seeded default" >&2
+	exit 1
+fi
+test ! -e "$DEFAULT_FAILURE_STATE/tuis"
+run_default success
+grep -qx yazi "$DEFAULT_FAILURE_STATE/tuis"
+test -x "$DEFAULT_FAILURE_BIN/yazi"
+test -x "$DEFAULT_FAILURE_BIN/ya"
+test "$(wc -l < "$DEFAULT_FAILURE_LOG")" -eq 2
+test -e "$DEFAULT_FAILURE_HOME/.squarebox-setup-done"
+
+rm -f -- "$DEFAULT_FAILURE_BIN/yazi" "$DEFAULT_FAILURE_BIN/ya"
+PRIOR_STATE="$TMP/prior-selection-state"
+PRIOR_HOME="$TMP/prior-selection-home"
+mkdir -p "$PRIOR_STATE" "$PRIOR_HOME"
+printf 'elio\n' > "$PRIOR_STATE/tuis"
+if run_default fail "$PRIOR_STATE" "$PRIOR_HOME"; then
+	echo "FAIL: post-create accepted a failed prior Selection" >&2
+	exit 1
+fi
+grep -qx elio "$PRIOR_STATE/tuis"
+test "$(wc -l < "$DEFAULT_FAILURE_LOG")" -eq 3
+tail -n 1 "$DEFAULT_FAILURE_LOG" | grep -qx 'elio latest'
+test ! -e "$PRIOR_HOME/.squarebox-setup-done"
+
+EDITOR_FAILURE_STATE="$TMP/editor-failure-state"
+EDITOR_FAILURE_HOME="$TMP/editor-failure-home"
+EDITOR_FAILURE_LOG="$TMP/editor-failure-install.log"
+mkdir -p "$EDITOR_FAILURE_STATE" "$EDITOR_FAILURE_HOME"
+run_editor_default() {
+	local mode=$1
+	HOME="$EDITOR_FAILURE_HOME" \
+		PATH="$DEFAULT_FAILURE_BIN:/usr/bin:/bin" \
+		SQUAREBOX_STATE_DIR="$EDITOR_FAILURE_STATE" \
+		SQUAREBOX_SETUP_SCRIPT="$ROOT/setup.sh" \
+		SQUAREBOX_TOOL_LIB="$DEFAULT_FAILURE_TOOL_LIB" \
+		SQUAREBOX_TOOLS_YAML=/dev/null \
+		SQUAREBOX_FAKE_BIN="$DEFAULT_FAILURE_BIN" \
+		SQUAREBOX_FAKE_INSTALL_MODE="$mode" \
+		SQUAREBOX_FAKE_INSTALL_LOG="$EDITOR_FAILURE_LOG" \
+		SQUAREBOX_DC_AI= SQUAREBOX_DC_SDKS= \
+		SQUAREBOX_DC_EDITORS=helix SQUAREBOX_DC_TUIS= \
+		SQUAREBOX_DC_MULTIPLEXERS= \
+		bash "$ROOT/scripts/devcontainer-postcreate.sh" \
+		>"$TMP/editor-$mode.out" 2>&1
+}
+
+if run_editor_default fail; then
+	echo "FAIL: post-create accepted a failed newly seeded editor" >&2
+	exit 1
+fi
+test ! -e "$EDITOR_FAILURE_STATE/editors"
+test ! -e "$EDITOR_FAILURE_STATE/editor-default"
+run_editor_default success
+grep -qx helix "$EDITOR_FAILURE_STATE/editors"
+grep -qx hx "$EDITOR_FAILURE_STATE/editor-default"
+test -e "$EDITOR_FAILURE_HOME/.squarebox-setup-done"
+test "$(wc -l < "$EDITOR_FAILURE_LOG")" -eq 2
 
 echo "PASS: Dev Container provisioning preserves independent section outcomes and prior Selections"
