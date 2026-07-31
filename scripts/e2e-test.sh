@@ -376,6 +376,12 @@ suite_devcontainer() {
 		jq -r '.workspaceFolder' "$dc"
 	run_test_grep "8.3b workspaceMount targets /workspace" "target=/workspace" \
 		jq -r '.workspaceMount' "$dc"
+	run_test "8.3c Managed home uses one rebuild-stable per-Box volume" \
+		jq -e '[.mounts[]? | select(
+			.source == "squarebox-home-${devcontainerId}" and
+			.target == "/home/dev" and
+			.type == "volume"
+		)] | length == 1' "$dc"
 
 	# 8.4 user is dev
 	run_test_grep "8.4 remoteUser is dev" "dev" jq -r '.remoteUser' "$dc"
