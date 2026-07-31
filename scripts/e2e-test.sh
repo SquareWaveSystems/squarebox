@@ -226,8 +226,8 @@ suite_setup_editors() {
 	mkdir -p /workspace/.squarebox
 	echo "opencode,pi" > /workspace/.squarebox/ai-tool
 	echo "micro,edit,fresh,helix,nvim" > /workspace/.squarebox/editors
-	echo "lazygit,gh-dash,yazi" > /workspace/.squarebox/tuis
-	echo "tmux,zellij" > /workspace/.squarebox/multiplexer
+	echo "lazygit,gh-dash,yazi,elio" > /workspace/.squarebox/tuis
+	echo "tmux,zellij,herdr" > /workspace/.squarebox/multiplexer
 	echo "node,go" > /workspace/.squarebox/sdks
 	# Shell section (experimental): exercise the bash path here. The zsh
 	# install (apt zsh + Oh My Zsh + two plugin clones) is network-heavy and
@@ -271,6 +271,7 @@ suite_setup_editors() {
 	run_test "3.7h gh-dash installed" command -v gh-dash
 	run_test "3.7i yazi installed" command -v yazi
 	run_test "3.7j ya installed" command -v ya
+	run_test "3.7k elio installed" command -v elio
 
 	# 5.12 lazygit config uses delta pager (set up by install_lazygit)
 	run_test_grep "5.12 lazygit config uses delta" "delta" cat /home/dev/.config/lazygit/config.yml
@@ -278,6 +279,7 @@ suite_setup_editors() {
 	# 3.8 multiplexers installed
 	run_test "3.8a tmux installed" command -v tmux
 	run_test "3.8b zellij installed" command -v zellij
+	run_test "3.8c herdr installed" command -v herdr
 
 	# 3.9 SDKs installed (via mise)
 	run_test "3.9a node installed (via mise)" command -v node

@@ -66,17 +66,18 @@ Qualification issues: [Linux desktop #126](https://github.com/SquareWaveSystems/
 - [ ] Deliberately choose an empty Selection and confirm it is saved distinctly from cancel
 - [ ] Fail one assistant install and confirm aliases target the first successfully observed assistant
 - [ ] GitHub device authentication succeeds; decline marker and credentials survive Box replacement
-- [ ] Claude, Copilot, Gemini, Codex, OpenCode, and Pi launch after installation
+- [ ] Claude, Copilot, Gemini, Codex, OpenCode, Pi, and Oh My Pi launch after installation
 - [ ] Copilot uses the supported `copilot` command
 - [ ] Bash initializes Starship, Zoxide, fzf keybindings/completion, aliases, and mise shims
 - [ ] Zsh and Fish initialize Starship, Zoxide, the `fzf`/`ff` command path, aliases, and mise shims
 - [ ] Section-only AI/editor/TUI reruns refresh Fish derived configuration
 - [ ] A non-first default editor survives Box replacement and noninteractive reconciliation
 - [ ] Explicit `set -g mouse off` remains respected during tmux migration
+- [ ] Herdr launches after installation and survives Box replacement from the Managed home
 
 ## Interactive tools
 
-- [ ] `lazygit`, `yazi`, `gh-dash`, and Helix (`hx`) render and accept input
+- [ ] `lazygit`, `yazi`, `elio`, `gh-dash`, and Helix (`hx`) render and accept input
 - [ ] `gum` and `fzf` interactive modes work with the host terminal
 - [ ] tmux and Zellij keybindings match the documentation
 - [ ] Neovim/LazyVim first launch completes without wedging dpkg under the timezone mount

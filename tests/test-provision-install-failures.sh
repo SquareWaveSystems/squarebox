@@ -16,7 +16,7 @@ assert_true() { if eval "$1"; then ok "$2"; else not_ok "$2"; fi; }
 # observed success.
 FIXTURE_BIN="$TMP/bin"
 mkdir -p "$FIXTURE_BIN"
-for utility in bash jq mkdir mktemp rm touch tr; do
+for utility in awk bash chmod grep jq mkdir mktemp rm sed sha256sum touch tr; do
 	ln -s "$(command -v "$utility")" "$FIXTURE_BIN/$utility"
 done
 
@@ -57,6 +57,13 @@ cat > "$FIXTURE_BIN/gum" <<-'GUM'
 	esac
 GUM
 chmod +x "$FIXTURE_BIN/gum"
+
+cat > "$FIXTURE_BIN/mise" <<-'MISE'
+	#!/bin/bash
+	printf '%s\n' "$*" >> "$MISE_CALLS"
+	exit "${MISE_RC:-42}"
+MISE
+chmod +x "$FIXTURE_BIN/mise"
 
 FIXTURE_LIB="$TMP/tool-lib.sh"
 cat > "$FIXTURE_LIB" <<-'TOOL_LIB'
@@ -125,6 +132,7 @@ run_selected_section() {
 		ATOMIC_CAT_FAIL_PREFIX="$atomic_cat_fail_prefix" \
 		ATOMIC_FAILURE_CALLS="$case_dir/atomic-failure.calls" \
 		NETWORK_CALLS="$case_dir/network.calls" \
+		MISE_CALLS="$case_dir/mise.calls" \
 		FAKE_GUM_SELECTION="$selection" \
 		PATH="$FIXTURE_BIN" \
 		/usr/bin/script -qec "/bin/bash '$ROOT/setup.sh' --rerun '$section'" /dev/null \
@@ -158,6 +166,13 @@ assert_true "[ ! -e '$ZELLIJ_CASE/home/.config/zellij/config.kdl' ]" \
 assert_true "grep -qx 'zellij latest' '$ZELLIJ_CASE/sb-install.calls'" \
 	"Zellij regression exercises the sb_install seam"
 
+HERDR_CASE="$TMP/herdr"
+run_selected_section multiplexers herdr "$HERDR_CASE"
+assert_true "[ \"\$(cat '$HERDR_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$HERDR_CASE/state/multiplexer')\" ]" \
+	"Herdr sb_install failure propagates without committing a Selection"
+assert_true "grep -qx 'herdr latest' '$HERDR_CASE/sb-install.calls'" \
+	"Herdr failure audit exercises its sb_install caller"
+
 # Audit every adjacent setup-tier sb_install caller, not just the two callers
 # that originally had a successful config write after the failed install.
 EDITORS_CASE="$TMP/editors"
@@ -170,10 +185,10 @@ for editor in micro edit fresh helix nvim; do
 done
 
 TUIS_CASE="$TMP/tuis"
-run_selected_section tuis $'lazygit\ngh-dash\nyazi' "$TUIS_CASE"
+run_selected_section tuis $'lazygit\ngh-dash\nyazi\nelio' "$TUIS_CASE"
 assert_true "[ \"\$(cat '$TUIS_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$TUIS_CASE/state/tuis')\" ]" \
 	"all TUI sb_install failures propagate without committing Selections"
-for tui in lazygit gh-dash yazi; do
+for tui in lazygit gh-dash yazi elio; do
 	assert_true "grep -qx '$tui latest' '$TUIS_CASE/sb-install.calls'" \
 		"$tui failure audit exercises its sb_install caller"
 done
@@ -184,6 +199,13 @@ assert_true "[ \"\$(cat '$OPENCODE_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$
 	"OpenCode sb_install failure propagates without committing a Selection"
 assert_true "grep -qx 'opencode latest' '$OPENCODE_CASE/sb-install.calls'" \
 	"OpenCode failure audit exercises its sb_install caller"
+
+OMP_CASE="$TMP/omp"
+run_selected_section ai "Oh My Pi" "$OMP_CASE"
+assert_true "[ \"\$(cat '$OMP_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$OMP_CASE/state/ai-tool')\" ]" \
+	"Oh My Pi mise failure propagates without committing a Selection"
+assert_true "grep -Fqx 'use -g github:can1357/oh-my-pi' '$OMP_CASE/mise.calls'" \
+	"Oh My Pi failure audit exercises its mise installer"
 
 # sb_install owns artifact installation, but setup owns Observed state. A
 # buggy/no-op installer returning zero must still not commit an absent command.
@@ -234,6 +256,23 @@ assert_true "[ ! -e '$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE/home/.config/zellij/layou
 run_selected_section multiplexers zellij "$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE" 0
 assert_true "[ \"\$(cat '$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE/setup.rc')\" -eq 0 ] && grep -Fq 'shared_except \"normal\" \"locked\" \"tmux\"' '$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE/home/.config/zellij/config.kdl' && grep -Fq 'plugin location=\"compact-bar\"' '$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE/home/.config/zellij/layouts/default.kdl'" \
 	"Zellij rerun reconciles a missing layout beside an already-published config"
+
+ZELLIJ_MIGRATION_FAILURE_CASE="$TMP/zellij-migration-failure"
+run_selected_section multiplexers zellij "$ZELLIJ_MIGRATION_FAILURE_CASE" 0
+sed -i \
+	-e 's#// Prefix-style bindings\. Ctrl+B is available for clients that#// Prefix-style bindings via Ctrl+Space (tmux-like leader)#' \
+	-e '/\/\/ cannot deliver Ctrl+Space (for example, some mobile stacks)./d' \
+	-e '/bind "Ctrl b" { SwitchToMode "Tmux"; }/d' \
+	-e '/bind "Ctrl b" { SwitchToMode "Normal"; }/d' \
+	-e '/\/\/ Discoverable help for this clear-defaults configuration\./,/^[[:space:]]*}[[:space:]]*$/d' \
+	-e '/\/\/ Scroll\/search reserve Ctrl+B for page-up\./,/^[[:space:]]*}[[:space:]]*$/d' \
+	-e 's/on_force_close "detach"/on_force_close "quit"/' \
+	"$ZELLIJ_MIGRATION_FAILURE_CASE/home/.config/zellij/config.kdl"
+run_selected_section multiplexers zellij "$ZELLIJ_MIGRATION_FAILURE_CASE" 0 fail expected clean config.kdl
+assert_true "[ \"\$(cat '$ZELLIJ_MIGRATION_FAILURE_CASE/setup.rc')\" -ne 0 ] && grep -Fqx 'on_force_close \"quit\"' '$ZELLIJ_MIGRATION_FAILURE_CASE/home/.config/zellij/config.kdl'" \
+	"Zellij migration publish failure remains visible and preserves the legacy config"
+assert_true "! find '$ZELLIJ_MIGRATION_FAILURE_CASE/home/.config/zellij' -maxdepth 1 -name '.config.kdl.squarebox-migrate.*' | grep -q ." \
+	"failed Zellij migration removes its destination-local staging file"
 
 # Adjacent apt-backed installers can suffer the same conditional-function
 # masking. Make tmux observable while forcing its config directory creation to

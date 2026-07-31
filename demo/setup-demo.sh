@@ -35,7 +35,7 @@ section_header "AI Coding Assistants"
 selected=$(gum choose --no-limit \
     --header "Select AI coding assistants (space=toggle, enter=confirm):" \
     "Claude Code" "GitHub Copilot CLI" "Google Gemini CLI" \
-    "OpenAI Codex CLI" "OpenCode" "Pi Coding Agent") || true
+    "OpenAI Codex CLI" "OpenCode" "Pi Coding Agent" "Oh My Pi") || true
 
 node_installed=false
 while IFS= read -r line; do
@@ -50,6 +50,9 @@ while IFS= read -r line; do
                 node_installed=true
             fi
             run_with_spinner "Installing ${line}..." 0.8
+            ;;
+        "Oh My Pi")
+            run_with_spinner "Installing Oh My Pi (via mise)..." 0.8
             ;;
         "OpenCode")
             run_with_spinner "Installing OpenCode..." 0.8
@@ -88,7 +91,7 @@ echo
 section_header "TUI Tools"
 selected=$(gum choose --no-limit \
     --header "Select terminal tools to install:" \
-    "lazygit" "gh-dash" "yazi") || true
+    "lazygit" "gh-dash" "yazi" "elio") || true
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue
@@ -100,13 +103,14 @@ echo
 section_header "Terminal Multiplexers"
 selected=$(gum choose --no-limit \
     --header "Select terminal multiplexer:" \
-    "tmux" "zellij") || true
+    "tmux" "zellij" "herdr") || true
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue
     case "$line" in
         tmux)   run_with_spinner "Installing tmux..." 0.6 ;;
         zellij) run_with_spinner "Installing Zellij..." 0.6 ;;
+        herdr)  run_with_spinner "Installing Herdr..." 0.6 ;;
     esac
 done <<< "$selected"
 

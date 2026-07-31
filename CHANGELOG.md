@@ -7,6 +7,20 @@
 - `bubblewrap` in the base image so the OpenAI Codex CLI uses the system
   `bwrap` for its Linux sandbox instead of warning and falling back to its
   bundled helper.
+- Herdr is available as a selectable agent multiplexer, installed from its
+  verified GitHub release asset into the Managed home.
+- Fresh managed Zellij configuration offers Ctrl+B as an alternate leader and
+  a prefix-mode help popup without shadowing scroll/search page-up.
+- Oh My Pi (`omp`) is available as a selectable coding harness, installed and
+  managed through mise in the persistent Managed home.
+- `elio` as a selectable TUI file manager alongside Yazi, installed from its
+  verified GitHub release asset into the Managed home.
+
+### Fixed
+
+- New managed Zellij configuration detaches sessions when a client disappears;
+  exact unmodified legacy defaults migrate without overwriting user-edited or
+  symlinked configuration.
 
 ## v1.1.0 — 2026-07-16
 

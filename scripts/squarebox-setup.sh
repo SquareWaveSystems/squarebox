@@ -31,10 +31,10 @@ usage() {
 	${BOLD}Sections:${RESET}
 	  git            Git identity (name, email)
 	  github         GitHub CLI authentication
-	  ai             AI coding assistants (claude, copilot, gemini, codex, opencode, pi)
+	  ai             AI coding assistants (claude, copilot, gemini, codex, opencode, pi, omp)
 	  editors        Text editors (micro, edit, fresh, helix/hx, nvim)
-	  tuis           TUI tools (lazygit, gh-dash, yazi)
-	  multiplexers   Terminal multiplexers (tmux, zellij)
+	  tuis           TUI tools (lazygit, gh-dash, yazi, elio)
+	  multiplexers   Terminal multiplexers (tmux, zellij, herdr)
 	  sdks           SDKs (node, python, go, dotnet, rust)
 	  shell          Default shell (bash, zsh/fish — experimental)
 

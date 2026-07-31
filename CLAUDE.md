@@ -100,7 +100,7 @@ GitHub authentication uses the normal Managed-home `~/.config/gh` plus
 `~/.squarebox-gh-skip`; legacy Workspace markers are migrated.
 
 Supported assistant keys include `claude`, `copilot`, `gemini`, `codex`,
-`opencode`, and `pi`. Copilot is `@github/copilot`, binary `copilot`,
+`opencode`, `pi`, and `omp`. Copilot is `@github/copilot`, binary `copilot`,
 and needs Node 22 or newer. SDKs are managed by mise. Editors include micro,
 edit, fresh, Helix (`hx`), and Neovim/LazyVim.
 

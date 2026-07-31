@@ -150,6 +150,17 @@ tools:
     group: setup
     verification: github-release-digest
 
+  elio:
+    repo: elio-fm/elio
+    version_prefix: v
+    artifact: elio-{version}-{zarch}-unknown-linux-gnu.tar.gz
+    method: tar.gz
+    binaries: elio
+    tar_strip: 1
+    dest: user
+    group: setup
+    verification: github-release-digest
+
   opencode:
     repo: anomalyco/opencode
     version_prefix: v
@@ -227,6 +238,16 @@ tools:
     method: tar.gz
     binaries: zellij
     tar_extract: zellij
+    dest: user
+    group: setup
+    verification: github-release-digest
+
+  herdr:
+    repo: herdrdev/herdr
+    version_prefix: v
+    artifact: herdr-linux-{zarch}
+    method: binary
+    binaries: herdr
     dest: user
     group: setup
     verification: github-release-digest
