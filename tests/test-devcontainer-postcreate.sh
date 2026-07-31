@@ -13,6 +13,8 @@ mkdir -p "$STATE" "$HOME_DIR"
 cat > "$FAKE_SETUP" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+[ ! -t 0 ]
+if IFS= read -r _unexpected_input; then exit 97; fi
 printf '%s\n' "$*" > "$SQUAREBOX_FAKE_SETUP_CALL"
 # Model independent setup outcomes: assistant failed and was not committed;
 # SDK and multiplexer succeeded and remain observed/selected.
@@ -66,7 +68,7 @@ if HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	echo "FAIL: post-create accepted a failed setup" >&2
 	exit 1
 fi
-grep -qx -- '--rerun ai sdks multiplexers' "$TMP/setup.call"
+grep -qx -- '--reconcile-selection ai sdks multiplexers' "$TMP/setup.call"
 test -f "$STATE/ai-tool" && test ! -s "$STATE/ai-tool"
 grep -qx node "$STATE/sdks"
 grep -qx zellij "$STATE/multiplexer"
@@ -78,6 +80,8 @@ printf 'tmux\n' > "$STATE/multiplexer"
 cat > "$FAKE_SETUP" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+[ ! -t 0 ]
+if IFS= read -r _unexpected_input; then exit 97; fi
 grep -qx python "$SQUAREBOX_STATE_DIR/sdks"
 grep -qx tmux "$SQUAREBOX_STATE_DIR/multiplexer"
 EOF
@@ -91,5 +95,78 @@ HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 grep -qx python "$STATE/sdks"
 grep -qx tmux "$STATE/multiplexer"
 test -e "$HOME_DIR/.squarebox-setup-done"
+
+# Codespaces runs postCreateCommand with a pseudo-TTY. Prove the call site
+# closes stdin independently of setup's reconciliation-mode implementation.
+PTY_STATE="$TMP/pty-state"
+PTY_HOME="$TMP/pty-home"
+PTY_SETUP="$TMP/pty-setup.sh"
+mkdir -p "$PTY_STATE" "$PTY_HOME"
+cat > "$PTY_SETUP" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[ ! -t 0 ]
+if IFS= read -r _unexpected_input; then exit 97; fi
+test "$*" = '--reconcile-selection ai sdks'
+grep -qx claude "$SQUAREBOX_STATE_DIR/ai-tool"
+grep -qx node "$SQUAREBOX_STATE_DIR/sdks"
+printf 'called\n' > "$SQUAREBOX_FAKE_SETUP_CALL"
+EOF
+chmod +x "$PTY_SETUP"
+timeout 5s script -qec "env HOME='$PTY_HOME' SQUAREBOX_STATE_DIR='$PTY_STATE' SQUAREBOX_SETUP_SCRIPT='$PTY_SETUP' SQUAREBOX_FAKE_SETUP_CALL='$TMP/pty-setup.called' SQUAREBOX_DC_AI=claude SQUAREBOX_DC_SDKS=node SQUAREBOX_DC_EDITORS= SQUAREBOX_DC_TUIS= SQUAREBOX_DC_MULTIPLEXERS= bash '$ROOT/scripts/devcontainer-postcreate.sh'" /dev/null \
+	>"$TMP/pty-postcreate.out" 2>&1
+test -e "$TMP/pty-setup.called"
+test -e "$PTY_HOME/.squarebox-setup-done"
+
+# Independently exercise the real reconciliation mode under a live PTY and
+# without stdin redirection. Observed npm- and mise-hosted assistants must be
+# found through mise shims, with no Gum prompt or reinstall command.
+RECON_STATE="$TMP/reconcile-state"
+RECON_HOME="$TMP/reconcile-home"
+RECON_BIN="$TMP/reconcile-bin"
+RECON_SHIMS="$RECON_HOME/.local/share/mise/shims"
+RECON_TOOL_LIB="$TMP/reconcile-tool-lib.sh"
+mkdir -p "$RECON_STATE" "$RECON_HOME" "$RECON_BIN" "$RECON_SHIMS"
+printf 'copilot,omp\n' > "$RECON_STATE/ai-tool"
+printf 'node\n' > "$RECON_STATE/sdks"
+printf ':\n' > "$RECON_TOOL_LIB"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$RECON_SHIMS/copilot"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$RECON_SHIMS/omp"
+cat > "$RECON_BIN/mise" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SQUAREBOX_FAKE_MISE_LOG"
+case "${1:-}" in
+	activate) printf 'export PATH="%s/.local/share/mise/shims:$PATH"\n' "$HOME" ;;
+	which) exit 0 ;;
+	use) printf 'called\n' > "$SQUAREBOX_FAKE_INSTALL_CALLED"; exit 99 ;;
+	*) exit 0 ;;
+esac
+EOF
+cat > "$RECON_BIN/npm" <<'EOF'
+#!/usr/bin/env bash
+printf 'called\n' > "$SQUAREBOX_FAKE_INSTALL_CALLED"
+exit 99
+EOF
+cat > "$RECON_BIN/gum" <<'EOF'
+#!/usr/bin/env bash
+printf 'called\n' > "$SQUAREBOX_FAKE_GUM_CALLED"
+exit 99
+EOF
+chmod +x "$RECON_BIN/mise" "$RECON_BIN/npm" "$RECON_BIN/gum" \
+	"$RECON_SHIMS/copilot" "$RECON_SHIMS/omp"
+
+timeout 5s script -qec "env HOME='$RECON_HOME' SQUAREBOX_STATE_DIR='$RECON_STATE' SQUAREBOX_TOOL_LIB='$RECON_TOOL_LIB' SQUAREBOX_TOOLS_YAML=/dev/null SQUAREBOX_FAKE_GUM_CALLED='$TMP/gum.called' SQUAREBOX_FAKE_INSTALL_CALLED='$TMP/install.called' SQUAREBOX_FAKE_MISE_LOG='$TMP/mise.log' PATH='$RECON_BIN:/usr/bin:/bin' bash '$ROOT/setup.sh' --reconcile-selection ai sdks" /dev/null \
+	>"$TMP/tty-reconcile.out" 2>&1
+test ! -e "$TMP/gum.called"
+test ! -e "$TMP/install.called"
+grep -qx 'copilot,omp' "$RECON_STATE/ai-tool"
+grep -qx node "$RECON_STATE/sdks"
+! grep -q '^use ' "$TMP/mise.log"
+
+if bash "$ROOT/setup.sh" --reconcile-selection >"$TMP/reconcile-no-sections.out" 2>&1; then
+	echo "FAIL: selection reconciliation accepted no sections" >&2
+	exit 1
+fi
+grep -q -- '--reconcile-selection requires at least one section' "$TMP/reconcile-no-sections.out"
 
 echo "PASS: Dev Container provisioning preserves independent section outcomes and prior Selections"

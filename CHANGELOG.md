@@ -32,6 +32,8 @@ stable v1.2 release and includes that fix.
   multiplexers alongside assistants, SDKs, editors, and TUIs.
 - Codespaces created from the custom Squarebox image include a digest-locked
   SSH server Feature, so `gh codespace ssh` can attach as documented.
+- Codespaces reconcile their post-create default Selections without opening
+  interactive pickers when the orchestrator assigns a pseudo-TTY.
 - Docker Boxes can remap `dev` to a non-default PUID/PGID even when lifecycle
   adapters mount managed files read-only beneath the Managed home.
 
