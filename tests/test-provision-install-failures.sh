@@ -58,6 +58,13 @@ cat > "$FIXTURE_BIN/gum" <<-'GUM'
 GUM
 chmod +x "$FIXTURE_BIN/gum"
 
+cat > "$FIXTURE_BIN/mise" <<-'MISE'
+	#!/bin/bash
+	printf '%s\n' "$*" >> "$MISE_CALLS"
+	exit "${MISE_RC:-42}"
+MISE
+chmod +x "$FIXTURE_BIN/mise"
+
 FIXTURE_LIB="$TMP/tool-lib.sh"
 cat > "$FIXTURE_LIB" <<-'TOOL_LIB'
 	sb_install() {
@@ -125,6 +132,7 @@ run_selected_section() {
 		ATOMIC_CAT_FAIL_PREFIX="$atomic_cat_fail_prefix" \
 		ATOMIC_FAILURE_CALLS="$case_dir/atomic-failure.calls" \
 		NETWORK_CALLS="$case_dir/network.calls" \
+		MISE_CALLS="$case_dir/mise.calls" \
 		FAKE_GUM_SELECTION="$selection" \
 		PATH="$FIXTURE_BIN" \
 		/usr/bin/script -qec "/bin/bash '$ROOT/setup.sh' --rerun '$section'" /dev/null \
@@ -184,6 +192,13 @@ assert_true "[ \"\$(cat '$OPENCODE_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$
 	"OpenCode sb_install failure propagates without committing a Selection"
 assert_true "grep -qx 'opencode latest' '$OPENCODE_CASE/sb-install.calls'" \
 	"OpenCode failure audit exercises its sb_install caller"
+
+OMP_CASE="$TMP/omp"
+run_selected_section ai "Oh My Pi" "$OMP_CASE"
+assert_true "[ \"\$(cat '$OMP_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$OMP_CASE/state/ai-tool')\" ]" \
+	"Oh My Pi mise failure propagates without committing a Selection"
+assert_true "grep -Fqx 'use -g github:can1357/oh-my-pi' '$OMP_CASE/mise.calls'" \
+	"Oh My Pi failure audit exercises its mise installer"
 
 # sb_install owns artifact installation, but setup owns Observed state. A
 # buggy/no-op installer returning zero must still not commit an absent command.

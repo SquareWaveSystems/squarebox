@@ -7,6 +7,8 @@
 - `bubblewrap` in the base image so the OpenAI Codex CLI uses the system
   `bwrap` for its Linux sandbox instead of warning and falling back to its
   bundled helper.
+- Oh My Pi (`omp`) is available as a selectable coding harness, installed and
+  managed through mise in the persistent Managed home.
 - `elio` as a selectable TUI file manager alongside Yazi, installed from its
   verified GitHub release asset into the Managed home.
 

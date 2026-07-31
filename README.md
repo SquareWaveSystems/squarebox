@@ -111,7 +111,7 @@ scripted installs). Values use the same keys as `sqrbx-setup`:
 
 | Variable | Selects |
 |----------|---------|
-| `SQUAREBOX_AI` | AI assistants (`claude,copilot,gemini,codex,opencode,pi`) |
+| `SQUAREBOX_AI` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,omp`) |
 | `SQUAREBOX_SDKS` | language SDKs (`node,python,go,dotnet,rust`) |
 | `SQUAREBOX_EDITORS` | editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
 | `SQUAREBOX_TUIS` | TUI tools (`lazygit,gh-dash,yazi,elio`) |
@@ -257,6 +257,7 @@ pre-selected non-interactively via the `SQUAREBOX_AI`/`SQUAREBOX_SDKS`/… env v
 | [OpenAI Codex CLI](https://github.com/openai/codex) | Rust | OpenAI Codex in the terminal * |
 | [opencode](https://github.com/anomalyco/opencode) | TypeScript/Bun | AI coding TUI |
 | [Pi Coding Agent](https://github.com/earendil-works/pi) | TypeScript | Minimal terminal coding harness (Earendil) * |
+| [Oh My Pi](https://github.com/can1357/oh-my-pi) | TypeScript/Rust | Batteries-included coding harness (`omp`), installed via mise |
 \* Requires Node.js (auto-installed if needed).
 
 ### Text Editors
@@ -472,6 +473,7 @@ First-run selections add to that:
 | OpenAI Codex CLI | ~50 MB |
 | OpenCode | ~30 MB |
 | Pi Coding Agent | ~50 MB |
+| Oh My Pi | Varies by release |
 | lazygit / gh-dash / yazi | ~10 / ~10 / ~10 MB |
 | elio | ~14 MB |
 | micro / edit | ~12 / ~7 MB |
@@ -505,7 +507,8 @@ SDKs (Node, Python, Go, .NET, Rust) are installed by [mise](https://github.com/j
 which is itself a Dockerfile-tier pinned binary. mise downloads each SDK
 toolchain from its upstream over HTTPS using its own integrity checks. npm-based
 AI tools (Copilot CLI, Gemini CLI, Codex CLI, and Pi) use npm's built-in
-integrity verification.
+integrity verification. Oh My Pi uses its official mise GitHub backend and
+follows mise's backend integrity policy.
 
 For the full trust model (what `install.sh` does on your machine, how each
 layer is verified, and how to inspect the script before running it) see
@@ -528,7 +531,7 @@ container environment variables (set to an empty string to opt out of a tier):
 
 | Variable | Default | Selects |
 |----------|---------|---------|
-| `SQUAREBOX_DC_AI` | `claude` | AI assistants (`claude,copilot,gemini,codex,opencode,pi`) |
+| `SQUAREBOX_DC_AI` | `claude` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,omp`) |
 | `SQUAREBOX_DC_SDKS` | `node` | SDKs (`node,python,go,dotnet,rust`) |
 | `SQUAREBOX_DC_EDITORS` | _(none)_ | Editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
 | `SQUAREBOX_DC_TUIS` | _(none)_ | TUI tools (`lazygit,gh-dash,yazi,elio`) |

@@ -35,7 +35,7 @@ section_header "AI Coding Assistants"
 selected=$(gum choose --no-limit \
     --header "Select AI coding assistants (space=toggle, enter=confirm):" \
     "Claude Code" "GitHub Copilot CLI" "Google Gemini CLI" \
-    "OpenAI Codex CLI" "OpenCode" "Pi Coding Agent") || true
+    "OpenAI Codex CLI" "OpenCode" "Pi Coding Agent" "Oh My Pi") || true
 
 node_installed=false
 while IFS= read -r line; do
@@ -50,6 +50,9 @@ while IFS= read -r line; do
                 node_installed=true
             fi
             run_with_spinner "Installing ${line}..." 0.8
+            ;;
+        "Oh My Pi")
+            run_with_spinner "Installing Oh My Pi (via mise)..." 0.8
             ;;
         "OpenCode")
             run_with_spinner "Installing OpenCode..." 0.8
