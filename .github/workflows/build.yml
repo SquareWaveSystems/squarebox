@@ -101,8 +101,10 @@ jobs:
             du -sh /* 2>/dev/null | sort -rh | head -20
           '
 
-      - name: Devcontainer config is valid JSON
-        run: jq empty .devcontainer/devcontainer.json
+      - name: Devcontainer config and lock are valid JSON
+        run: |
+          jq empty .devcontainer/devcontainer.json
+          jq empty .devcontainer/devcontainer-lock.json
 
       - name: Container creates successfully
         run: |

@@ -85,6 +85,7 @@ Qualification issues: [Linux desktop #126](https://github.com/SquareWaveSystems/
 ## Dev Containers and Codespaces
 
 - [ ] VS Code Dev Containers builds the tagged Candidate source, runs `postCreateCommand`, and reopens successfully (source rebuild is not byte-identical to the published image)
+- [ ] `gh codespace ssh` attaches to a Codespace built from the custom Squarebox image
 - [ ] GitHub Codespaces runs the noninteractive defaults and preserves independent successful Selections after one section fails
 - [ ] Custom `SQUAREBOX_DC_MULTIPLEXERS` defaults are observed; an explicit empty value opts out; and an existing multiplexer Selection takes precedence on rebuild
 - [ ] Rebuilds preserve Workspace Selection state and Managed-home authentication/toolchains

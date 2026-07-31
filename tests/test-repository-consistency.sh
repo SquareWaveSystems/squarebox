@@ -28,6 +28,26 @@ test "$(jq -r .workspaceFolder .devcontainer/devcontainer.json)" = /workspace \
 	|| fail "Dev Container Workspace differs from setup state"
 jq -r .workspaceMount .devcontainer/devcontainer.json | grep -Fq 'target=/workspace' \
 	|| fail "Dev Container mount does not target /workspace"
+
+SSHD_FEATURE=ghcr.io/devcontainers/features/sshd:1.1.0
+SSHD_DIGEST=sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee
+DEVCONTAINER_LOCK=.devcontainer/devcontainer-lock.json
+
+test "$(jq -r --arg id "$SSHD_FEATURE" \
+	'.features[$id].gatewayPorts // empty' \
+	.devcontainer/devcontainer.json)" = no \
+	|| fail "Dev Container SSH server feature is absent or permits non-loopback gateway forwarding"
+test "$(jq -r --arg id "$SSHD_FEATURE" \
+	'.features[$id].version // empty' "$DEVCONTAINER_LOCK")" = 1.1.0 \
+	|| fail "Dev Container SSH server feature version is not locked"
+test "$(jq -r --arg id "$SSHD_FEATURE" \
+	'.features[$id].resolved // empty' "$DEVCONTAINER_LOCK")" \
+	= "ghcr.io/devcontainers/features/sshd@$SSHD_DIGEST" \
+	|| fail "Dev Container SSH server feature resolution is not digest-pinned"
+test "$(jq -r --arg id "$SSHD_FEATURE" \
+	'.features[$id].integrity // empty' "$DEVCONTAINER_LOCK")" \
+	= "$SSHD_DIGEST" \
+	|| fail "Dev Container SSH server feature integrity does not match the reviewed digest"
 test "$(jq '[.mounts[]? | select(
 	.source == "squarebox-home-${devcontainerId}" and
 	.target == "/home/dev" and

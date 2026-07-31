@@ -361,6 +361,9 @@ suite_update() {
 suite_devcontainer() {
 	# These tests validate the devcontainer.json config file
 	local dc=".devcontainer/devcontainer.json"
+	local dc_lock=".devcontainer/devcontainer-lock.json"
+	local sshd_feature="ghcr.io/devcontainers/features/sshd:1.1.0"
+	local sshd_digest="sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
 
 	if [ ! -f "$dc" ]; then
 		tap_fail "8.1 devcontainer.json exists" "file not found: $dc"
@@ -394,6 +397,19 @@ suite_devcontainer() {
 
 	# 8.7 post-create script exists and is syntactically valid bash
 	run_test "8.7 devcontainer-postcreate.sh parses" bash -n scripts/devcontainer-postcreate.sh
+
+	# 8.8 Codespaces CLI access uses the reviewed, locked SSH server Feature
+	# without permitting remote-forwarded ports to listen beyond localhost.
+	run_test_grep "8.8 SSH server Feature restricts gateway ports to loopback" "^no$" \
+		jq -r --arg id "$sshd_feature" '.features[$id].gatewayPorts // empty' "$dc"
+	run_test "8.9 Dev Container Feature lock exists" test -f "$dc_lock"
+	run_test_grep "8.9b SSH server Feature version is locked" "^1[.]1[.]0$" \
+		jq -r --arg id "$sshd_feature" '.features[$id].version // empty' "$dc_lock"
+	run_test_grep "8.9c SSH server Feature resolution is digest-pinned" \
+		"^ghcr[.]io/devcontainers/features/sshd@$sshd_digest$" \
+		jq -r --arg id "$sshd_feature" '.features[$id].resolved // empty' "$dc_lock"
+	run_test_grep "8.9d SSH server Feature integrity is reviewed" "^$sshd_digest$" \
+		jq -r --arg id "$sshd_feature" '.features[$id].integrity // empty' "$dc_lock"
 }
 
 # ── Suite: setup-rerun ───────────────────────────────────────────────────

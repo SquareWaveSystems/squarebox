@@ -30,6 +30,8 @@ stable v1.2 release and includes that fix.
   replacement.
 - Dev Container and Codespaces post-create defaults now support terminal
   multiplexers alongside assistants, SDKs, editors, and TUIs.
+- Codespaces created from the custom Squarebox image include a digest-locked
+  SSH server Feature, so `gh codespace ssh` can attach as documented.
 
 ### Changed
 

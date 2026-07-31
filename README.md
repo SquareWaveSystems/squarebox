@@ -547,7 +547,10 @@ To add or change tools after the fact, run `sqrbx-setup` from the integrated
 terminal.
 
 You can also attach to a running codespace directly from your local terminal
-using `gh codespace ssh`.
+using `gh codespace ssh`. The official Dev Containers SSH server Feature is
+version- and digest-locked for this path. It is added only to the derived Dev
+Container image, not the published Squarebox Candidate, and remote-forwarded
+ports remain bound to loopback by default.
 
 Uninstall
 ---------
