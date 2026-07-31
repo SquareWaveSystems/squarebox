@@ -9,6 +9,10 @@
   bundled helper.
 - Fresh managed Zellij configuration offers Ctrl+B as an alternate leader and
   a prefix-mode help popup without shadowing scroll/search page-up.
+- Oh My Pi (`omp`) is available as a selectable coding harness, installed and
+  managed through mise in the persistent Managed home.
+- `elio` as a selectable TUI file manager alongside Yazi, installed from its
+  verified GitHub release asset into the Managed home.
 
 ### Fixed
 

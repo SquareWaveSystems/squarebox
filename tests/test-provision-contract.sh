@@ -10,6 +10,10 @@ assert() { if "$@"; then ok "$*"; else not_ok "$*"; fi; }
 
 assert grep -q 'npm install -g --silent @github/copilot' "$ROOT/setup.sh"
 assert grep -q 'ensure_node_major_for_npm 22' "$ROOT/setup.sh"
+assert grep -Fq 'mise use -g github:can1357/oh-my-pi' "$ROOT/setup.sh"
+assert grep -Fq 'command -v omp >/dev/null 2>&1' "$ROOT/setup.sh"
+assert grep -Fq 'claude|copilot|gemini|codex|opencode|pi|omp)' "$ROOT/setup.sh"
+assert grep -Fq 'ai_choice="claude,copilot,gemini,codex,opencode,pi,omp"' "$ROOT/setup.sh"
 if grep -Eq '@githubnext|github-copilot-cli' "$ROOT/setup.sh"; then
 	not_ok "deprecated Copilot package and command are absent"
 else
