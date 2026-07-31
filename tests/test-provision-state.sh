@@ -142,6 +142,62 @@ HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --reconcile-box >"$TMP/reconcile-off.out" 2>"$TMP/reconcile-off.err"
 assert_true "! grep -q 'mouse on' '$HOME_DIR/.config/tmux/tmux.conf'" "tmux migration never overrides explicit mouse-off"
 
+# Fresh Zellij config detaches sessions. Only the byte-exact legacy managed
+# default is migrated; any edit or symlink remains user-controlled.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/zellij"
+chmod +x "$BIN/zellij"
+printf 'zellij\n' > "$STATE/multiplexer"
+rm -rf "$HOME_DIR/.config/zellij"
+HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/zellij-fresh.out" 2>"$TMP/zellij-fresh.err"
+ZELLIJ_CONF="$HOME_DIR/.config/zellij/config.kdl"
+assert_true "grep -Fqx 'on_force_close \"detach\"' '$ZELLIJ_CONF' && ! grep -Fq 'on_force_close \"quit\"' '$ZELLIJ_CONF'" \
+	"fresh managed Zellij config detaches on client loss"
+
+sed -i \
+	-e 's#// Prefix-style bindings\. Ctrl+B is available for clients that#// Prefix-style bindings via Ctrl+Space (tmux-like leader)#' \
+	-e '/\/\/ cannot deliver Ctrl+Space (for example, some mobile stacks)./d' \
+	-e '/bind "Ctrl b" { SwitchToMode "Tmux"; }/d' \
+	-e '/bind "Ctrl b" { SwitchToMode "Normal"; }/d' \
+	-e '/\/\/ Discoverable help for this clear-defaults configuration\./,/^[[:space:]]*}[[:space:]]*$/d' \
+	-e '/\/\/ Scroll\/search reserve Ctrl+B for page-up\./,/^[[:space:]]*}[[:space:]]*$/d' \
+	-e 's/on_force_close "detach"/on_force_close "quit"/' \
+	"$ZELLIJ_CONF"
+assert_true "[ \"\$(sha256sum '$ZELLIJ_CONF' | awk '{print \$1}')\" = 03ebc2170a89802b6452dcdb5d91dd724fe108f0c5ccfbe070edea4e5b2d6242 ]" \
+	"legacy Zellij migration fixture matches the recorded v1.1 managed default"
+HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/zellij-legacy.out" 2>"$TMP/zellij-legacy.err"
+assert_true "grep -Fqx 'on_force_close \"detach\"' '$ZELLIJ_CONF'" \
+	"exact legacy managed Zellij config migrates to detach"
+
+sed -i 's/on_force_close "detach"/on_force_close "quit"/' "$ZELLIJ_CONF"
+printf '// explicit user edit\n' >> "$ZELLIJ_CONF"
+HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/zellij-edited.out" 2>"$TMP/zellij-edited.err"
+assert_true "grep -Fqx 'on_force_close \"quit\"' '$ZELLIJ_CONF' && grep -Fqx '// explicit user edit' '$ZELLIJ_CONF'" \
+	"Zellij migration preserves an edited managed config"
+
+printf 'on_force_close "quit"\n' > "$ZELLIJ_CONF"
+HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/zellij-user.out" 2>"$TMP/zellij-user.err"
+assert_true "grep -Fqx 'on_force_close \"quit\"' '$ZELLIJ_CONF'" \
+	"Zellij migration preserves a user-authored force-close choice"
+
+ZELLIJ_OUTSIDE="$TMP/zellij-outside.kdl"
+printf 'on_force_close "quit"\n' > "$ZELLIJ_OUTSIDE"
+rm -f "$ZELLIJ_CONF"
+ln -s "$ZELLIJ_OUTSIDE" "$ZELLIJ_CONF"
+HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/zellij-symlink.out" 2>"$TMP/zellij-symlink.err"
+assert_true "[ -L '$ZELLIJ_CONF' ] && grep -Fqx 'on_force_close \"quit\"' '$ZELLIJ_OUTSIDE'" \
+	"Zellij migration does not rewrite a symlinked config"
+rm -f "$ZELLIJ_CONF"
+
 # A gum cancellation and a confirmed empty multi-select are different state
 # transitions: cancel preserves prior files; empty intentionally clears them.
 if command -v script >/dev/null 2>&1; then
