@@ -185,7 +185,7 @@ RUBY
 # versions; prereleases use an unprotected environment and continue
 # automatically after the automated gates.
 grep -Fq 'prepare-release:' "$WORKFLOW"
-grep -Fq 'name: ${{ needs.candidate.outputs.prerelease == '\''false'\'' && '\''v1.1-production'\'' || '\''v1.1-prerelease-auto'\'' }}' "$WORKFLOW"
+grep -Fq 'name: ${{ needs.candidate.outputs.prerelease == '\''false'\'' && '\''stable-release'\'' || '\''prerelease-auto'\'' }}' "$WORKFLOW"
 
 # Execute the real embedded publication script against a fake GitHub adapter.
 # This locks the mutable-draft/immutable-rerun split and SemVer latest behavior
@@ -298,7 +298,7 @@ raise "final mutation job is not globally serialized" unless
 
 expected_environment =
   "${{ needs.candidate.outputs.prerelease == 'false' && " \
-  "'v1.1-production' || 'v1.1-prerelease-auto' }}"
+  "'stable-release' || 'prerelease-auto' }}"
 raise "stable publication is not protected by the production environment" unless
   publish.dig("environment", "name") == expected_environment
 
