@@ -15,7 +15,7 @@ The goal is to make modern terminal tooling easy and accessible. One-line
 install, interactive first-run setup, sensible defaults (thanks [omarchy](https://omarchy.org)).
 
 Preparing an existing installation for v1.2? Read the
-[migration guide](docs/releases/v1.2.0.md) and [changelog](CHANGELOG.md).
+[migration guide](docs/releases/v1.2.1.md) and [changelog](CHANGELOG.md).
 
 ![squarebox first-run setup](demo/squarebox-setup.gif)
 *(Actual setup may involve more staring at the screen.)*
@@ -97,7 +97,7 @@ Flags: `--build` (build from source), `--edge` (latest `main`), `--adopt`
 |----------|---------|---------|
 | `SQUAREBOX_DIR` | `~/squarebox` | Install location (repo + workspace). Point at durable storage on hosts where `$HOME` is volatile — e.g. Unraid `/mnt/user/appdata/squarebox`. |
 | `SQUAREBOX_WORKSPACE` | `$SQUAREBOX_DIR/workspace` | Host path mounted as `/workspace`. |
-| `SQUAREBOX_TAG` | latest published stable | Published Release to install (for example `v1.2.0`). Tags use `vMAJOR.MINOR.PATCH[-prerelease]`; build metadata is not published. |
+| `SQUAREBOX_TAG` | latest published stable | Published Release to install (for example `v1.2.1`). Tags use `vMAJOR.MINOR.PATCH[-prerelease]`; build metadata is not published. |
 | `SQUAREBOX_IMAGE` | value from `release.json` | Optional image-repository override for development/testing. |
 | `SQUAREBOX_BUILD` | `0` | `1` is equivalent to `--build`. |
 | `PUID` / `PGID` | invoking Linux user | Host uid/gid that should own bind-mounted files. Docker/rootful hosts may override these (Unraid/NAS: `99` / `100`); rootless Podman requires the invoking host identity. |
@@ -541,6 +541,7 @@ container environment variables (set to an empty string to opt out of a tier):
 | `SQUAREBOX_DC_SDKS` | `node` | SDKs (`node,python,go,dotnet,rust`) |
 | `SQUAREBOX_DC_EDITORS` | _(none)_ | Editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
 | `SQUAREBOX_DC_TUIS` | _(none)_ | TUI tools (`lazygit,gh-dash,yazi,elio`) |
+| `SQUAREBOX_DC_MULTIPLEXERS` | _(none)_ | Multiplexers (`tmux,zellij,herdr`) |
 
 To add or change tools after the fact, run `sqrbx-setup` from the integrated
 terminal.

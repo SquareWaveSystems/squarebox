@@ -16,6 +16,7 @@
 #   SQUAREBOX_DC_SDKS     language SDKs      (default: node)
 #   SQUAREBOX_DC_EDITORS  text editors       (default: none)
 #   SQUAREBOX_DC_TUIS     TUI tools          (default: none)
+#   SQUAREBOX_DC_MULTIPLEXERS terminal multiplexers (default: none)
 #
 # Values are comma-separated and use the same keys as sqrbx-setup, e.g.
 # SQUAREBOX_DC_AI="claude,codex" or SQUAREBOX_DC_SDKS="node,python".
@@ -57,6 +58,7 @@ AI=${SQUAREBOX_DC_AI-claude}
 SDKS=${SQUAREBOX_DC_SDKS-node}
 EDITORS=${SQUAREBOX_DC_EDITORS-}
 TUIS=${SQUAREBOX_DC_TUIS-}
+MULTIPLEXERS=${SQUAREBOX_DC_MULTIPLEXERS-}
 
 sections=()
 
@@ -77,6 +79,7 @@ seed ai-tool "$AI"      ai
 seed sdks    "$SDKS"    sdks
 seed editors "$EDITORS" editors
 seed tuis    "$TUIS"    tuis
+seed multiplexer "$MULTIPLEXERS" multiplexers
 
 if [ ${#sections[@]} -eq 0 ]; then
 	echo "squarebox: no default tools selected; run 'sqrbx-setup' to configure."

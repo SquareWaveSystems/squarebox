@@ -9,7 +9,7 @@ an automated pass.
 Record the Candidate version, source SHA, image digest, host OS, architecture,
 container runtime/version, and result for every run.
 
-Release tracker: [v1.2.0 #125](https://github.com/SquareWaveSystems/squarebox/issues/125).
+Release tracker: [v1.2.1 #125](https://github.com/SquareWaveSystems/squarebox/issues/125).
 Qualification issues: [Linux desktop #126](https://github.com/SquareWaveSystems/squarebox/issues/126),
 [Fedora/Podman #127](https://github.com/SquareWaveSystems/squarebox/issues/127),
 [macOS #128](https://github.com/SquareWaveSystems/squarebox/issues/128),
@@ -86,6 +86,7 @@ Qualification issues: [Linux desktop #126](https://github.com/SquareWaveSystems/
 
 - [ ] VS Code Dev Containers builds the tagged Candidate source, runs `postCreateCommand`, and reopens successfully (source rebuild is not byte-identical to the published image)
 - [ ] GitHub Codespaces runs the noninteractive defaults and preserves independent successful Selections after one section fails
+- [ ] Custom `SQUAREBOX_DC_MULTIPLEXERS` defaults are observed; an explicit empty value opts out; and an existing multiplexer Selection takes precedence on rebuild
 - [ ] Rebuilds preserve Workspace Selection state and Managed-home authentication/toolchains
 
 ## Candidate promotion

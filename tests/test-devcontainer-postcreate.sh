@@ -15,9 +15,10 @@ cat > "$FAKE_SETUP" <<'EOF'
 set -euo pipefail
 printf '%s\n' "$*" > "$SQUAREBOX_FAKE_SETUP_CALL"
 # Model independent setup outcomes: assistant failed and was not committed;
-# SDK succeeded and remains observed/selected.
+# SDK and multiplexer succeeded and remain observed/selected.
 : > "$SQUAREBOX_STATE_DIR/ai-tool"
 printf 'node\n' > "$SQUAREBOX_STATE_DIR/sdks"
+printf 'zellij\n' > "$SQUAREBOX_STATE_DIR/multiplexer"
 exit 42
 EOF
 chmod +x "$FAKE_SETUP"
@@ -60,29 +61,35 @@ if HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	SQUAREBOX_FAKE_SETUP_CALL="$TMP/setup.call" \
 	SQUAREBOX_DC_AI=claude SQUAREBOX_DC_SDKS=node \
 	SQUAREBOX_DC_EDITORS= SQUAREBOX_DC_TUIS= \
+	SQUAREBOX_DC_MULTIPLEXERS=zellij \
 	bash "$ROOT/scripts/devcontainer-postcreate.sh" >"$TMP/failure.out" 2>&1; then
 	echo "FAIL: post-create accepted a failed setup" >&2
 	exit 1
 fi
-grep -qx -- '--rerun ai sdks' "$TMP/setup.call"
+grep -qx -- '--rerun ai sdks multiplexers' "$TMP/setup.call"
 test -f "$STATE/ai-tool" && test ! -s "$STATE/ai-tool"
 grep -qx node "$STATE/sdks"
+grep -qx zellij "$STATE/multiplexer"
 test ! -e "$HOME_DIR/.squarebox-setup-done"
 
 # Existing user choices win over defaults and are still passed for reconcile.
 printf 'python\n' > "$STATE/sdks"
+printf 'tmux\n' > "$STATE/multiplexer"
 cat > "$FAKE_SETUP" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 grep -qx python "$SQUAREBOX_STATE_DIR/sdks"
+grep -qx tmux "$SQUAREBOX_STATE_DIR/multiplexer"
 EOF
 chmod +x "$FAKE_SETUP"
 HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	SQUAREBOX_SETUP_SCRIPT="$FAKE_SETUP" \
 	SQUAREBOX_DC_AI= SQUAREBOX_DC_SDKS=node \
 	SQUAREBOX_DC_EDITORS= SQUAREBOX_DC_TUIS= \
+	SQUAREBOX_DC_MULTIPLEXERS=zellij \
 	bash "$ROOT/scripts/devcontainer-postcreate.sh" >"$TMP/success.out" 2>&1
 grep -qx python "$STATE/sdks"
+grep -qx tmux "$STATE/multiplexer"
 test -e "$HOME_DIR/.squarebox-setup-done"
 
 echo "PASS: Dev Container provisioning preserves independent section outcomes and prior Selections"

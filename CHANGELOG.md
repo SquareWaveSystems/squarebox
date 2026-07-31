@@ -1,6 +1,10 @@
 # Changelog
 
-## v1.2.0 — 2026-07-31
+## v1.2.1 — 2026-07-31
+
+v1.2.0 was built as a draft Candidate but was never published after final
+qualification found a Dev Container persistence defect. v1.2.1 is the first
+stable v1.2 release and includes that fix.
 
 ### Added
 
@@ -21,6 +25,11 @@
 - New managed Zellij configuration detaches sessions when a client disappears;
   exact unmodified legacy defaults migrate without overwriting user-edited or
   symlinked configuration.
+- Dev Containers mount `/home/dev` from an isolated, rebuild-stable named
+  volume so authentication, history, and mise toolchains survive Box
+  replacement.
+- Dev Container and Codespaces post-create defaults now support terminal
+  multiplexers alongside assistants, SDKs, editors, and TUIs.
 
 ### Changed
 
@@ -31,7 +40,7 @@
 
 ### Migration notes
 
-See [`docs/releases/v1.2.0.md`](docs/releases/v1.2.0.md).
+See [`docs/releases/v1.2.1.md`](docs/releases/v1.2.1.md).
 
 ## v1.1.0 — 2026-07-16
 
