@@ -9,6 +9,7 @@ compose.lifecycle	Compose force-recreates the exact Candidate while Managed home
 podman.rootless	Rootless Podman maps the host user to dev, provisions Box-tier tools, and preserves Workspace and Managed-home state
 powershell.lifecycle	PowerShell lifecycle adapters parse and pass executable safety fixtures natively on Windows
 lifecycle.install-state	Lifecycle state, release identity, ownership, and static contracts pass isolated fixtures
+lifecycle.nondefault-id	A non-default Docker identity starts twice with its lifecycle-managed Bash profile mounted read-only under a writable Managed home
 artifact.fail-closed	A rejected artifact cannot reach its destination
 setup.noninteractive	Noninteractive setup exits successfully without invoking an interactive prompt
 setup.box-tier	Selected Box-tier setup completes with production capabilities and the read-only timezone mount

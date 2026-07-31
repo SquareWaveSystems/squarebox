@@ -32,6 +32,50 @@ validate_id() {
 	fi
 }
 
+ensure_dev_home() {
+	local passwd_entry current_home canonical_home=/home/dev
+	if ! passwd_entry="$(getent passwd dev)"; then
+		echo "squarebox: dev account is missing" >&2
+		return 1
+	fi
+	IFS=: read -r _ _ _ _ _ current_home _ <<< "$passwd_entry"
+	[ "$current_home" = "$canonical_home" ] && return 0
+
+	if ! usermod -d "$canonical_home" dev; then
+		echo "squarebox: failed to restore dev home to $canonical_home" >&2
+		return 1
+	fi
+	case "$current_home" in
+		/run/squarebox-usermod.*) rmdir "$current_home" 2>/dev/null || true ;;
+	esac
+}
+
+remap_dev_uid() {
+	local target_uid="$1" remap_home remap_status=0
+	ensure_dev_home || return 1
+
+	# GNU usermod automatically re-owns the account's current home when its UID
+	# changes. Lifecycle adapters intentionally place read-only managed-file
+	# binds below /home/dev, so that implicit traversal fails before our later
+	# best-effort chown can run. Point passwd metadata at an ephemeral root-owned
+	# directory only for the UID mutation, then restore the real Managed home.
+	remap_home="$(mktemp -d /run/squarebox-usermod.XXXXXX)"
+	if ! usermod -d "$remap_home" dev; then
+		rmdir "$remap_home" 2>/dev/null || true
+		return 1
+	fi
+	if usermod -o -u "$target_uid" dev; then
+		remap_status=0
+	else
+		remap_status=$?
+	fi
+	if ! ensure_dev_home; then
+		echo "squarebox: UID remap changed dev but its canonical home could not be restored" >&2
+		return 1
+	fi
+	return "$remap_status"
+}
+
 selection_contains() {
 	local file="$1" item="$2" value=""
 	[ -f "$file" ] || return 1
@@ -116,6 +160,10 @@ PUID="$((10#$PUID))"
 PGID="$((10#$PGID))"
 
 if [ "$(id -u)" = "0" ]; then
+	# Repair an interrupted prior remap before checking whether the numeric UID
+	# already matches. This makes a failed home-restoration attempt self-healing
+	# on the next container start instead of preserving an ephemeral passwd home.
+	ensure_dev_home
 	cur_uid="$(id -u dev)"
 	cur_gid="$(id -g dev)"
 
@@ -125,7 +173,7 @@ if [ "$(id -u)" = "0" ]; then
 		groupmod -o -g "$PGID" dev
 	fi
 	if [ "$PUID" != "$cur_uid" ]; then
-		usermod -o -u "$PUID" dev
+		remap_dev_uid "$PUID"
 	fi
 
 	# Re-own the paths dev owns only when the ids actually changed. /etc/passwd
