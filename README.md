@@ -114,7 +114,7 @@ scripted installs). Values use the same keys as `sqrbx-setup`:
 | `SQUAREBOX_AI` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,omp`) |
 | `SQUAREBOX_SDKS` | language SDKs (`node,python,go,dotnet,rust`) |
 | `SQUAREBOX_EDITORS` | editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
-| `SQUAREBOX_TUIS` | TUI tools (`lazygit,gh-dash,yazi`) |
+| `SQUAREBOX_TUIS` | TUI tools (`lazygit,gh-dash,yazi,elio`) |
 | `SQUAREBOX_MULTIPLEXERS` | multiplexers (`tmux,zellij`) |
 | `SQUAREBOX_GIT_NAME` / `SQUAREBOX_GIT_EMAIL` | git identity (when no host gitconfig) |
 
@@ -284,6 +284,7 @@ Installed during first-run setup. Choose any combination:
 | [lazygit](https://github.com/jesseduffield/lazygit) | Go | Git terminal UI |
 | [gh-dash](https://github.com/dlvhdr/gh-dash) | Go | GitHub dashboard for the terminal |
 | [yazi](https://github.com/sxyazi/yazi) | Rust | Terminal file manager |
+| [elio](https://github.com/elio-fm/elio) | Rust | Terminal file manager with rich previews, inline images, and trash support |
 
 ### Terminal Multiplexers
 
@@ -474,6 +475,7 @@ First-run selections add to that:
 | Pi Coding Agent | ~50 MB |
 | Oh My Pi | Varies by release |
 | lazygit / gh-dash / yazi | ~10 / ~10 / ~10 MB |
+| elio | ~14 MB |
 | micro / edit | ~12 / ~7 MB |
 | fresh / nvim | ~10 / ~45 MB |
 | Helix | Varies by release (binary plus runtime files) |
@@ -532,7 +534,7 @@ container environment variables (set to an empty string to opt out of a tier):
 | `SQUAREBOX_DC_AI` | `claude` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,omp`) |
 | `SQUAREBOX_DC_SDKS` | `node` | SDKs (`node,python,go,dotnet,rust`) |
 | `SQUAREBOX_DC_EDITORS` | _(none)_ | Editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
-| `SQUAREBOX_DC_TUIS` | _(none)_ | TUI tools (`lazygit,gh-dash,yazi`) |
+| `SQUAREBOX_DC_TUIS` | _(none)_ | TUI tools (`lazygit,gh-dash,yazi,elio`) |
 
 To add or change tools after the fact, run `sqrbx-setup` from the integrated
 terminal.

@@ -178,10 +178,10 @@ for editor in micro edit fresh helix nvim; do
 done
 
 TUIS_CASE="$TMP/tuis"
-run_selected_section tuis $'lazygit\ngh-dash\nyazi' "$TUIS_CASE"
+run_selected_section tuis $'lazygit\ngh-dash\nyazi\nelio' "$TUIS_CASE"
 assert_true "[ \"\$(cat '$TUIS_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$TUIS_CASE/state/tuis')\" ]" \
 	"all TUI sb_install failures propagate without committing Selections"
-for tui in lazygit gh-dash yazi; do
+for tui in lazygit gh-dash yazi elio; do
 	assert_true "grep -qx '$tui latest' '$TUIS_CASE/sb-install.calls'" \
 		"$tui failure audit exercises its sb_install caller"
 done
