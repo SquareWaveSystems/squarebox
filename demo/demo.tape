@@ -56,7 +56,7 @@ Enter
 Sleep 3s
 
 # --- Default editor (nano, micro, fresh) ---
-# Choose fresh, the non-first option whose persistence is part of v1.1.
+# Choose fresh to demonstrate a non-first persisted default editor.
 Down
 Sleep 300ms
 Down

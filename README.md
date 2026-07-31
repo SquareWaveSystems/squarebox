@@ -14,8 +14,8 @@ tablet, or phone (please don't).
 The goal is to make modern terminal tooling easy and accessible. One-line
 install, interactive first-run setup, sensible defaults (thanks [omarchy](https://omarchy.org)).
 
-Preparing an existing installation for v1.1? Read the
-[migration guide](docs/releases/v1.1.0.md) and [changelog](CHANGELOG.md).
+Preparing an existing installation for v1.2? Read the
+[migration guide](docs/releases/v1.2.0.md) and [changelog](CHANGELOG.md).
 
 ![squarebox first-run setup](demo/squarebox-setup.gif)
 *(Actual setup may involve more staring at the screen.)*
@@ -97,7 +97,7 @@ Flags: `--build` (build from source), `--edge` (latest `main`), `--adopt`
 |----------|---------|---------|
 | `SQUAREBOX_DIR` | `~/squarebox` | Install location (repo + workspace). Point at durable storage on hosts where `$HOME` is volatile — e.g. Unraid `/mnt/user/appdata/squarebox`. |
 | `SQUAREBOX_WORKSPACE` | `$SQUAREBOX_DIR/workspace` | Host path mounted as `/workspace`. |
-| `SQUAREBOX_TAG` | latest published stable | Published Release to install (for example `v1.1.0`). Tags use `vMAJOR.MINOR.PATCH[-prerelease]`; build metadata is not published. |
+| `SQUAREBOX_TAG` | latest published stable | Published Release to install (for example `v1.2.0`). Tags use `vMAJOR.MINOR.PATCH[-prerelease]`; build metadata is not published. |
 | `SQUAREBOX_IMAGE` | value from `release.json` | Optional image-repository override for development/testing. |
 | `SQUAREBOX_BUILD` | `0` | `1` is equivalent to `--build`. |
 | `PUID` / `PGID` | invoking Linux user | Host uid/gid that should own bind-mounted files. Docker/rootful hosts may override these (Unraid/NAS: `99` / `100`); rootless Podman requires the invoking host identity. |
@@ -127,7 +127,7 @@ curl -fsSL https://github.com/SquareWaveSystems/squarebox/releases/latest/downlo
 
 </details>
 
-Each successful v1.1 install records its effective lifecycle settings at
+Each successful v1.1-or-newer install records its effective lifecycle settings at
 `<SQUAREBOX_DIR>/.squarebox/install-state` (mode 0600 on POSIX; inherited
 current-user install-directory ACL on native Windows). Rebuild and uninstall
 parse this file as data; they do not reconstruct defaults or source it as shell
@@ -156,7 +156,7 @@ Once installed, you can re-run or pass flags from the local copy:
 > runtime and Git failures directly by default.
 
 > **Windows adapter boundary:** Keep install, rebuild, and uninstall on the
-> adapter that created the v1.1 Install identity. Native PowerShell and Git Bash
+> adapter that created the Install identity. Native PowerShell and Git Bash
 > use the same `FORMAT=1` field names, but their native path and shell-profile
 > values are not interchangeable; cross-adapter state consumption is rejected.
 > Native PowerShell mounts `%USERPROFILE%\.ssh` read-only when it exists and
@@ -394,6 +394,8 @@ Both tmux and zellij ship with Omarchy-inspired defaults and matching keybinding
 |---------|------|--------|
 | Config path | `~/.config/tmux/tmux.conf` | `~/.config/zellij/config.kdl` |
 | Prefix | `Ctrl+Space` | `Ctrl+Space` (Tmux mode) |
+| Alternate prefix | `Ctrl+B` | `Ctrl+B` (Tmux mode) |
+| Prefix help | — | `prefix ?` |
 | Pane navigation | `Ctrl+Alt+Arrow` | `Ctrl+Alt+Arrow` |
 | Pane resizing | `Ctrl+Alt+Shift+Arrow` | `Ctrl+Alt+Shift+Arrow` |
 | Tab/window select | `Alt+1-9` | `Alt+1-9` |
