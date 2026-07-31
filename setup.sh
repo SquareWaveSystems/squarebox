@@ -540,13 +540,14 @@ if $INTERACTIVE; then
 				codex)    gum_selected="${gum_selected:+$gum_selected,}OpenAI Codex CLI" ;;
 				opencode) gum_selected="${gum_selected:+$gum_selected,}OpenCode" ;;
 				pi)       gum_selected="${gum_selected:+$gum_selected,}Pi Coding Agent" ;;
+				omp)      gum_selected="${gum_selected:+$gum_selected,}Oh My Pi" ;;
 			esac
 		done
 		gum_args=(--no-limit --header "Select AI coding assistants (space=toggle, enter=confirm):")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		if ! selected=$(gum choose "${gum_args[@]}" \
 			"Claude Code" "GitHub Copilot CLI" "Google Gemini CLI" \
-			"OpenAI Codex CLI" "OpenCode" "Pi Coding Agent"); then
+			"OpenAI Codex CLI" "OpenCode" "Pi Coding Agent" "Oh My Pi"); then
 			cancel_setup
 		fi
 		ai_choice=""
@@ -558,11 +559,12 @@ if $INTERACTIVE; then
 				"OpenAI Codex CLI")   ai_choice="${ai_choice:+$ai_choice,}codex" ;;
 				"OpenCode")           ai_choice="${ai_choice:+$ai_choice,}opencode" ;;
 				"Pi Coding Agent")    ai_choice="${ai_choice:+$ai_choice,}pi" ;;
+				"Oh My Pi")           ai_choice="${ai_choice:+$ai_choice,}omp" ;;
 			esac
 		done <<< "$selected"
 	else
 		echo "Select AI coding assistants (comma-separated, 'all', or press Enter to skip):"
-		for ai_item in "1:claude:Claude Code" "2:copilot:GitHub Copilot CLI" "3:gemini:Google Gemini CLI" "4:codex:OpenAI Codex CLI" "5:opencode:OpenCode" "6:pi:Pi Coding Agent"; do
+		for ai_item in "1:claude:Claude Code" "2:copilot:GitHub Copilot CLI" "3:gemini:Google Gemini CLI" "4:codex:OpenAI Codex CLI" "5:opencode:OpenCode" "6:pi:Pi Coding Agent" "7:omp:Oh My Pi"; do
 			num="${ai_item%%:*}"; rest="${ai_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
 			if [[ ",$ai_prev," == *",${key},"* ]]; then
 				echo "  ${num}) ${label} [installed]"
@@ -570,13 +572,13 @@ if $INTERACTIVE; then
 				echo "  ${num}) ${label}"
 			fi
 		done
-		read -rp "Selection [1-6/all/skip]: " ai_selection
+		read -rp "Selection [1-7/all/skip]: " ai_selection
 		if [ -z "$ai_selection" ] && [ -n "$ai_prev" ]; then
 			ai_choice="$ai_prev"
 		else
 			ai_choice=""
 			if [ "$ai_selection" = "all" ]; then
-				ai_choice="claude,copilot,gemini,codex,opencode,pi"
+				ai_choice="claude,copilot,gemini,codex,opencode,pi,omp"
 			elif [ -n "$ai_selection" ]; then
 				for item in $(echo "$ai_selection" | tr ',' ' '); do
 					case "$item" in
@@ -586,6 +588,7 @@ if $INTERACTIVE; then
 						4) ai_choice="${ai_choice:+$ai_choice,}codex" ;;
 						5) ai_choice="${ai_choice:+$ai_choice,}opencode" ;;
 						6) ai_choice="${ai_choice:+$ai_choice,}pi" ;;
+						7) ai_choice="${ai_choice:+$ai_choice,}omp" ;;
 					esac
 				done
 			fi
@@ -602,7 +605,7 @@ fi
 supported_ai=()
 for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 	case "$ai_tool" in
-		claude|copilot|gemini|codex|opencode|pi) supported_ai+=("$ai_tool") ;;
+		claude|copilot|gemini|codex|opencode|pi|omp) supported_ai+=("$ai_tool") ;;
 		*) echo "Warning: removing unsupported AI assistant from Selection: $ai_tool" >&2 ;;
 	esac
 done
@@ -637,6 +640,13 @@ install_pi() {
 	command -v pi >/dev/null 2>&1
 }
 
+install_omp() {
+	if command -v omp &>/dev/null && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then echo "Oh My Pi already installed, skipping."; return 0; fi
+	run_with_spinner "Installing/updating Oh My Pi (via mise)..." mise use -g github:can1357/oh-my-pi || return 1
+	_squarebox_mise_activate
+	command -v omp >/dev/null 2>&1
+}
+
 install_claude() {
 	if command -v claude >/dev/null 2>&1 && { ! $SB_RERUN || $SB_RECONCILE_BOX; }; then
 		echo "Claude Code already installed, skipping."
@@ -656,6 +666,7 @@ ai_command_present() {
 		codex) command -v codex >/dev/null 2>&1 ;;
 		opencode) command -v opencode >/dev/null 2>&1 ;;
 		pi) command -v pi >/dev/null 2>&1 ;;
+		omp) command -v omp >/dev/null 2>&1 ;;
 		*) return 1 ;;
 	esac
 }
@@ -684,6 +695,7 @@ for ai_tool in $(echo "$ai_choice" | tr ',' ' '); do
 		gemini)  install_gemini  && ai_ok=true ;;
 		codex)   install_codex   && ai_ok=true ;;
 		pi)      install_pi      && ai_ok=true ;;
+		omp)     install_omp     && ai_ok=true ;;
 	esac
 	if $ai_ok; then
 		installed_ai+=("$ai_tool")
@@ -702,7 +714,7 @@ printf '%s\n' "$ai_choice" > "$AI_CONFIG"
 # Set aliases based on selection — c maps to first selected tool in priority order
 {
 	c_target=""
-	for ai_tool in claude copilot gemini codex opencode pi; do
+	for ai_tool in claude copilot gemini codex opencode pi omp; do
 		if [[ ",$observed_ai," == *",$ai_tool,"* ]]; then
 			[ -z "$c_target" ] && c_target="$ai_tool"
 			case "$ai_tool" in
@@ -1072,12 +1084,13 @@ if $INTERACTIVE; then
 				lazygit) gum_selected="${gum_selected:+$gum_selected,}lazygit" ;;
 				gh-dash) gum_selected="${gum_selected:+$gum_selected,}gh-dash" ;;
 				yazi)    gum_selected="${gum_selected:+$gum_selected,}yazi" ;;
+				elio)    gum_selected="${gum_selected:+$gum_selected,}elio" ;;
 			esac
 		done
 		gum_args=(--no-limit --header "Select TUI tools to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		if ! selected=$(gum choose "${gum_args[@]}" \
-			"lazygit" "gh-dash" "yazi"); then
+			"lazygit" "gh-dash" "yazi" "elio"); then
 			cancel_setup
 		fi
 		tui_list=""
@@ -1087,7 +1100,7 @@ if $INTERACTIVE; then
 		done <<< "$selected"
 	else
 		echo "Select TUI tools to install (comma-separated, or 'all', or press Enter to skip):"
-		for tui_item in "1:lazygit:git terminal UI" "2:gh-dash:GitHub dashboard for the terminal" "3:yazi:terminal file manager"; do
+		for tui_item in "1:lazygit:git terminal UI" "2:gh-dash:GitHub dashboard for the terminal" "3:yazi:terminal file manager" "4:elio:terminal file manager with rich previews"; do
 			num="${tui_item%%:*}"; rest="${tui_item#*:}"; key="${rest%%:*}"; desc="${rest#*:}"
 			if [[ ",$tui_prev," == *",${key},"* ]]; then
 				echo "  ${num}) ${key} — ${desc} [installed]"
@@ -1095,19 +1108,20 @@ if $INTERACTIVE; then
 				echo "  ${num}) ${key} — ${desc}"
 			fi
 		done
-		read -rp "Selection [1,2,3/all/skip]: " tui_selection
+		read -rp "Selection [1,2,3,4/all/skip]: " tui_selection
 		if [ -z "$tui_selection" ] && [ -n "$tui_prev" ]; then
 			tui_list="$tui_prev"
 		else
 			tui_list=""
 			if [ "$tui_selection" = "all" ]; then
-				tui_list="lazygit,gh-dash,yazi"
+				tui_list="lazygit,gh-dash,yazi,elio"
 			elif [ -n "$tui_selection" ]; then
 				for item in $(echo "$tui_selection" | tr ',' ' '); do
 					case "$item" in
 						1) tui_list="${tui_list:+$tui_list,}lazygit" ;;
 						2) tui_list="${tui_list:+$tui_list,}gh-dash" ;;
 						3) tui_list="${tui_list:+$tui_list,}yazi" ;;
+						4) tui_list="${tui_list:+$tui_list,}elio" ;;
 					esac
 				done
 			fi
@@ -1163,6 +1177,12 @@ install_yazi() {
 	command -v yazi >/dev/null 2>&1 && command -v ya >/dev/null 2>&1
 }
 
+install_elio() {
+	if command -v elio &>/dev/null; then echo "elio already installed, skipping."; return 0; fi
+	run_with_spinner "Installing elio..." sb_install elio latest || return 1
+	command -v elio >/dev/null 2>&1
+}
+
 installed_tuis=()
 committed_tuis=()
 for tui in $(echo "$tui_list" | tr ',' ' '); do
@@ -1176,6 +1196,9 @@ for tui in $(echo "$tui_list" | tr ',' ' '); do
 		yazi)
 			if install_yazi; then installed_tuis+=("yazi"); committed_tuis+=("yazi")
 			else record_failure "Yazi installation failed; new Selection was not committed"; [[ ",$tui_prev," == *",yazi,"* ]] && committed_tuis+=("yazi"); fi ;;
+		elio)
+			if install_elio; then installed_tuis+=("elio"); committed_tuis+=("elio")
+			else record_failure "elio installation failed; new Selection was not committed"; [[ ",$tui_prev," == *",elio,"* ]] && committed_tuis+=("elio"); fi ;;
 	esac
 done
 tui_list=$(join_csv "${committed_tuis[@]}")
@@ -1490,16 +1513,20 @@ _install_zellij_inner() {
 		            };
 		        }
 
-		        // Prefix-style bindings via Ctrl+Space (tmux-like leader)
+		        // Prefix-style bindings. Ctrl+B is available for clients that
+		        // cannot deliver Ctrl+Space (for example, some mobile stacks).
 		        bind "Ctrl Space" { SwitchToMode "Tmux"; }
+		        bind "Ctrl b" { SwitchToMode "Tmux"; }
 		    }
 
 		    locked {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		        bind "Ctrl b" { SwitchToMode "Normal"; }
 		    }
 
 		    tmux {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		        bind "Ctrl b" { SwitchToMode "Normal"; }
 		        bind "Esc" { SwitchToMode "Normal"; }
 
 		        // Pane splitting (h=horizontal, v=vertical — matching tmux)
@@ -1548,6 +1575,11 @@ _install_zellij_inner() {
 
 		        // Enter scroll/copy mode (vi-style — like tmux [ )
 		        bind "[" { SwitchToMode "Scroll"; }
+		        // Discoverable help for this clear-defaults configuration.
+		        bind "?" {
+		            LaunchOrFocusPlugin "configuration" { floating true; };
+		            SwitchToMode "Normal";
+		        }
 		    }
 
 		    // ── Scroll mode (vi-style copy mode) ────────────────────────
@@ -1604,6 +1636,10 @@ _install_zellij_inner() {
 		    // Allow Ctrl+Space to return to normal from any non-normal mode
 		    shared_except "normal" "locked" "tmux" {
 		        bind "Ctrl Space" { SwitchToMode "Normal"; }
+		    }
+		    // Scroll/search reserve Ctrl+B for page-up.
+		    shared_except "normal" "locked" "tmux" "scroll" "search" {
+		        bind "Ctrl b" { SwitchToMode "Normal"; }
 		    }
 		}
 			ZELLIJCONF

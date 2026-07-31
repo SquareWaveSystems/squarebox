@@ -294,6 +294,7 @@ lazygit_current() {
 }
 xh_current() { xh --version 2>/dev/null | _extract_first_version; }
 yazi_current() { yazi --version 2>/dev/null | _extract_first_version; }
+elio_current() { elio --version 2>/dev/null | _extract_first_version; }
 starship_current() { starship --version 2>/dev/null | _extract_first_version; }
 ghdash_current() { gh-dash --version 2>/dev/null | _extract_first_version; }
 glow_current() { glow --version 2>/dev/null | _extract_first_version; }
