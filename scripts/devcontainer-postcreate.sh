@@ -61,6 +61,8 @@ TUIS=${SQUAREBOX_DC_TUIS-}
 MULTIPLEXERS=${SQUAREBOX_DC_MULTIPLEXERS-}
 
 sections=()
+new_selection_files=()
+new_editor_default=false
 
 # seed <config-file> <value> <section>
 # Writes the selection file only if absent, so a user's prior sqrbx-setup
@@ -71,6 +73,10 @@ seed() {
 	[ -z "$value" ] && return 0
 	if [ ! -f "$CONFIG_DIR/$file" ]; then
 		printf '%s\n' "$value" > "$CONFIG_DIR/$file"
+		new_selection_files+=("$file")
+		if [ "$file" = editors ] && [ ! -e "$CONFIG_DIR/editor-default" ]; then
+			new_editor_default=true
+		fi
 	fi
 	sections+=("$section")
 }
@@ -90,11 +96,31 @@ echo "squarebox: installing default toolset (${sections[*]})..."
 # Codespaces and other orchestrators may allocate a pseudo-TTY to post-create
 # commands. Reconciliation is explicitly noninteractive, and closing stdin
 # makes any accidental future read fail instead of hanging container creation.
-if ! "$SETUP" --reconcile-selection "${sections[@]}" </dev/null; then
+new_selection_csv=$(IFS=,; printf '%s' "${new_selection_files[*]}")
+if ! SQUAREBOX_RECONCILE_NEW_SELECTIONS="$new_selection_csv" \
+	"$SETUP" --reconcile-selection "${sections[@]}" </dev/null; then
 	# setup.sh reconciles each requested Selection independently and rewrites
-	# that section to the successfully observed subset. Preserve those results:
-	# deleting every newly seeded file here would erase a successful SDK merely
-	# because an unrelated assistant failed later in the same run.
+	# that section to the successfully observed subset. Remove only empty files
+	# that this invocation seeded: successful subsets remain committed, prior
+	# user Selections are untouched, and a failed new default can retry later.
+	for selection_file in "${new_selection_files[@]}"; do
+		selection_path="$CONFIG_DIR/$selection_file"
+		if [ -f "$selection_path" ]; then
+			if grep -q '[^[:space:]]' -- "$selection_path"; then
+				continue
+			else
+				grep_rc=$?
+			fi
+			if [ "$grep_rc" -eq 1 ]; then
+				rm -f -- "$selection_path"
+				if [ "$selection_file" = editors ] && $new_editor_default; then
+					rm -f -- "$CONFIG_DIR/editor-default"
+				fi
+			else
+				echo "squarebox: unable to inspect failed Selection: $selection_path" >&2
+			fi
+		fi
+	done
 	echo "squarebox: default tool provisioning failed" >&2
 	exit 1
 fi
