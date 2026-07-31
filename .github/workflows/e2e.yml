@@ -839,7 +839,7 @@ jobs:
     environment:
       # Stable publication waits for the required reviewer configured on this
       # environment. The prerelease environment is intentionally unprotected.
-      name: ${{ needs.candidate.outputs.prerelease == 'false' && 'v1.1-production' || 'v1.1-prerelease-auto' }}
+      name: ${{ needs.candidate.outputs.prerelease == 'false' && 'stable-release' || 'prerelease-auto' }}
     runs-on: ubuntu-latest
     concurrency:
       group: squarebox-release-publication

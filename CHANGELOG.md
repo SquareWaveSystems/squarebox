@@ -10,9 +10,11 @@
 - `elio` as a selectable TUI file manager alongside Yazi, installed from its
   verified GitHub release asset into the Managed home.
 
-### Removed
+### Fixed
 
-- Paseo assistant installation and Selection support.
+- New managed Zellij configuration detaches sessions when a client disappears;
+  exact unmodified legacy defaults migrate without overwriting user-edited or
+  symlinked configuration.
 
 ## v1.1.0 — 2026-07-16
 
@@ -22,7 +24,7 @@
 - Bash, experimental Zsh, and experimental Fish selection.
 - tmux and Zellij selection with aligned keybindings.
 - SSH client availability in the base image.
-- Pi and Paseo assistant options.
+- Pi assistant option.
 - Version display in the MOTD and image metadata.
 - Durable Install identity for safe rebuild and uninstall behavior.
 - Assertion-backed release Evidence, SBOM/provenance, vulnerability scanning,
@@ -79,6 +81,7 @@
 
 ### Removed
 
+- Paseo assistant installation and Selection support before stable publication.
 - Disabled learn-mode commands and command-logging hook from the default image.
 
 ### Migration notes

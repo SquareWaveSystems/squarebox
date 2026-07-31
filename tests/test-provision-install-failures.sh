@@ -16,7 +16,7 @@ assert_true() { if eval "$1"; then ok "$2"; else not_ok "$2"; fi; }
 # observed success.
 FIXTURE_BIN="$TMP/bin"
 mkdir -p "$FIXTURE_BIN"
-for utility in bash jq mkdir mktemp rm touch tr; do
+for utility in awk bash chmod grep jq mkdir mktemp rm sed sha256sum touch tr; do
 	ln -s "$(command -v "$utility")" "$FIXTURE_BIN/$utility"
 done
 
@@ -234,6 +234,16 @@ assert_true "[ ! -e '$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE/home/.config/zellij/layou
 run_selected_section multiplexers zellij "$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE" 0
 assert_true "[ \"\$(cat '$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE/setup.rc')\" -eq 0 ] && grep -Fq 'shared_except \"normal\" \"locked\" \"tmux\"' '$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE/home/.config/zellij/config.kdl' && grep -Fq 'plugin location=\"compact-bar\"' '$ZELLIJ_LAYOUT_WRITE_FAILURE_CASE/home/.config/zellij/layouts/default.kdl'" \
 	"Zellij rerun reconciles a missing layout beside an already-published config"
+
+ZELLIJ_MIGRATION_FAILURE_CASE="$TMP/zellij-migration-failure"
+run_selected_section multiplexers zellij "$ZELLIJ_MIGRATION_FAILURE_CASE" 0
+sed -i 's/on_force_close "detach"/on_force_close "quit"/' \
+	"$ZELLIJ_MIGRATION_FAILURE_CASE/home/.config/zellij/config.kdl"
+run_selected_section multiplexers zellij "$ZELLIJ_MIGRATION_FAILURE_CASE" 0 fail expected clean config.kdl
+assert_true "[ \"\$(cat '$ZELLIJ_MIGRATION_FAILURE_CASE/setup.rc')\" -ne 0 ] && grep -Fqx 'on_force_close \"quit\"' '$ZELLIJ_MIGRATION_FAILURE_CASE/home/.config/zellij/config.kdl'" \
+	"Zellij migration publish failure remains visible and preserves the legacy config"
+assert_true "! find '$ZELLIJ_MIGRATION_FAILURE_CASE/home/.config/zellij' -maxdepth 1 -name '.config.kdl.squarebox-migrate.*' | grep -q ." \
+	"failed Zellij migration removes its destination-local staging file"
 
 # Adjacent apt-backed installers can suffer the same conditional-function
 # masking. Make tmux observable while forcing its config directory creation to
