@@ -37,6 +37,9 @@ RUN printf 'path-include=/usr/share/doc/fzf/examples/key-bindings.bash\n' \
 	nano \
 	zstd \
 	zoxide \
+	# bubblewrap: OpenAI Codex CLI's Linux sandbox uses the first bwrap on PATH
+	# and warns at startup when only its bundled fallback helper is available.
+	bubblewrap \
 	toilet \
 	toilet-fonts \
 	libicu-dev \

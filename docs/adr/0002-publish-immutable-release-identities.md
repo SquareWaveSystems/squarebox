@@ -18,7 +18,7 @@ For a stable version, maintainers create the final version tag before physical
 qualification. The automated gates build that tag once, sign its Candidate
 digest and release assets, upload them to a non-discoverable draft GitHub
 Release, and verify the downloaded draft assets through the same Release
-adapter used by consumers. The workflow then stops at the `v1.1-production`
+adapter used by consumers. The workflow then stops at the `stable-release`
 environment. That environment must have a required human reviewer. Approval is
 the authorization to publish those already-prepared bytes; the publication job
 downloads and verifies them again after the wait and never rebuilds the image.
@@ -27,7 +27,7 @@ prepare a new version.
 
 Prerelease tags follow the same build, signing, draft, and verification path,
 then publish automatically through the intentionally unprotected
-`v1.1-prerelease-auto` environment. Environment protection is repository
+`prerelease-auto` environment. Environment protection is repository
 configuration, so the stable reviewer rule is a release prerequisite rather
 than something this workflow file can enforce by itself.
 

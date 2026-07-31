@@ -1,4 +1,4 @@
-# Squarebox v1.1 manual UAT
+# Squarebox v1.2 manual UAT
 
 Automated release assertions are defined in `scripts/e2e-required.tsv` and
 reported from exact Evidence by `.github/workflows/e2e.yml`. This checklist
@@ -9,18 +9,19 @@ an automated pass.
 Record the Candidate version, source SHA, image digest, host OS, architecture,
 container runtime/version, and result for every run.
 
-Tracking issues: [Linux desktop #99](https://github.com/SquareWaveSystems/squarebox/issues/99),
-[Fedora/Podman #100](https://github.com/SquareWaveSystems/squarebox/issues/100),
-[macOS #101](https://github.com/SquareWaveSystems/squarebox/issues/101),
-[Windows/Git Bash #102](https://github.com/SquareWaveSystems/squarebox/issues/102),
-[Dev Containers/Codespaces #103](https://github.com/SquareWaveSystems/squarebox/issues/103),
+Release tracker: [v1.2.0 #125](https://github.com/SquareWaveSystems/squarebox/issues/125).
+Qualification issues: [Linux desktop #126](https://github.com/SquareWaveSystems/squarebox/issues/126),
+[Fedora/Podman #127](https://github.com/SquareWaveSystems/squarebox/issues/127),
+[macOS #128](https://github.com/SquareWaveSystems/squarebox/issues/128),
+[Windows/Git Bash #129](https://github.com/SquareWaveSystems/squarebox/issues/129),
+[Dev Containers/Codespaces #130](https://github.com/SquareWaveSystems/squarebox/issues/130),
 [demo regeneration #104](https://github.com/SquareWaveSystems/squarebox/issues/104), and
-[physical Candidate qualification #105](https://github.com/SquareWaveSystems/squarebox/issues/105).
+[physical Candidate qualification #131](https://github.com/SquareWaveSystems/squarebox/issues/131).
 
 ## Linux desktop — Docker
 
 - [ ] Fresh Bash installer: launch, interactive setup, exit, resume, rebuild, uninstall
-- [ ] Existing v1.0 Managed home upgrade: no repeated prompts; selections reconcile
+- [ ] Existing v1.1 Managed home upgrade: no repeated prompts; Selections reconcile
 - [ ] Host UID/GID other than 1000: Workspace and managed files remain host-owned
 - [ ] Custom install path, Workspace, and Managed-home volume survive rebuild and purge correctly
 - [ ] Purge refuses an unrelated directory/container/image/volume with a colliding name
@@ -95,8 +96,8 @@ Tracking issues: [Linux desktop #99](https://github.com/SquareWaveSystems/square
 - [ ] Download the non-discoverable draft assets with authenticated `gh release download` and verify their hashes and Cosign identity signature
 - [ ] Run fresh and upgraded Compose flows against the digest
 - [ ] Confirm stable installers cannot discover the Release until all gates pass
-- [ ] Record the qualification evidence and explicit promote/no-promote decision in [issue #105](https://github.com/SquareWaveSystems/squarebox/issues/105)
-- [ ] Approve the waiting `v1.1-production` environment deployment to publish the tested Candidate without rebuilding different image bytes
+- [ ] Record the qualification evidence and explicit promote/no-promote decision in [issue #131](https://github.com/SquareWaveSystems/squarebox/issues/131)
+- [ ] Approve the waiting `stable-release` environment deployment to publish the tested Candidate without rebuilding different image bytes
 - [ ] After publication, run `gh release verify <tag>` and confirm GitHub reports a valid immutable-Release attestation
 - [ ] Confirm GitHub Release and GHCR `latest` identify the greatest published stable version
 - [ ] Rerun an older stable workflow (or its equivalent dry-run check) and confirm neither `latest` pointer can rewind

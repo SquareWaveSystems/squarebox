@@ -218,6 +218,7 @@ What's included
 | Name | Language | Description |
 |------|----------|-------------|
 | [bat](https://github.com/sharkdp/bat) | Rust | Cat clone with syntax highlighting |
+| [bubblewrap](https://github.com/containers/bubblewrap) | C | Unprivileged sandboxing tool (`bwrap`), used by the Codex CLI sandbox |
 | [curl](https://github.com/curl/curl) | C | URL data transfer |
 | [delta](https://github.com/dandavison/delta) | Rust | Syntax-highlighting pager for git diffs |
 | [difftastic](https://github.com/Wilfred/difftastic) | Rust | Syntax-aware structural diff tool (`difft`) |
