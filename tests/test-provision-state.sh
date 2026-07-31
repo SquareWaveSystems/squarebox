@@ -154,8 +154,24 @@ HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 ZELLIJ_CONF="$HOME_DIR/.config/zellij/config.kdl"
 assert_true "grep -Fqx 'on_force_close \"detach\"' '$ZELLIJ_CONF' && ! grep -Fq 'on_force_close \"quit\"' '$ZELLIJ_CONF'" \
 	"fresh managed Zellij config detaches on client loss"
+assert_true "[ \"\$(grep -Fc 'bind \"Ctrl b\" { SwitchToMode \"Tmux\"; }' '$ZELLIJ_CONF')\" -eq 1 ] && [ \"\$(grep -Fc 'bind \"Ctrl b\" { SwitchToMode \"Normal\"; }' '$ZELLIJ_CONF')\" -eq 3 ]" \
+	"fresh managed Zellij config provides Ctrl+B leader entry and exits"
+assert_true "grep -Fq 'LaunchOrFocusPlugin \"configuration\" { floating true; };' '$ZELLIJ_CONF' && grep -Fq 'shared_except \"normal\" \"locked\" \"tmux\" \"scroll\" \"search\"' '$ZELLIJ_CONF'" \
+	"fresh managed Zellij config exposes help without shadowing scroll/search Ctrl+B"
+assert_true "[ \"\$(grep -Fc 'bind \"Ctrl b\" \"PageUp\" { PageScrollUp; }' '$ZELLIJ_CONF')\" -eq 2 ]" \
+	"scroll and search retain Ctrl+B page-up"
 
-sed -i 's/on_force_close "detach"/on_force_close "quit"/' "$ZELLIJ_CONF"
+sed -i \
+	-e 's#// Prefix-style bindings\. Ctrl+B is available for clients that#// Prefix-style bindings via Ctrl+Space (tmux-like leader)#' \
+	-e '/\/\/ cannot deliver Ctrl+Space (for example, some mobile stacks)./d' \
+	-e '/bind "Ctrl b" { SwitchToMode "Tmux"; }/d' \
+	-e '/bind "Ctrl b" { SwitchToMode "Normal"; }/d' \
+	-e '/\/\/ Discoverable help for this clear-defaults configuration\./,/^[[:space:]]*}[[:space:]]*$/d' \
+	-e '/\/\/ Scroll\/search reserve Ctrl+B for page-up\./,/^[[:space:]]*}[[:space:]]*$/d' \
+	-e 's/on_force_close "detach"/on_force_close "quit"/' \
+	"$ZELLIJ_CONF"
+assert_true "[ \"\$(sha256sum '$ZELLIJ_CONF' | awk '{print \$1}')\" = 03ebc2170a89802b6452dcdb5d91dd724fe108f0c5ccfbe070edea4e5b2d6242 ]" \
+	"legacy Zellij migration fixture matches the recorded v1.1 managed default"
 HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
 	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/zellij-legacy.out" 2>"$TMP/zellij-legacy.err"

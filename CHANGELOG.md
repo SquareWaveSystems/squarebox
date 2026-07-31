@@ -7,6 +7,8 @@
 - `bubblewrap` in the base image so the OpenAI Codex CLI uses the system
   `bwrap` for its Linux sandbox instead of warning and falling back to its
   bundled helper.
+- Fresh managed Zellij configuration offers Ctrl+B as an alternate leader and
+  a prefix-mode help popup without shadowing scroll/search page-up.
 
 ### Fixed
 
