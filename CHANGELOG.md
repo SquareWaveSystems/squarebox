@@ -8,10 +8,6 @@
   `bwrap` for its Linux sandbox instead of warning and falling back to its
   bundled helper.
 
-### Removed
-
-- Paseo assistant installation and Selection support.
-
 ## v1.1.0 — 2026-07-16
 
 ### Added
@@ -20,7 +16,7 @@
 - Bash, experimental Zsh, and experimental Fish selection.
 - tmux and Zellij selection with aligned keybindings.
 - SSH client availability in the base image.
-- Pi and Paseo assistant options.
+- Pi assistant option.
 - Version display in the MOTD and image metadata.
 - Durable Install identity for safe rebuild and uninstall behavior.
 - Assertion-backed release Evidence, SBOM/provenance, vulnerability scanning,
@@ -77,6 +73,7 @@
 
 ### Removed
 
+- Paseo assistant installation and Selection support before stable publication.
 - Disabled learn-mode commands and command-logging hook from the default image.
 
 ### Migration notes

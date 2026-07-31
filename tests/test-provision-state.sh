@@ -124,7 +124,9 @@ assert_true "[ \"\$(cat '$STATE/editor-default')\" = fresh ] && grep -qx \"expor
 
 printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/codex"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/npm"
-chmod +x "$BIN/codex" "$BIN/npm"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/node"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/mise"
+chmod +x "$BIN/codex" "$BIN/npm" "$BIN/node" "$BIN/mise"
 printf 'codex,removed-assistant\n' > "$STATE/ai-tool"
 if HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
