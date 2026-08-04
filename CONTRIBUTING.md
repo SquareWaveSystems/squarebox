@@ -77,8 +77,8 @@ use `smoke` for the base image. Assertions write machine-readable Evidence when
 Evidence rather than inferring a pass from job status.
 
 Changes to persistence, setup, ownership, Compose, Dev Containers, Windows, or
-Podman must update the automated scenarios where possible and the remaining
-manual matrix in `uat-checklist.md`.
+Podman must update the automated scenarios where possible. Optional follow-up
+checks live in `uat-checklist.md`; they are not an implied release gate.
 
 ## Project structure
 
@@ -156,8 +156,8 @@ creates a non-discoverable draft GitHub Release, and verifies the downloaded
 draft before publication can run. There is no release rebuild.
 
 Prerelease tags publish automatically after those automated gates. For a stable
-release, create the immutable final-version tag before physical qualification,
-test the prepared digest and draft assets, then approve the separate
+release, create the immutable final-version tag, verify the prepared digest and
+draft assets, then approve the separate
 `publish-release` job. Repository administrators must configure
 `stable-release` with a required human reviewer and leave
 `prerelease-auto` unprotected. Approval publishes the exact prepared bytes;
@@ -186,7 +186,8 @@ published immutable reruns must verify metadata without editing it.
 ## Pull requests and issues
 
 Keep commits outcome-oriented and explain why the change is needed. Include
-tests, Evidence IDs, supported migration behavior, and any remaining manual UAT.
+tests, Evidence IDs, supported migration behavior, and any explicitly requested
+optional UAT.
 
 GitHub Issues is the tracker. A ready implementation issue contains reproduction
 or design evidence, acceptance criteria, dependencies, and the relevant triage
