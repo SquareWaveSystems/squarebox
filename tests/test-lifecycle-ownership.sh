@@ -80,7 +80,13 @@ case "$1" in
       rm) ;;
       *) exit 2 ;;
     esac ;;
-  rm|rmi) ;;
+  rm) ;;
+  rmi)
+    if [ "${FAIL_SHARED_RELEASE_REMOVE:-0}" = 1 ] \
+      && [ "$2" = 'ghcr.io/squarewavesystems/squarebox@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ]; then
+      echo 'shared release image is in use' >&2
+      exit 42
+    fi ;;
   *) exit 2 ;;
 esac
 EOF
@@ -192,7 +198,8 @@ fi
 grep -q -- '--force is required' "$TMP/force.out"
 test -d "$TMP/custom"
 
-"$ROOT/uninstall.sh" --purge --yes --force
+export FAIL_SHARED_RELEASE_REMOVE=1
+"$ROOT/uninstall.sh" --purge --yes --force >"$TMP/purge.out"
 test ! -e "$TMP/custom"
 test -f "$TMP/home/squarebox/DO-NOT-DELETE"
 test -f "$TMP/external-workspace/project.txt"
@@ -200,6 +207,8 @@ test ! -e "$TMP/home/.squarebox-shell-init"
 ! grep -qF '# >>> squarebox >>>' "$TMP/home/.bashrc"
 grep -q '^rm -f squarebox$' "$TMP/runtime.log"
 grep -q '^rmi squarebox$' "$TMP/runtime.log"
+! grep -q '^rmi ghcr.io/squarewavesystems/squarebox@sha256:' "$TMP/runtime.log"
+grep -q 'Retaining shared Candidate image ref' "$TMP/purge.out"
 grep -q '^volume rm custom-home$' "$TMP/runtime.log"
 
 echo 'ok - lifecycle deletion requires identity, reachability, adoption force, and recorded paths'
