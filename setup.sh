@@ -1760,10 +1760,15 @@ install_zellij() {
 }
 
 _install_herdr_inner() {
+	local config_path="$HOME/.config/herdr/config.toml"
 	command -v herdr >/dev/null 2>&1 || sb_install herdr latest || return 1
 	command -v herdr >/dev/null 2>&1 || return 1
 	mkdir -p "$HOME/.config/herdr" || return 1
-	if [ ! -e "$HOME/.config/herdr/config.toml" ] && [ ! -L "$HOME/.config/herdr/config.toml" ]; then
+	if [ -e "$config_path" ] && [ ! -L "$config_path" ] && [ ! -f "$config_path" ]; then
+		echo "ERROR: Herdr config path is not a regular file: $config_path" >&2
+		return 1
+	fi
+	if [ ! -e "$config_path" ] && [ ! -L "$config_path" ]; then
 		if ! (
 			config_tmp=""
 			cleanup_herdr_stage() {
@@ -1812,7 +1817,7 @@ _install_herdr_inner() {
 		zoom = ["ctrl+shift+z", "prefix+z"]
 		resize_mode = "prefix+r"
 		HERDRCONF
-			mv -fT -- "$config_tmp" "$HOME/.config/herdr/config.toml" || exit 1
+			mv -fT -- "$config_tmp" "$config_path" || exit 1
 			config_tmp=""
 		); then
 			return 1

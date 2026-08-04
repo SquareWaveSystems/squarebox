@@ -268,6 +268,18 @@ HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 assert_true "grep -Fqx '# user-owned Herdr config' '$HERDR_CONF'" \
 	"Herdr setup preserves an existing user config"
 
+rm -rf "$HERDR_CONF"
+mkdir -p "$HERDR_CONF"
+if HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/herdr-directory.out" 2>"$TMP/herdr-directory.err"; then
+	HERDR_DIRECTORY_RC=0
+else
+	HERDR_DIRECTORY_RC=$?
+fi
+assert_true "[ \"$HERDR_DIRECTORY_RC\" -ne 0 ] && [ -d '$HERDR_CONF' ] && grep -Fq 'Herdr config path is not a regular file' '$TMP/herdr-directory.err'" \
+	"Herdr rejects a directory at the config path"
+
 # A gum cancellation and a confirmed empty multi-select are different state
 # transitions: cancel preserves prior files; empty intentionally clears them.
 if command -v script >/dev/null 2>&1; then
