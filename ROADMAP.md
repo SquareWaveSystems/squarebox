@@ -1,22 +1,21 @@
 # Roadmap
 
-## v1.1.0 release gate
+## v1.2.1 release gate
 
 - Pass every assertion in `scripts/e2e-required.tsv` against one immutable Candidate digest.
-- Complete the real-host matrix in `uat-checklist.md`, especially Windows,
-  macOS, Fedora rootless Podman/SELinux, Dev Containers/Codespaces, and
-  physical arm64 (tracked by GitHub issues #99–#105).
-- `v1.1.0-rc5` completed the automatic publication rehearsal.
+- Keep platform-specific manual qualification optional; automated Candidate
+  Evidence is the release gate.
+- `v1.2.1-rc5` completed the automatic publication rehearsal.
 - Keep GitHub immutable Releases enabled, keep the no-bypass `v*` update and
   deletion ruleset active, and verify the stable/prerelease environment
   protections before creating a final tag.
-- Create the immutable `v1.1.0` tag so CI builds one final Candidate and
-  prepares its signed assets as a non-discoverable draft. Complete physical
-  qualification against that exact digest and draft asset set, then approve
-  the `v1.1-production` environment to publish those bytes without rebuilding.
+- Create the immutable `v1.2.1` tag so CI builds one final Candidate and
+  prepares its signed assets as a non-discoverable draft, then approve the
+  protected stable environment to publish those bytes without rebuilding.
   Do not retarget the final tag if qualification fails; fix forward with a new
   version.
-- Resolve or explicitly defer every open release-blocking GitHub issue.
+- Verify the final Candidate identity, attestation, aliases, and non-rewind
+  behavior in issue #131.
 
 ## After v1.1
 
@@ -38,5 +37,5 @@
   tmux, and Zellij with clear overrides for bat/delta themes.
 - **Assistant completion notifications** — opt-in terminal bell/desktop adapter
   around long-running assistant commands.
-- **Native platform depth** — move remaining Windows, macOS, Podman/SELinux,
-  and physical-arm64 UAT into automated adapters where runners permit.
+- **Native platform depth** — improve platform adapters when concrete defects
+  justify the work; do not maintain a standing manual qualification matrix.
