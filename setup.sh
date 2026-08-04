@@ -1760,13 +1760,74 @@ install_zellij() {
 }
 
 _install_herdr_inner() {
+	local config_path="$HOME/.config/herdr/config.toml"
 	command -v herdr >/dev/null 2>&1 || sb_install herdr latest || return 1
 	command -v herdr >/dev/null 2>&1 || return 1
+	mkdir -p "$HOME/.config/herdr" || return 1
+	if [ -e "$config_path" ] && [ ! -L "$config_path" ] && [ ! -f "$config_path" ]; then
+		echo "ERROR: Herdr config path is not a regular file: $config_path" >&2
+		return 1
+	fi
+	if [ ! -e "$config_path" ] && [ ! -L "$config_path" ]; then
+		if ! (
+			config_tmp=""
+			cleanup_herdr_stage() {
+				[ -z "$config_tmp" ] || rm -f -- "$config_tmp"
+			}
+			trap cleanup_herdr_stage EXIT
+			trap 'exit 1' HUP INT TERM
+			config_tmp=$(mktemp "$HOME/.config/herdr/.config.toml.squarebox-tmp.XXXXXX") || exit 1
+			cat > "$config_tmp" <<-'HERDRCONF' || exit 1
+		[ui]
+		agent_panel_sort = "spaces"
+
+		# Super belongs to the OS/window manager. Ctrl acts immediately in Herdr;
+		# Shift modifies or moves. F12 keeps the upstream-style prefix fallbacks.
+		[keys]
+		prefix = "f12"
+		help = ["ctrl+?", "prefix+?"]
+		goto = ["ctrl+g", "prefix+g"]
+		workspace_picker = "prefix+w"
+		toggle_sidebar = ["ctrl+b", "prefix+b"]
+		detach = ["ctrl+shift+q", "prefix+q"]
+
+		new_tab = ["ctrl+t", "prefix+c"]
+		previous_tab = ["ctrl+shift+tab", "prefix+p"]
+		next_tab = ["ctrl+tab", "prefix+n"]
+		switch_tab = ["ctrl+1..9", "prefix+1..9"]
+		rename_tab = "prefix+shift+t"
+		close_tab = "prefix+shift+x"
+
+		new_workspace = ["ctrl+shift+n", "prefix+shift+n"]
+		rename_workspace = "prefix+shift+w"
+		close_workspace = "prefix+shift+d"
+
+		focus_pane_left = ["ctrl+left", "prefix+h"]
+		focus_pane_down = ["ctrl+down", "prefix+j"]
+		focus_pane_up = ["ctrl+up", "prefix+k"]
+		focus_pane_right = ["ctrl+right", "prefix+l"]
+		swap_pane_left = ["ctrl+shift+left", "prefix+shift+h"]
+		swap_pane_down = ["ctrl+shift+down", "prefix+shift+j"]
+		swap_pane_up = ["ctrl+shift+up", "prefix+shift+k"]
+		swap_pane_right = ["ctrl+shift+right", "prefix+shift+l"]
+
+		close_pane = ["ctrl+w", "prefix+x"]
+		split_vertical = ["ctrl+backslash", "prefix+v"]
+		split_horizontal = ["ctrl+shift+backslash", "prefix+minus"]
+		zoom = ["ctrl+shift+z", "prefix+z"]
+		resize_mode = "prefix+r"
+		HERDRCONF
+			mv -fT -- "$config_tmp" "$config_path" || exit 1
+			config_tmp=""
+		); then
+			return 1
+		fi
+	fi
 }
 
 install_herdr() {
-	if command -v herdr &>/dev/null; then
-		echo "Herdr already installed, skipping."
+	if command -v herdr &>/dev/null && [ -f "$HOME/.config/herdr/config.toml" ]; then
+		echo "Herdr already installed and configured, skipping."
 		return 0
 	fi
 	run_with_spinner "Installing Herdr..." _install_herdr_inner

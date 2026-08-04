@@ -249,6 +249,37 @@ assert_true "[ -L '$ZELLIJ_CONF' ] && grep -Fqx 'on_force_close \"quit\"' '$ZELL
 	"Zellij migration does not rewrite a symlinked config"
 rm -f "$ZELLIJ_CONF"
 
+# Herdr uses the shared immediate-app keyboard language for a fresh Managed
+# home, while an existing config remains user-controlled.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/herdr"
+chmod +x "$BIN/herdr"
+printf 'herdr\n' > "$STATE/multiplexer"
+rm -rf "$HOME_DIR/.config/herdr"
+HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/herdr-fresh.out" 2>"$TMP/herdr-fresh.err"
+HERDR_CONF="$HOME_DIR/.config/herdr/config.toml"
+assert_true "grep -Fqx 'prefix = \"f12\"' '$HERDR_CONF' && grep -Fqx 'new_tab = [\"ctrl+t\", \"prefix+c\"]' '$HERDR_CONF' && grep -Fqx 'focus_pane_left = [\"ctrl+left\", \"prefix+h\"]' '$HERDR_CONF'" \
+	"fresh Herdr config uses immediate Ctrl actions with F12 fallbacks"
+printf '# user-owned Herdr config\n' > "$HERDR_CONF"
+HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/herdr-user.out" 2>"$TMP/herdr-user.err"
+assert_true "grep -Fqx '# user-owned Herdr config' '$HERDR_CONF'" \
+	"Herdr setup preserves an existing user config"
+
+rm -rf "$HERDR_CONF"
+mkdir -p "$HERDR_CONF"
+if HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/herdr-directory.out" 2>"$TMP/herdr-directory.err"; then
+	HERDR_DIRECTORY_RC=0
+else
+	HERDR_DIRECTORY_RC=$?
+fi
+assert_true "[ \"$HERDR_DIRECTORY_RC\" -ne 0 ] && [ -d '$HERDR_CONF' ] && grep -Fq 'Herdr config path is not a regular file' '$TMP/herdr-directory.err'" \
+	"Herdr rejects a directory at the config path"
+
 # A gum cancellation and a confirmed empty multi-select are different state
 # transitions: cancel preserves prior files; empty intentionally clears them.
 if command -v script >/dev/null 2>&1; then

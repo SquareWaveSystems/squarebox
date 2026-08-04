@@ -386,9 +386,30 @@ Aliases
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
 
-### Multiplexer Keybindings (Experimental)
+### Shared Keyboard Language (Experimental)
 
-Both tmux and zellij ship with Omarchy-inspired defaults and matching keybindings:
+Squarebox builds on Omarchy's defaults with one portable rule: `Super` belongs
+to the OS/window manager, while `Ctrl` acts immediately in the focused app.
+Adding `Shift` modifies or moves the target. Herdr follows this language
+directly; its `F12` prefix remains available as a compatibility fallback.
+
+Herdr's generated default uses familiar app shortcuts:
+
+| Feature | Herdr |
+|---------|-------|
+| New / close | `Ctrl+T` / `Ctrl+W` |
+| Cycle / select tabs | `Ctrl+Tab`, `Ctrl+Shift+Tab` / `Ctrl+1-9` |
+| Focus / swap pane | `Ctrl+Arrow` / `Ctrl+Shift+Arrow` |
+| Sidebar / go to | `Ctrl+B` / `Ctrl+G` |
+| Split right / down | `Ctrl+\\` / `Ctrl+Shift+\\` |
+| Zoom / new workspace | `Ctrl+Shift+Z` / `Ctrl+Shift+N` |
+| Compatibility prefix | `F12` |
+
+These bindings intentionally take precedence over matching shell or nested-app
+shortcuts while Herdr is focused. Existing `~/.config/herdr/config.toml` files
+remain user-managed and are never replaced by setup.
+
+Tmux and Zellij retain their earlier Omarchy-inspired matching defaults:
 
 | Feature | Tmux | Zellij |
 |---------|------|--------|
