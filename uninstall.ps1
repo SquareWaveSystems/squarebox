@@ -186,6 +186,7 @@ $ContainerName = if ($State) { $State.CONTAINER_NAME } else { 'squarebox' }
 $ImageAlias = if ($State) { $State.IMAGE_ALIAS } else { 'squarebox' }
 $ImageRef = if ($State) { $State.IMAGE_REF } else { 'squarebox' }
 $ImageId = if ($State) { $State.IMAGE_ID } else { '' }
+$SharedImageRef = $State -and $State.BUILD -ceq '0' -and $ImageRef -cne $ImageAlias
 $HomeVolume = if ($State) { $State.HOME_VOLUME } elseif ($env:SQUAREBOX_HOME_VOLUME) { $env:SQUAREBOX_HOME_VOLUME } else { 'squarebox-home' }
 $HomeVolumeAdopted = $State -and $State.HOME_VOLUME_ADOPTED -eq '1'
 $ProfilePath = if ($State -and $State.SHELL_RC) { $State.SHELL_RC } else { $PROFILE.CurrentUserAllHosts }
@@ -280,7 +281,7 @@ Write-Host ''
 Write-Host 'Will remove:'
 $Anything = $false
 if ($ContainerOwned) { Write-Host "  - Managed Box: $ContainerName"; $Anything = $true }
-if ($ImageOwned) { Write-Host "  - Recorded image refs: $ImageAlias and $ImageRef"; $Anything = $true }
+if ($ImageOwned) { Write-Host "  - Recorded image alias: $ImageAlias"; $Anything = $true }
 if ($HasProfile) { Write-Host "  - PowerShell adapter(s): $($ProfilePaths -join ', ')"; $Anything = $true }
 if ($Purge -and (Test-Path $InstallDir)) { Write-Host "  - Recorded install directory: $InstallDir"; $Anything = $true }
 if ($Purge -and $VolumeOwned) { Write-Host "  - Managed home: $HomeVolume"; $Anything = $true }
@@ -323,14 +324,16 @@ if ($ContainerOwned) {
     if ($LASTEXITCODE -ne 0) { Abort "Failed to remove managed Box '$ContainerName'." }
 }
 if ($ImageOwned) {
-    foreach ($ref in @($ImageAlias, $ImageRef) | Select-Object -Unique) {
-        & $Runtime image inspect $ref 2>$null | Out-Null
-        if ($LASTEXITCODE -ne 0) { continue }
-        $refId = (& $Runtime image inspect -f '{{.Id}}' $ref).Trim()
-        if ($State -and $refId -cne $ImageId) { Abort "Image ref '$ref' changed ownership during uninstall." }
-        & $Runtime rmi $ref | Out-Null
-        if ($LASTEXITCODE -ne 0) { Abort "Image ref '$ref' is still in use or could not be removed." }
+    & $Runtime image inspect $ImageAlias 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        $refId = (& $Runtime image inspect -f '{{.Id}}' $ImageAlias).Trim()
+        if ($State -and $refId -cne $ImageId) { Abort "Image alias '$ImageAlias' changed ownership during uninstall." }
+        & $Runtime rmi $ImageAlias | Out-Null
+        if ($LASTEXITCODE -ne 0) { Abort "Image alias '$ImageAlias' is still in use or could not be removed." }
     }
+    # Published refs identify shared Candidate cache, not a resource owned by
+    # this Install identity. Another Box may still depend on the same digest.
+    if ($SharedImageRef) { Write-Host "Retaining shared Candidate image ref $ImageRef." }
 }
 if ($HasProfile) {
     foreach ($path in $ProfileBlocks) { Remove-SquareboxProfileBlock $path }

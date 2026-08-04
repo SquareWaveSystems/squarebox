@@ -72,6 +72,8 @@ grep -q '\$HomeVolume -cne \$State.HOME_VOLUME' install.ps1
 grep -q '\$owner.Trim() -cne '\''__INSTALL_ID__' install.ps1
 grep -q '\$script:RollbackArmed' install.ps1
 grep -q 'changed ownership after confirmation' uninstall.ps1
+grep -q 'Retaining shared Candidate image ref' uninstall.sh
+grep -q 'Retaining shared Candidate image ref' uninstall.ps1
 ! grep -Eq '\$owner([.]Trim[(][)])?[[:space:]]+-ne[[:space:]]+\$InstallId' install.ps1 uninstall.ps1
 ! grep -Eq 'sudo[[:space:]]+rm[[:space:]]+-rf' uninstall.sh
 for file in install.sh uninstall.sh; do

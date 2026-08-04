@@ -359,7 +359,7 @@ echo ""
 echo "Will remove:"
 anything=0
 [ "$container_owned" = 1 ] && { echo "  - Managed Box: $CONTAINER_NAME"; anything=1; }
-[ "$image_owned" = 1 ] && { echo "  - Recorded image refs: $IMAGE_ALIAS ${IMAGE_REF:+and $IMAGE_REF}"; anything=1; }
+[ "$image_owned" = 1 ] && { echo "  - Recorded image alias: $IMAGE_ALIAS"; anything=1; }
 [ "$has_shell_init" = 1 ] && { echo "  - Shell adapter: $SHELL_INIT"; anything=1; }
 for _rc in "${rc_files[@]}"; do echo "  - Shell sentinel: $_rc"; anything=1; done
 [ "$has_bridge" = 1 ] && { echo "  - Git Bash bridge: $HOME/.bash_profile"; anything=1; }
@@ -411,19 +411,21 @@ if [ "$container_owned" = 1 ]; then
 fi
 
 if [ "$image_owned" = 1 ]; then
-	echo "Removing recorded image references..."
-	_refs=("$IMAGE_ALIAS"); [ -n "$IMAGE_REF" ] && [ "$IMAGE_REF" != "$IMAGE_ALIAS" ] && _refs+=("$IMAGE_REF")
-	for _ref in "${_refs[@]}"; do
-		if rt_cmd image inspect "$_ref" >/dev/null 2>&1; then
-			_ref_id="$(rt_cmd image inspect -f '{{.Id}}' "$_ref")"
-			if [ "$HAD_STATE" = 1 ] && [ "$_ref_id" != "$IMAGE_ID" ]; then
-				echo "Error: image ref '$_ref' changed ownership during uninstall; refusing removal." >&2; exit 1
-			fi
-			rt_cmd rmi "$_ref" >/dev/null || {
-				echo "Error: image ref '$_ref' is still in use or could not be removed." >&2; exit 1;
-			}
+	echo "Removing recorded image alias..."
+	if rt_cmd image inspect "$IMAGE_ALIAS" >/dev/null 2>&1; then
+		_ref_id="$(rt_cmd image inspect -f '{{.Id}}' "$IMAGE_ALIAS")"
+		if [ "$HAD_STATE" = 1 ] && [ "$_ref_id" != "$IMAGE_ID" ]; then
+			echo "Error: image alias '$IMAGE_ALIAS' changed ownership during uninstall; refusing removal." >&2; exit 1
 		fi
-	done
+		rt_cmd rmi "$IMAGE_ALIAS" >/dev/null || {
+			echo "Error: image alias '$IMAGE_ALIAS' is still in use or could not be removed." >&2; exit 1;
+		}
+	fi
+	# Published refs identify shared Candidate cache, not a resource owned by
+	# this Install identity. Another Box may still depend on the same digest.
+	if [ "$HAD_STATE" = 1 ] && [ "$BUILD" = 0 ] && [ -n "$IMAGE_REF" ] && [ "$IMAGE_REF" != "$IMAGE_ALIAS" ]; then
+		echo "Retaining shared Candidate image ref $IMAGE_REF."
+	fi
 fi
 
 rm -f "$SHELL_INIT"
