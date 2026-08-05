@@ -61,6 +61,13 @@ chmod +x "$FIXTURE_BIN/gum"
 cat > "$FIXTURE_BIN/mise" <<-'MISE'
 	#!/bin/bash
 	printf '%s\n' "$*" >> "$MISE_CALLS"
+	if [ "${MISE_MODE:-}" = rust-success ]; then
+		case "$*" in
+			"use -g rust@latest") touch "$MISE_RUST_INSTALLED"; exit 0 ;;
+			"activate bash --shims") exit 0 ;;
+			"which rustc") [ -e "$MISE_RUST_INSTALLED" ]; exit ;;
+		esac
+	fi
 	exit "${MISE_RC:-42}"
 MISE
 chmod +x "$FIXTURE_BIN/mise"
@@ -133,6 +140,8 @@ run_selected_section() {
 		ATOMIC_FAILURE_CALLS="$case_dir/atomic-failure.calls" \
 		NETWORK_CALLS="$case_dir/network.calls" \
 		MISE_CALLS="$case_dir/mise.calls" \
+		MISE_MODE="${MISE_MODE:-}" \
+		MISE_RUST_INSTALLED="$case_dir/rust.installed" \
 		FAKE_GUM_SELECTION="$selection" \
 		PATH="$FIXTURE_BIN" \
 		/usr/bin/script -qec "/bin/bash '$ROOT/setup.sh' --rerun '$section'" /dev/null \
@@ -206,6 +215,13 @@ assert_true "[ \"\$(cat '$OMP_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$OMP_C
 	"Oh My Pi mise failure propagates without committing a Selection"
 assert_true "grep -Fqx 'use -g github:can1357/oh-my-pi' '$OMP_CASE/mise.calls'" \
 	"Oh My Pi failure audit exercises its mise installer"
+
+RUST_CASE="$TMP/rust"
+MISE_MODE=rust-success run_selected_section sdks Rust "$RUST_CASE" 0
+assert_true "[ \"\$(cat '$RUST_CASE/setup.rc')\" -eq 0 ] && [ \"\$(cat '$RUST_CASE/state/sdks')\" = rust ]" \
+	"Rust commits its Selection when mise exposes rustc"
+assert_true "grep -Fqx 'which rustc' '$RUST_CASE/mise.calls' && ! grep -Fqx 'which rust' '$RUST_CASE/mise.calls'" \
+	"Rust availability is probed through rustc rather than a nonexistent rust binary"
 
 # sb_install owns artifact installation, but setup owns Observed state. A
 # buggy/no-op installer returning zero must still not commit an absent command.
