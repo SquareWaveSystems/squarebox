@@ -476,18 +476,20 @@ _install_mise_sdk_inner() {
 }
 
 _install_mise_sdk() {
-	local tool="$1" label="$2" version="${3:-latest}"
+	# A mise tool name is not always one of the executables it provides (for
+	# example, the rust toolchain exposes rustc and cargo, not `rust`).
+	local tool="$1" label="$2" version="${3:-latest}" probe="${4:-$1}"
 	if ! command -v mise >/dev/null 2>&1; then
 		echo "Error: mise is not installed (expected at /usr/local/bin/mise)" >&2
 		return 1
 	fi
-	if mise which "$tool" >/dev/null 2>&1 && { ! $SB_RERUN || $SB_RECONCILE; }; then
+	if mise which "$probe" >/dev/null 2>&1 && { ! $SB_RERUN || $SB_RECONCILE; }; then
 		echo "${label} already installed, skipping."
 		return 0
 	fi
 	run_with_spinner "Installing/updating ${label} (via mise)..." _install_mise_sdk_inner "$tool" "$version" || return 1
 	_squarebox_mise_activate
-	if ! mise which "$tool" >/dev/null 2>&1; then
+	if ! mise which "$probe" >/dev/null 2>&1; then
 		echo "Error: ${label} not available after mise install" >&2
 		return 1
 	fi
@@ -497,7 +499,7 @@ install_node()   { _install_mise_sdk node   "Node.js"; }
 install_python() { _install_mise_sdk python "Python"; }
 install_go()     { _install_mise_sdk go     "Go"; }
 install_dotnet() { _install_mise_sdk dotnet ".NET"; }
-install_rust()   { _install_mise_sdk rust   "Rust"; }
+install_rust()   { _install_mise_sdk rust   "Rust" latest rustc; }
 
 # Ensure Node.js is available for npm-based AI tools
 ensure_node_for_npm() {
