@@ -1,6 +1,11 @@
 #!/bin/bash
 # squarebox MOTD — orange metallic banner with SDK info
 
+# Herdr creates a fresh interactive shell for every managed pane and exports
+# HERDR_ENV=1 there. The outer Box shell has already shown the MOTD, so avoid
+# repeating the full banner in every Herdr tab and split.
+[ "${HERDR_ENV:-}" = 1 ] && exit 0
+
 # Orange metallic: bright orange heading, muted orange date
 printf '\e[1;38;5;208m'
 toilet -f smblock --metal "squarebox"
