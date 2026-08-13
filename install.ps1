@@ -205,6 +205,7 @@ function Read-InstallState([string]$Path, [string]$ExpectedInstallDir) {
     Assert-InstallState $state $Path $ExpectedInstallDir
     return $state
 }
+if ($env:SQUAREBOX_LIFECYCLE_FUNCTIONS_ONLY -eq '1') { return }
 function Test-Origin([string]$Origin) {
     return @(
         'https://github.com/SquareWaveSystems/squarebox',

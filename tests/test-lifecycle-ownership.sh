@@ -108,6 +108,8 @@ assert_uninstall_rejects_state duplicate "printf 'HOME_VOLUME=other\\n' >>\"\$TM
 assert_uninstall_rejects_state unknown "printf 'DELETE_THIS=/\\n' >>\"\$TMP/custom/.squarebox/install-state\""
 assert_uninstall_rejects_state missing "sed -i '/^WORKSPACE_DIR=/d' \"\$TMP/custom/.squarebox/install-state\""
 assert_uninstall_rejects_state unsafe_workspace "sed -i 's#^WORKSPACE_DIR=.*#WORKSPACE_DIR=/#' \"\$TMP/custom/.squarebox/install-state\""
+assert_uninstall_rejects_state unnormalized_workspace "sed -i 's#^WORKSPACE_DIR=/#WORKSPACE_DIR=//#' \"\$TMP/custom/.squarebox/install-state\""
+assert_uninstall_rejects_state edge_without_build "sed -i 's/^EDGE=0\$/EDGE=1/; s/^RELEASE_TAG=.*\$/RELEASE_TAG=/; s/^SOURCE_REF=.*\$/SOURCE_REF=refs\\/remotes\\/origin\\/main/' \"\$TMP/custom/.squarebox/install-state\""
 
 export CONTAINER_OWNER=some-other-install
 if "$ROOT/uninstall.sh" --yes >"$TMP/owner.out" 2>&1; then
