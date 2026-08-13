@@ -214,4 +214,62 @@ try {
     Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# Execute both migration directions with native Windows paths, isolated profile
+# files, and a mock runtime. State and profiles must be accepted after each
+# conversion without touching a real Box or the runner's user profiles.
+$migrationRoot = Join-Path ([IO.Path]::GetTempPath()) "squarebox-migration-test-$([guid]::NewGuid().ToString('N'))"
+$migrationHome = Join-Path $migrationRoot 'Üser Home'
+$migrationInstall = Join-Path $migrationHome 'Squarebox Space'
+$migrationStateDir = Join-Path $migrationInstall '.squarebox'
+$migrationState = Join-Path $migrationStateDir 'install-state'
+$profileAll = Join-Path $migrationHome 'Documents\PowerShell\profile.ps1'
+$profileHost = Join-Path $migrationHome 'Documents\PowerShell\host-profile.ps1'
+$gitBashInit = (Join-Path $migrationHome '.squarebox-shell-init').Replace('\', '/')
+$gitBashRc = (Join-Path $migrationHome '.bashrc').Replace('\', '/')
+$mockBin = Join-Path $migrationRoot 'bin'
+[IO.Directory]::CreateDirectory($migrationStateDir) | Out-Null
+[IO.Directory]::CreateDirectory($mockBin) | Out-Null
+[IO.File]::WriteAllText((Join-Path $mockBin 'docker.cmd'), "@echo off`r`necho test-install-123`r`nexit /b 0`r`n", [Text.ASCIIEncoding]::new())
+[IO.File]::WriteAllLines($gitBashInit, @('# squarebox-install-id=test-install-123'), [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllLines($gitBashRc, @('# >>> squarebox >>>', '[ -f "$HOME/.squarebox-shell-init" ] && . "$HOME/.squarebox-shell-init"', '# <<< squarebox <<<'), [Text.UTF8Encoding]::new($false))
+$migrationValues = [ordered]@{
+    FORMAT='1'; INSTALL_ID='test-install-123'; RUNTIME='docker'; INSTALL_DIR=$migrationInstall.Replace('\', '/')
+    WORKSPACE_DIR=(Join-Path $migrationInstall 'Wørkspace').Replace('\', '/'); GIT_CONFIG_DIR=(Join-Path $migrationInstall '.squarebox\identity\git').Replace('\', '/')
+    HOME_VOLUME='custom-home'; CONTAINER_NAME='custom.box'; IMAGE_ALIAS='squarebox'; IMAGE_REPOSITORY='ghcr.io/squarewavesystems/squarebox'
+    IMAGE_REF='ghcr.io/squarewavesystems/squarebox@sha256:' + ('b' * 64); IMAGE_ID='sha256:' + ('c' * 64)
+    IMAGE_DIGEST='ghcr.io/squarewavesystems/squarebox@sha256:' + ('b' * 64); SOURCE_REF='v1.2.3'; SOURCE_COMMIT='a' * 40
+    RELEASE_TAG='v1.2.3'; REQUESTED_TAG='latest'; PUID='1000'; PGID='1000'; BUILD='0'; EDGE='0'
+    SHELL_INIT=$gitBashInit; SHELL_RC=$gitBashRc; ORIGIN='https://github.com/SquareWaveSystems/squarebox.git'; HOME_VOLUME_ADOPTED='0'
+}
+[IO.File]::WriteAllLines($migrationState, @($StateFields | ForEach-Object { "$_=$($migrationValues[$_])" }), [Text.UTF8Encoding]::new($false))
+$oldPath = $env:PATH
+try {
+    $env:PATH = "$mockBin;$oldPath"
+    & pwsh -NoProfile -File (Join-Path $Root 'scripts/migrate-windows-adapter.ps1') -Target PowerShell -InstallDir $migrationInstall `
+        -PowerShellProfile $profileAll -PowerShellCurrentHostProfile $profileHost -UserHomePath $migrationHome -Yes
+    Assert-True ($LASTEXITCODE -eq 0) 'Git Bash to PowerShell migration failed'
+    $powerState = @{}; Get-Content $migrationState | ForEach-Object { $key, $value = $_ -split '=', 2; $powerState[$key] = $value }
+    Assert-True ($powerState.SHELL_INIT -ceq $profileAll) 'PowerShell migration published the wrong profile identity'
+    Assert-True ($powerState.INSTALL_DIR -ceq [IO.Path]::GetFullPath($migrationInstall)) 'PowerShell migration did not normalize INSTALL_DIR'
+    Assert-True ((Get-Content $profileAll) -ccontains '# squarebox-install-id=test-install-123') 'PowerShell profile ownership was not installed'
+    Assert-True (-not (Test-Path $gitBashInit)) 'source Git Bash adapter survived migration'
+
+    & pwsh -NoProfile -File (Join-Path $Root 'scripts/migrate-windows-adapter.ps1') -Target GitBash -InstallDir $migrationInstall `
+        -PowerShellProfile $profileAll -PowerShellCurrentHostProfile $profileHost -UserHomePath $migrationHome -Yes
+    Assert-True ($LASTEXITCODE -eq 0) 'PowerShell to Git Bash migration failed'
+    $bashState = @{}; Get-Content $migrationState | ForEach-Object { $key, $value = $_ -split '=', 2; $bashState[$key] = $value }
+    Assert-True ($bashState.INSTALL_DIR -ceq $migrationInstall.Replace('\', '/')) 'Git Bash migration did not publish drive-form path spelling'
+    Assert-True ((Get-Content $gitBashInit) -ccontains '# squarebox-install-id=test-install-123') 'Git Bash adapter ownership was not installed'
+
+    $beforeForeign = [IO.File]::ReadAllBytes($migrationState)
+    [IO.File]::WriteAllText($gitBashInit, "# squarebox-install-id=foreign-owner`n", [Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File (Join-Path $Root 'scripts/migrate-windows-adapter.ps1') -Target PowerShell -InstallDir $migrationInstall `
+        -PowerShellProfile $profileAll -PowerShellCurrentHostProfile $profileHost -UserHomePath $migrationHome -Yes 2>$null
+    Assert-True ($LASTEXITCODE -ne 0) 'migration accepted a foreign Git Bash adapter'
+    Assert-True ([Convert]::ToBase64String($beforeForeign) -ceq [Convert]::ToBase64String([IO.File]::ReadAllBytes($migrationState))) 'foreign migration changed Install state'
+} finally {
+    $env:PATH = $oldPath
+    Remove-Item -LiteralPath $migrationRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Output "ok - native PowerShell lifecycle syntax, safety, and $($cases.Count) shared state fixtures"

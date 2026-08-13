@@ -5,6 +5,9 @@
 param(
     [Parameter(Mandatory)][ValidateSet('PowerShell', 'GitBash')][string]$Target,
     [string]$InstallDir = $env:SQUAREBOX_DIR,
+    [string]$PowerShellProfile = $PROFILE.CurrentUserAllHosts,
+    [string]$PowerShellCurrentHostProfile = $PROFILE.CurrentUserCurrentHost,
+    [string]$UserHomePath = $(if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }),
     [switch]$Yes
 )
 
@@ -16,7 +19,7 @@ $Fields = @(
     'REQUESTED_TAG', 'PUID', 'PGID', 'BUILD', 'EDGE', 'SHELL_INIT', 'SHELL_RC',
     'ORIGIN', 'HOME_VOLUME_ADOPTED'
 )
-$UserHome = if ($env:USERPROFILE) { [IO.Path]::GetFullPath($env:USERPROFILE) } else { [IO.Path]::GetFullPath($HOME) }
+$UserHome = [IO.Path]::GetFullPath($UserHomePath)
 if (-not $InstallDir) { $InstallDir = Join-Path $UserHome 'squarebox' }
 $InstallDir = [IO.Path]::GetFullPath($InstallDir)
 $StateFile = Join-Path $InstallDir '.squarebox\install-state'
@@ -54,11 +57,20 @@ function Read-State([string]$Path) {
     if ($state.BUILD -cnotin @('0', '1') -or $state.EDGE -cnotin @('0', '1') -or $state.HOME_VOLUME_ADOPTED -cnotin @('0', '1') -or
         ($state.EDGE -ceq '1' -and $state.BUILD -cne '1')) { Fail 'invalid lifecycle flags' }
     foreach ($name in @('INSTALL_DIR', 'WORKSPACE_DIR', 'GIT_CONFIG_DIR', 'SHELL_INIT', 'SHELL_RC')) {
-        if (-not [IO.Path]::IsPathFullyQualified($state[$name])) { Fail "non-absolute $name" }
+		if (-not [IO.Path]::IsPathFullyQualified($state[$name])) { Fail "non-absolute $name" }
+		$full = [IO.Path]::GetFullPath($state[$name])
+		$normalizedInput = $state[$name].Replace('/', '\')
+		if (-not [string]::Equals($full, $normalizedInput, [StringComparison]::OrdinalIgnoreCase)) { Fail "unnormalized $name" }
     }
     if (-not [string]::Equals([IO.Path]::GetFullPath($state.INSTALL_DIR), $InstallDir, [StringComparison]::OrdinalIgnoreCase)) {
         Fail 'INSTALL_DIR does not identify this checkout'
     }
+	if ([string]::Equals($InstallDir, [IO.Path]::GetPathRoot($InstallDir), [StringComparison]::OrdinalIgnoreCase) -or
+		[string]::Equals($InstallDir, $UserHome, [StringComparison]::OrdinalIgnoreCase)) { Fail 'unsafe INSTALL_DIR' }
+	$workspace = [IO.Path]::GetFullPath($state.WORKSPACE_DIR)
+	if ([string]::Equals($workspace, [IO.Path]::GetPathRoot($workspace), [StringComparison]::OrdinalIgnoreCase) -or
+		[string]::Equals($workspace, $InstallDir, [StringComparison]::OrdinalIgnoreCase) -or
+		[string]::Equals($workspace, $UserHome, [StringComparison]::OrdinalIgnoreCase)) { Fail 'unsafe WORKSPACE_DIR' }
     $expectedGit = Join-Path $InstallDir '.squarebox\identity\git'
     if (-not [string]::Equals([IO.Path]::GetFullPath($state.GIT_CONFIG_DIR), [IO.Path]::GetFullPath($expectedGit), [StringComparison]::OrdinalIgnoreCase)) { Fail 'GIT_CONFIG_DIR escaped managed identity state' }
     return $state
@@ -68,8 +80,14 @@ function Format-Path([string]$Path, [string]$Adapter) {
     if ($Adapter -ceq 'GitBash') { return $native.Replace('\', '/') }
     return $native
 }
+function Assert-SafeFile([string]$Path, [string]$Description) {
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint -or $item.PSIsContainer) { Fail "$Description is not a regular file: $Path" }
+}
 function Test-Block([string]$Path, [string]$Start, [string]$End) {
     if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    Assert-SafeFile $Path 'profile'
     $inside = $false; $count = 0
     foreach ($line in [IO.File]::ReadAllLines($Path)) {
         if ($line -ceq $Start) { if ($inside -or $count) { Fail "malformed marker block in $Path" }; $inside = $true; $count++; continue }
@@ -86,7 +104,7 @@ function Remove-Block([string]$Path, [string]$Start, [string]$End) {
         if ($line -ceq $End) { $inside = $false; continue }
         if (-not $inside) { $line }
     }
-    [IO.File]::WriteAllLines($Path, $lines, [Text.UTF8Encoding]::new($false))
+    Write-Atomic $Path @($lines)
 }
 function Write-Atomic([string]$Path, [string[]]$Lines) {
     [IO.Directory]::CreateDirectory((Split-Path $Path)) | Out-Null
@@ -94,9 +112,13 @@ function Write-Atomic([string]$Path, [string[]]$Lines) {
     try { [IO.File]::WriteAllLines($temp, $Lines, [Text.UTF8Encoding]::new($false)); [IO.File]::Move($temp, $Path, $true) }
     finally { Remove-Item -Force -LiteralPath $temp -ErrorAction SilentlyContinue }
 }
+function Add-Block([string]$Path, [string[]]$Block) {
+    Assert-SafeFile $Path 'profile'
+    $lines = if (Test-Path -LiteralPath $Path -PathType Leaf) { @([IO.File]::ReadAllLines($Path)) } else { @() }
+    Write-Atomic $Path @($lines + $Block)
+}
 
 $State = Read-State $StateFile
-$PowerShellProfile = $PROFILE.CurrentUserAllHosts
 $GitBashInit = Format-Path (Join-Path $UserHome '.squarebox-shell-init') GitBash
 $GitBashRc = Format-Path (Join-Path $UserHome '.bashrc') GitBash
 $PowerShellStatePath = Format-Path $PowerShellProfile PowerShell
@@ -104,6 +126,20 @@ $source = if ([string]::Equals([IO.Path]::GetFullPath($State.SHELL_INIT), [IO.Pa
     elseif ($State.SHELL_INIT.Replace('\', '/') -ceq $GitBashInit -and $State.SHELL_RC.Replace('\', '/') -ceq $GitBashRc) { 'GitBash' }
     else { Fail 'state is foreign to both supported Windows adapters' }
 if ($source -ceq $Target) { Fail "Install identity already belongs to $Target" }
+if ($source -ceq 'GitBash') {
+    Assert-SafeFile $GitBashInit 'Git Bash adapter'
+    if (-not (Test-Path -LiteralPath $GitBashInit -PathType Leaf) -or
+        -not ([IO.File]::ReadAllLines($GitBashInit) -ccontains "# squarebox-install-id=$($State.INSTALL_ID)")) { Fail 'Git Bash adapter ownership check failed' }
+} else {
+    if (-not (Test-Block $PowerShellProfile '# >>> squarebox >>>' '# <<< squarebox <<<') -or
+        -not ([IO.File]::ReadAllLines($PowerShellProfile) -ccontains "# squarebox-install-id=$($State.INSTALL_ID)")) { Fail 'PowerShell adapter ownership check failed' }
+}
+foreach ($path in @($PowerShellProfile, $PowerShellCurrentHostProfile)) {
+    if ((Test-Block $path '# >>> squarebox >>>' '# <<< squarebox <<<') -and
+        -not ([IO.File]::ReadAllLines($path) -ccontains "# squarebox-install-id=$($State.INSTALL_ID)")) { Fail "foreign PowerShell profile block: $path" }
+}
+if ((Test-Path -LiteralPath $GitBashInit -PathType Leaf) -and
+    -not ([IO.File]::ReadAllLines($GitBashInit) -ccontains "# squarebox-install-id=$($State.INSTALL_ID)")) { Fail 'foreign Git Bash adapter' }
 
 if (-not (Get-Command $State.RUNTIME -ErrorAction SilentlyContinue)) { Fail "runtime '$($State.RUNTIME)' is unavailable" }
 $owner = (& $State.RUNTIME inspect -f '{{ index .Config.Labels "io.squarebox.install-id" }}' $State.CONTAINER_NAME 2>$null)
@@ -113,18 +149,21 @@ if ($LASTEXITCODE -ne 0) { Fail 'Managed-home ownership check failed' }
 if ($volumeOwner) { $volumeOwner = $volumeOwner.Trim() }
 if ($volumeOwner -cne $State.INSTALL_ID -and -not (-not $volumeOwner -and $State.HOME_VOLUME_ADOPTED -ceq '1')) { Fail 'Managed home is foreign' }
 
-$paths = @($StateFile, $PowerShellProfile, $PROFILE.CurrentUserCurrentHost, $GitBashInit, $GitBashRc) | Select-Object -Unique
+$paths = @(
+    $StateFile, $PowerShellProfile, $PowerShellCurrentHostProfile, $GitBashInit, $GitBashRc,
+    (Format-Path (Join-Path $UserHome '.zshrc') GitBash), (Format-Path (Join-Path $UserHome '.bash_profile') GitBash)
+) | Select-Object -Unique
+if (-not $Yes -and -not $PSCmdlet.ShouldContinue("Convert $source Install identity '$($State.INSTALL_ID)' to $Target?", 'Squarebox adapter migration')) { exit 0 }
 $backupRoot = Join-Path ([IO.Path]::GetTempPath()) "squarebox-migration-$([guid]::NewGuid().ToString('N'))"
 [IO.Directory]::CreateDirectory($backupRoot) | Out-Null
 $backups = @()
 foreach ($path in $paths) {
+    Assert-SafeFile $path 'migration target'
     $exists = Test-Path -LiteralPath $path -PathType Leaf
     $backup = Join-Path $backupRoot ([string]$backups.Count)
     if ($exists) { [IO.File]::Copy($path, $backup, $true) }
     $backups += [pscustomobject]@{ Path = $path; Backup = $backup; Exists = $exists }
 }
-
-if (-not $Yes -and -not $PSCmdlet.ShouldContinue("Convert $source Install identity '$($State.INSTALL_ID)' to $Target?", 'Squarebox adapter migration')) { exit 0 }
 try {
     if ($Target -ceq 'PowerShell') {
         foreach ($path in @($GitBashRc, (Format-Path (Join-Path $UserHome '.zshrc') GitBash))) { Remove-Block $path '# >>> squarebox >>>' '# <<< squarebox <<<' }
@@ -142,12 +181,12 @@ try {
             "function sqrbx-rebuild { & '$($InstallDir.Replace("'", "''"))\install.ps1' @args }", 'function squarebox-rebuild { sqrbx-rebuild @args }',
             "function sqrbx-uninstall { & '$($InstallDir.Replace("'", "''"))\uninstall.ps1' @args }", 'function squarebox-uninstall { sqrbx-uninstall @args }', '# <<< squarebox <<<'
         )
-        [IO.Directory]::CreateDirectory((Split-Path $PowerShellProfile)) | Out-Null
         Remove-Block $PowerShellProfile '# >>> squarebox >>>' '# <<< squarebox <<<'
-        [IO.File]::AppendAllLines($PowerShellProfile, $block, [Text.UTF8Encoding]::new($false))
+        Add-Block $PowerShellProfile $block
+        foreach ($name in @('INSTALL_DIR', 'WORKSPACE_DIR', 'GIT_CONFIG_DIR')) { $State[$name] = Format-Path $State[$name] PowerShell }
         $State.SHELL_INIT = $PowerShellStatePath; $State.SHELL_RC = $PowerShellStatePath
     } else {
-        foreach ($path in @($PowerShellProfile, $PROFILE.CurrentUserCurrentHost)) { Remove-Block $path '# >>> squarebox >>>' '# <<< squarebox <<<' }
+        foreach ($path in @($PowerShellProfile, $PowerShellCurrentHostProfile)) { Remove-Block $path '# >>> squarebox >>>' '# <<< squarebox <<<' }
         $install = Format-Path $InstallDir GitBash
 		$bashSingleQuote = "'" + '"' + "'" + '"' + "'"
 		$quotedInstall = $install.Replace("'", $bashSingleQuote)
@@ -166,8 +205,7 @@ try {
             'sqrbx-uninstall() { "${_sq_install}/uninstall.sh" "$@"; }', 'squarebox-uninstall() { sqrbx-uninstall "$@"; }'
         )
         Remove-Block $GitBashRc '# >>> squarebox >>>' '# <<< squarebox <<<'
-        [IO.Directory]::CreateDirectory((Split-Path $GitBashRc)) | Out-Null
-        [IO.File]::AppendAllLines($GitBashRc, @('# >>> squarebox >>>', '[ -f "$HOME/.squarebox-shell-init" ] && . "$HOME/.squarebox-shell-init"', '# <<< squarebox <<<'), [Text.UTF8Encoding]::new($false))
+        Add-Block $GitBashRc @('# >>> squarebox >>>', '[ -f "$HOME/.squarebox-shell-init" ] && . "$HOME/.squarebox-shell-init"', '# <<< squarebox <<<')
         foreach ($name in @('INSTALL_DIR', 'WORKSPACE_DIR', 'GIT_CONFIG_DIR')) { $State[$name] = Format-Path $State[$name] GitBash }
         $State.SHELL_INIT = $GitBashInit; $State.SHELL_RC = $GitBashRc
     }
