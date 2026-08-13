@@ -143,8 +143,10 @@ try {
     } else {
         foreach ($path in @($PowerShellProfile, $PROFILE.CurrentUserCurrentHost)) { Remove-Block $path '# >>> squarebox >>>' '# <<< squarebox <<<' }
         $install = Format-Path $InstallDir GitBash
+		$bashSingleQuote = "'" + '"' + "'" + '"' + "'"
+		$quotedInstall = $install.Replace("'", $bashSingleQuote)
         Write-Atomic $GitBashInit @(
-            "# squarebox-install-id=$($State.INSTALL_ID)", "_sq_install='$($install.Replace("'", "'\"'\"'"))'",
+            "# squarebox-install-id=$($State.INSTALL_ID)", "_sq_install='$quotedInstall'",
             'sqrbx() { if [ "${1:-}" = uninstall ]; then shift; "${_sq_install}/uninstall.sh" "$@"; else "${_sq_install}/install.sh" "$@"; fi; }',
             'squarebox() { sqrbx "$@"; }', 'sqrbx-rebuild() { "${_sq_install}/install.sh" "$@"; }', 'squarebox-rebuild() { sqrbx-rebuild "$@"; }',
             'sqrbx-uninstall() { "${_sq_install}/uninstall.sh" "$@"; }', 'squarebox-uninstall() { sqrbx-uninstall "$@"; }'
