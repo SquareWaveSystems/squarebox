@@ -384,7 +384,15 @@ Aliases
 | `gcad` | `git commit -a --amend` | Stage all and amend |
 | `lg` | `lazygit` | Launch lazygit (if installed) |
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
+| `codex-yolo` | `codex --dangerously-bypass-approvals-and-sandbox` | Codex without prompts or sandboxing |
+| `gemini-yolo` | `gemini --approval-mode=yolo` | Gemini CLI without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
+| `omp-yolo` | `omp --approval-mode yolo` | Oh My Pi without prompts |
+
+The `*-yolo` aliases are generated only for selected AI tools that are
+installed. They disable that tool's normal approval prompts; `codex-yolo` also
+disables Codex's sandbox. Use them only in a workspace whose contents and
+commands you trust.
 
 ### Shared Keyboard Language (Experimental)
 
