@@ -11,8 +11,10 @@ assistants, language SDKs, and an opinionated set of shell aliases. Run the
 same box anywhere (desktop, VPS, or Codespace) and SSH in from your laptop,
 tablet, or phone (please don't).
 
-The goal is to make modern terminal tooling easy and accessible. One-line
-install, interactive first-run setup, sensible defaults (thanks [omarchy](https://omarchy.org)).
+The goal is multi-faceted: a playground for modern CLI/TUI tools, a Box for
+running AI agents, and a persistent terminal environment for remote development.
+One-line install, interactive first-run setup, sensible defaults (thanks
+[omarchy](https://omarchy.org)).
 
 Preparing an existing installation for v1.2? Read the
 [migration guide](docs/releases/v1.2.1.md) and [changelog](CHANGELOG.md).
