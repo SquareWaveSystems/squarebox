@@ -384,6 +384,7 @@ Aliases
 | `gcad` | `git commit -a --amend` | Stage all and amend |
 | `lg` | `lazygit` | Launch lazygit (if installed) |
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
+| `copilot-yolo` | `copilot --allow-all` | Copilot CLI without permission prompts |
 | `codex-yolo` | `codex --dangerously-bypass-approvals-and-sandbox` | Codex without prompts or sandboxing |
 | `gemini-yolo` | `gemini --approval-mode=yolo` | Gemini CLI without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |

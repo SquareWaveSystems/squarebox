@@ -752,6 +752,7 @@ printf '%s\n' "$ai_choice" > "$AI_CONFIG"
 			[ -z "$c_target" ] && c_target="$ai_tool"
 			case "$ai_tool" in
 				claude)   echo "alias claude-yolo='claude --dangerously-skip-permissions'" ;;
+				copilot)  echo "alias copilot-yolo='copilot --allow-all'" ;;
 				codex)    echo "alias codex-yolo='codex --dangerously-bypass-approvals-and-sandbox'" ;;
 				gemini)   echo "alias gemini-yolo='gemini --approval-mode=yolo'" ;;
 				opencode) echo "alias opencode-yolo='opencode --dangerously-skip-permissions'" ;;
