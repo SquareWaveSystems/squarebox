@@ -237,6 +237,14 @@ elseif ($command.Contains('io.squarebox.install-id')) { Write-Output 'test-insta
 exit 0
 '@, [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path $mockBin 'docker.cmd'), "@echo off`r`npwsh -NoProfile -File `"%~dp0mock-runtime.ps1`" %*`r`nexit /b %ERRORLEVEL%`r`n", [Text.ASCIIEncoding]::new())
+if (-not $IsWindows) {
+    $unixRuntime = Join-Path $mockBin 'docker'
+    [IO.File]::WriteAllText($unixRuntime, @'
+#!/usr/bin/env bash
+exec pwsh -NoProfile -File "$(dirname "$0")/mock-runtime.ps1" "$@"
+'@, [Text.UTF8Encoding]::new($false))
+    [IO.File]::SetUnixFileMode($unixRuntime, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite -bor [IO.UnixFileMode]::UserExecute)
+}
 [IO.File]::WriteAllLines($gitBashInit, @('# squarebox-install-id=test-install-123'), [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllLines($gitBashRc, @('# >>> squarebox >>>', '[ -f "$HOME/.squarebox-shell-init" ] && . "$HOME/.squarebox-shell-init"', '# <<< squarebox <<<'), [Text.UTF8Encoding]::new($false))
 $migrationValues = [ordered]@{
