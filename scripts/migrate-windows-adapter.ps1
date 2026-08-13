@@ -132,7 +132,13 @@ try {
         Remove-Item -Force -LiteralPath $GitBashInit -ErrorAction SilentlyContinue
         $block = @(
             '# >>> squarebox >>>', '# Managed by squarebox using the recorded Install identity.', "# squarebox-install-id=$($State.INSTALL_ID)",
-            "function sqrbx { & '$($InstallDir.Replace("'", "''"))\install.ps1' @args }", 'function squarebox { sqrbx @args }',
+            'function sqrbx {',
+            "    if (`$args.Count -gt 0 -and `$args[0] -eq 'uninstall') { & '$($InstallDir.Replace("'", "''"))\uninstall.ps1' @(`$args | Select-Object -Skip 1); return }",
+            "    `$owner = (& $($State.RUNTIME) inspect -f '{{ index .Config.Labels `"io.squarebox.install-id`" }}' '$($State.CONTAINER_NAME)' 2>`$null)",
+            "    if (-not `$owner -or `$owner.Trim() -cne '$($State.INSTALL_ID)') { throw 'squarebox Install identity mismatch; refusing to start.' }",
+            "    `$running = (& $($State.RUNTIME) inspect -f '{{.State.Running}}' '$($State.CONTAINER_NAME)' 2>`$null)",
+            "    if (`$running -and `$running.Trim() -ceq 'true') { & $($State.RUNTIME) stop '$($State.CONTAINER_NAME)' | Out-Null }",
+            "    & $($State.RUNTIME) start -ai '$($State.CONTAINER_NAME)'", '}', 'function squarebox { sqrbx @args }',
             "function sqrbx-rebuild { & '$($InstallDir.Replace("'", "''"))\install.ps1' @args }", 'function squarebox-rebuild { sqrbx-rebuild @args }',
             "function sqrbx-uninstall { & '$($InstallDir.Replace("'", "''"))\uninstall.ps1' @args }", 'function squarebox-uninstall { sqrbx-uninstall @args }', '# <<< squarebox <<<'
         )
@@ -145,9 +151,17 @@ try {
         $install = Format-Path $InstallDir GitBash
 		$bashSingleQuote = "'" + '"' + "'" + '"' + "'"
 		$quotedInstall = $install.Replace("'", $bashSingleQuote)
+		$quotedRuntime = $State.RUNTIME.Replace("'", $bashSingleQuote)
+		$quotedContainer = $State.CONTAINER_NAME.Replace("'", $bashSingleQuote)
+		$quotedInstallId = $State.INSTALL_ID.Replace("'", $bashSingleQuote)
         Write-Atomic $GitBashInit @(
             "# squarebox-install-id=$($State.INSTALL_ID)", "_sq_install='$quotedInstall'",
-            'sqrbx() { if [ "${1:-}" = uninstall ]; then shift; "${_sq_install}/uninstall.sh" "$@"; else "${_sq_install}/install.sh" "$@"; fi; }',
+            "_sq_runtime='$quotedRuntime'", "_sq_container='$quotedContainer'", "_sq_install_id='$quotedInstallId'",
+            'sqrbx() {', '  if [ "${1:-}" = uninstall ]; then shift; "${_sq_install}/uninstall.sh" "$@"; return; fi',
+            '  _sq_owner="$("${_sq_runtime}" inspect -f ''{{ index .Config.Labels "io.squarebox.install-id" }}'' "${_sq_container}" 2>/dev/null || true)"',
+            '  [ "$_sq_owner" = "$_sq_install_id" ] || { echo "squarebox: Install identity mismatch; refusing to start" >&2; return 1; }',
+            '  if [ "$("${_sq_runtime}" inspect -f ''{{.State.Running}}'' "${_sq_container}" 2>/dev/null)" = true ]; then "${_sq_runtime}" stop "${_sq_container}" >/dev/null; fi',
+            '  "${_sq_runtime}" start -ai "${_sq_container}"', '}',
             'squarebox() { sqrbx "$@"; }', 'sqrbx-rebuild() { "${_sq_install}/install.sh" "$@"; }', 'squarebox-rebuild() { sqrbx-rebuild "$@"; }',
             'sqrbx-uninstall() { "${_sq_install}/uninstall.sh" "$@"; }', 'squarebox-uninstall() { sqrbx-uninstall "$@"; }'
         )
