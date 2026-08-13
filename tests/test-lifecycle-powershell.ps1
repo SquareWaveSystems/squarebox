@@ -108,8 +108,8 @@ try {
             foreach ($property in $case.set.PSObject.Properties) {
                 $fixtureValue = [string]$property.Value
                 if ($fixtureValue.StartsWith('{ROOT}/', [StringComparison]::Ordinal)) {
-                    $values[$property.Name] = [IO.Path]::Combine(
-                        $fixtureRoot, $fixtureValue.Substring('{ROOT}/'.Length).Replace('/', [IO.Path]::DirectorySeparatorChar))
+                    $values[$property.Name] = $fixtureRoot + $fixtureValue.Substring('{ROOT}'.Length).Replace(
+                        '/', [IO.Path]::DirectorySeparatorChar)
                 } else {
                     $values[$property.Name] = $fixtureValue.Replace('{ROOT}', $fixtureRoot)
                 }
