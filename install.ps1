@@ -963,8 +963,8 @@ if ($SeedSections.Count -gt 0) {
     Write-Host "Provisioning requested Selection on the Candidate Box ($($SeedSections -join ', '))..."
     & $Runtime exec -u dev -e HOME=/home/dev $script:CandidateName /usr/local/lib/squarebox/setup.sh --rerun @SeedSections
     $provisionExit = $LASTEXITCODE
-    & $Runtime stop $script:CandidateName | Out-Null
     if ($provisionExit -ne 0) {
+		& $Runtime stop $script:CandidateName 2>$null | Out-Null
         Abort 'Requested provisioning failed; the prior Box remains available.'
     }
     Invoke-FailureInjection 'provision'
