@@ -229,7 +229,14 @@ $gitBashRc = (Join-Path $migrationHome '.bashrc').Replace('\', '/')
 $mockBin = Join-Path $migrationRoot 'bin'
 [IO.Directory]::CreateDirectory($migrationStateDir) | Out-Null
 [IO.Directory]::CreateDirectory($mockBin) | Out-Null
-[IO.File]::WriteAllText((Join-Path $mockBin 'docker.cmd'), "@echo off`r`necho test-install-123`r`nexit /b 0`r`n", [Text.ASCIIEncoding]::new())
+$mockRuntime = Join-Path $mockBin 'mock-runtime.ps1'
+[IO.File]::WriteAllText($mockRuntime, @'
+$command = $args -join ' '
+if ($command.Contains('{{.Id}}')) { Write-Output ('sha256:' + ('c' * 64)) }
+elseif ($command.Contains('io.squarebox.install-id')) { Write-Output 'test-install-123' }
+exit 0
+'@, [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $mockBin 'docker.cmd'), "@echo off`r`npwsh -NoProfile -File `"%~dp0mock-runtime.ps1`" %*`r`nexit /b %ERRORLEVEL%`r`n", [Text.ASCIIEncoding]::new())
 [IO.File]::WriteAllLines($gitBashInit, @('# squarebox-install-id=test-install-123'), [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllLines($gitBashRc, @('# >>> squarebox >>>', '[ -f "$HOME/.squarebox-shell-init" ] && . "$HOME/.squarebox-shell-init"', '# <<< squarebox <<<'), [Text.UTF8Encoding]::new($false))
 $migrationValues = [ordered]@{
@@ -261,12 +268,49 @@ try {
     Assert-True ($bashState.INSTALL_DIR -ceq $migrationInstall.Replace('\', '/')) 'Git Bash migration did not publish drive-form path spelling'
     Assert-True ((Get-Content $gitBashInit) -ccontains '# squarebox-install-id=test-install-123') 'Git Bash adapter ownership was not installed'
 
+    $beforeMalformed = [IO.File]::ReadAllBytes($migrationState)
+    [IO.File]::AppendAllText($migrationState, "UNKNOWN_FIELD=unsafe`n", [Text.UTF8Encoding]::new($false))
+    $malformedState = [IO.File]::ReadAllBytes($migrationState)
+    & pwsh -NoProfile -File (Join-Path $Root 'scripts/migrate-windows-adapter.ps1') -Target PowerShell -InstallDir $migrationInstall `
+        -PowerShellProfile $profileAll -PowerShellCurrentHostProfile $profileHost -UserHomePath $migrationHome -Yes 2>$null
+    Assert-True ($LASTEXITCODE -ne 0) 'migration accepted malformed Install state'
+    Assert-True ([Convert]::ToBase64String($malformedState) -ceq [Convert]::ToBase64String([IO.File]::ReadAllBytes($migrationState))) 'malformed migration changed Install state'
+    [IO.File]::WriteAllBytes($migrationState, $beforeMalformed)
+
     $beforeForeign = [IO.File]::ReadAllBytes($migrationState)
     [IO.File]::WriteAllText($gitBashInit, "# squarebox-install-id=foreign-owner`n", [Text.UTF8Encoding]::new($false))
     & pwsh -NoProfile -File (Join-Path $Root 'scripts/migrate-windows-adapter.ps1') -Target PowerShell -InstallDir $migrationInstall `
         -PowerShellProfile $profileAll -PowerShellCurrentHostProfile $profileHost -UserHomePath $migrationHome -Yes 2>$null
     Assert-True ($LASTEXITCODE -ne 0) 'migration accepted a foreign Git Bash adapter'
     Assert-True ([Convert]::ToBase64String($beforeForeign) -ceq [Convert]::ToBase64String([IO.File]::ReadAllBytes($migrationState))) 'foreign migration changed Install state'
+    [IO.File]::WriteAllLines($gitBashInit, @('# squarebox-install-id=test-install-123'), [Text.UTF8Encoding]::new($false))
+
+    & pwsh -NoProfile -File (Join-Path $Root 'scripts/migrate-windows-adapter.ps1') -Target PowerShell -InstallDir $migrationInstall `
+        -PowerShellProfile $profileAll -PowerShellCurrentHostProfile $profileHost -UserHomePath $migrationHome -Yes
+    Assert-True ($LASTEXITCODE -eq 0) 'Git Bash to PowerShell migration before target uninstall failed'
+
+    $uninstallHarness = Join-Path $migrationRoot 'invoke-target-uninstall.ps1'
+    [IO.File]::WriteAllText($uninstallHarness, @'
+$PROFILE.CurrentUserAllHosts = $env:SQUAREBOX_TEST_PROFILE_ALL
+$PROFILE.CurrentUserCurrentHost = $env:SQUAREBOX_TEST_PROFILE_HOST
+& $env:SQUAREBOX_TEST_UNINSTALL -InstallDir $env:SQUAREBOX_TEST_INSTALL_DIR -Yes
+exit $LASTEXITCODE
+'@, [Text.UTF8Encoding]::new($false))
+    $oldUserProfile = $env:USERPROFILE
+    $env:USERPROFILE = $migrationHome
+    $env:SQUAREBOX_TEST_PROFILE_ALL = $profileAll
+    $env:SQUAREBOX_TEST_PROFILE_HOST = $profileHost
+    $env:SQUAREBOX_TEST_UNINSTALL = Join-Path $Root 'uninstall.ps1'
+    $env:SQUAREBOX_TEST_INSTALL_DIR = $migrationInstall
+    try {
+        & pwsh -NoProfile -File $uninstallHarness
+        Assert-True ($LASTEXITCODE -eq 0) 'PowerShell uninstaller rejected migrated Install state'
+        Assert-True (-not ((Get-Content $profileAll) -ccontains '# squarebox-install-id=test-install-123')) 'target uninstaller did not remove migrated adapter'
+    } finally {
+        $env:USERPROFILE = $oldUserProfile
+        Remove-Item Env:SQUAREBOX_TEST_PROFILE_ALL, Env:SQUAREBOX_TEST_PROFILE_HOST, Env:SQUAREBOX_TEST_UNINSTALL, Env:SQUAREBOX_TEST_INSTALL_DIR -ErrorAction SilentlyContinue
+    }
+    $global:LASTEXITCODE = 0
 } finally {
     $env:PATH = $oldPath
     Remove-Item -LiteralPath $migrationRoot -Recurse -Force -ErrorAction SilentlyContinue
