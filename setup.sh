@@ -1823,9 +1823,14 @@ _install_herdr_inner() {
 		split_horizontal = ["ctrl+alt+backslash", "prefix+minus"]
 		zoom = ["ctrl+alt+z", "prefix+z"]
 		resize_mode = "prefix+r"
-		HERDRCONF
+			HERDRCONF
 			mv -fT -- "$config_tmp" "$config_path" || exit 1
 			config_tmp=""
+			if ! herdr config check >/dev/null 2>&1; then
+				echo "ERROR: Generated Herdr config failed validation: $config_path" >&2
+				rm -f -- "$config_path"
+				exit 1
+			fi
 		); then
 			return 1
 		fi

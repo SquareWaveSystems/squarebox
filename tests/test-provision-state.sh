@@ -258,16 +258,38 @@ rm -f "$ZELLIJ_CONF"
 
 # Herdr uses the shared immediate-app keyboard language for a fresh Managed
 # home, while an existing config remains user-controlled.
-printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/herdr"
+cat > "$BIN/herdr" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "${1:-}" = config ] && [ "${2:-}" = check ]; then
+	config="$HOME/.config/herdr/config.toml"
+	grep -Fqx 'detach = ["ctrl+alt+q", "prefix+q"]' "$config"
+	grep -Fqx 'new_workspace = ["ctrl+alt+n", "prefix+shift+n"]' "$config"
+	grep -Fqx 'split_horizontal = ["ctrl+alt+backslash", "prefix+minus"]' "$config"
+	grep -Fqx 'zoom = ["ctrl+alt+z", "prefix+z"]' "$config"
+	[ "${HERDR_CHECK_FAIL:-0}" -eq 0 ]
+	printf 'config check\n' >> "$HERDR_TEST_LOG"
+fi
+EOF
 chmod +x "$BIN/herdr"
 printf 'herdr\n' > "$STATE/multiplexer"
 rm -rf "$HOME_DIR/.config/herdr"
-HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+HERDR_TEST_LOG="$TMP/herdr-check.log" HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
 	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/herdr-fresh.out" 2>"$TMP/herdr-fresh.err"
 HERDR_CONF="$HOME_DIR/.config/herdr/config.toml"
-assert_true "grep -Fqx 'prefix = \"f12\"' '$HERDR_CONF' && grep -Fqx 'new_tab = [\"ctrl+t\", \"prefix+c\"]' '$HERDR_CONF' && grep -Fqx 'new_workspace = [\"ctrl+alt+n\", \"prefix+shift+n\"]' '$HERDR_CONF' && grep -Fqx 'focus_pane_left = [\"ctrl+left\", \"prefix+h\"]' '$HERDR_CONF'" \
-	"fresh Herdr config uses terminal-safe direct chords with F12 fallbacks"
+assert_true "grep -Fqx 'config check' '$TMP/herdr-check.log' && grep -Fqx 'prefix = \"f12\"' '$HERDR_CONF' && grep -Fqx 'new_tab = [\"ctrl+t\", \"prefix+c\"]' '$HERDR_CONF' && grep -Fqx 'focus_pane_left = [\"ctrl+left\", \"prefix+h\"]' '$HERDR_CONF'" \
+	"fresh Herdr config passes validation with terminal-safe direct chords and F12 fallbacks"
+rm -f "$HERDR_CONF"
+if HERDR_CHECK_FAIL=1 HERDR_TEST_LOG="$TMP/herdr-check-fail.log" HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun multiplexers >"$TMP/herdr-invalid.out" 2>"$TMP/herdr-invalid.err"; then
+	HERDR_INVALID_RC=0
+else
+	HERDR_INVALID_RC=$?
+fi
+assert_true "[ \"$HERDR_INVALID_RC\" -ne 0 ] && [ ! -e '$HERDR_CONF' ] && grep -Fq 'Generated Herdr config failed validation' '$TMP/herdr-invalid.err'" \
+	"Herdr setup removes a generated config that fails validation"
 printf '# user-owned Herdr config\n' > "$HERDR_CONF"
 HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
