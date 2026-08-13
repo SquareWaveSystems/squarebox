@@ -64,4 +64,69 @@ Assert-True ($install.Contains('{{range .RepoDigests}}{{println .}}{{end}}') -an
 Assert-True ($install -match '\$repoDigestOutput = @\(\)\s+if \(-not \$Build\)') 'local builds still derive identity from unordered RepoDigests'
 Assert-True ($install.Contains('$SelectionStateFiles') -and $install.Contains('Selection state file must not be a reparse point or symlink')) 'PowerShell seeding can follow Workspace Selection links'
 
-Write-Output 'ok - native PowerShell lifecycle syntax and safety contracts'
+$schema = Get-Content -Raw (Join-Path $Root 'scripts/lib/install-state-schema.json') | ConvertFrom-Json
+$cases = Get-Content -Raw (Join-Path $Root 'tests/fixtures/install-state-cases.json') | ConvertFrom-Json
+$StateFields = @($schema.fields)
+$Repo = 'https://github.com/SquareWaveSystems/squarebox.git'
+$fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) "squarebox-state-$([guid]::NewGuid().ToString('N'))"
+$UserHome = Join-Path $fixtureRoot 'home'
+$fixtureInstall = Join-Path $fixtureRoot 'squarebox'
+$stateDir = Join-Path $fixtureInstall '.squarebox'
+[void](New-Item -ItemType Directory -Force $UserHome, $stateDir)
+
+function Abort([string]$Message) { throw $Message }
+try {
+    foreach ($adapter in @('install.ps1', 'uninstall.ps1')) {
+        $tokens = $null; $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $Root $adapter), [ref]$tokens, [ref]$errors)
+        Assert-True ($errors.Count -eq 0) "$adapter has parser errors"
+        foreach ($functionName in @('Test-ReleaseTag', 'Test-StatePath', 'Test-SamePath', 'Test-StateId', 'Assert-InstallState', 'Read-InstallState')) {
+            $definition = $ast.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -ceq $functionName
+            }, $true)
+            Assert-True ($null -ne $definition) "$adapter has no $functionName function"
+            Invoke-Expression $definition.Extent.Text
+        }
+        foreach ($case in $cases) {
+            $values = [ordered]@{
+                FORMAT = '1'; INSTALL_ID = 'test-install-123'; RUNTIME = 'docker'
+                INSTALL_DIR = $fixtureInstall; WORKSPACE_DIR = (Join-Path $fixtureRoot 'workspace')
+                GIT_CONFIG_DIR = (Join-Path $fixtureInstall '.squarebox/identity/git')
+                HOME_VOLUME = 'squarebox-home'; CONTAINER_NAME = 'squarebox'; IMAGE_ALIAS = 'squarebox'
+                IMAGE_REPOSITORY = 'ghcr.io/squarewavesystems/squarebox'
+                IMAGE_REF = 'ghcr.io/squarewavesystems/squarebox@sha256:' + ('b' * 64)
+                IMAGE_ID = 'sha256:' + ('c' * 64)
+                IMAGE_DIGEST = 'ghcr.io/squarewavesystems/squarebox@sha256:' + ('b' * 64)
+                SOURCE_REF = 'v1.2.3'; SOURCE_COMMIT = 'a' * 40; RELEASE_TAG = 'v1.2.3'
+                REQUESTED_TAG = 'latest'; PUID = '1000'; PGID = '1000'; BUILD = '0'; EDGE = '0'
+                SHELL_INIT = $PROFILE.CurrentUserAllHosts; SHELL_RC = $PROFILE.CurrentUserAllHosts
+                ORIGIN = $Repo; HOME_VOLUME_ADOPTED = '0'
+            }
+            foreach ($property in $case.set.PSObject.Properties) {
+                $fixtureValue = [string]$property.Value
+                if ($fixtureValue.StartsWith('{ROOT}/', [StringComparison]::Ordinal)) {
+                    $values[$property.Name] = $fixtureRoot + $fixtureValue.Substring('{ROOT}'.Length).Replace(
+                        '/', [IO.Path]::DirectorySeparatorChar)
+                } else {
+                    $values[$property.Name] = $fixtureValue.Replace('{ROOT}', $fixtureRoot)
+                }
+            }
+            $removed = @($case.remove)
+            $lines = @($StateFields | Where-Object { $_ -cnotin $removed } | ForEach-Object { "$_=$($values[$_])" })
+            $lines += @($case.append)
+            $separator = if ($case.encoding -ceq 'crlf') { "`r`n" } else { [Environment]::NewLine }
+            $stateFile = Join-Path $stateDir 'install-state'
+            [IO.File]::WriteAllText($stateFile, (($lines -join $separator) + $separator), [Text.UTF8Encoding]::new($false))
+            $accepted = $true
+            try { [void](Read-InstallState $stateFile $fixtureInstall) } catch { $accepted = $false }
+            Assert-True ($accepted -eq [bool]$case.accept) "$adapter fixture '$($case.name)' had unexpected result"
+        }
+    }
+} finally {
+    Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Output "ok - native PowerShell lifecycle syntax, safety, and $($cases.Count) shared state fixtures"

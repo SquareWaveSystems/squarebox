@@ -101,7 +101,7 @@ is_absolute_state_path() {
 		[A-Za-z]:/*) [ "$WINDOWS_BASH" = 1 ] || return 1 ;;
 		*) return 1 ;;
 	esac
-	case "$1" in */../*|*/..|*/./*|*/.|*[$'\001'-$'\037'$'\177']*) return 1 ;; esac
+	case "$1" in *//*|*/../*|*/..|*/./*|*/.|*[$'\001'-$'\037'$'\177']*) return 1 ;; esac
 }
 is_root_state_path() {
 	case "$1" in
@@ -220,6 +220,10 @@ load_state() {
 	done
 	validate_state_schema "$file"
 }
+
+if [ "${SQUAREBOX_LIFECYCLE_FUNCTIONS_ONLY:-0}" = 1 ]; then
+	return 0 2>/dev/null || exit 0
+fi
 
 HAD_STATE=0
 if [ -f "$STATE_FILE" ]; then load_state "$STATE_FILE"; HAD_STATE=1; fi

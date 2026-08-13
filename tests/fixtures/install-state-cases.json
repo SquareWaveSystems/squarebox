@@ -1,0 +1,20 @@
+[
+  {"name": "stable", "accept": true},
+  {"name": "crlf", "accept": true, "encoding": "crlf"},
+  {"name": "non_ascii_workspace", "accept": true, "set": {"WORKSPACE_DIR": "{ROOT}/wörk-工作"}},
+  {"name": "source_build", "accept": true, "set": {"BUILD": "1", "IMAGE_REF": "squarebox"}},
+  {"name": "edge_build", "accept": true, "set": {"BUILD": "1", "EDGE": "1", "IMAGE_REF": "squarebox", "SOURCE_REF": "refs/remotes/origin/main", "RELEASE_TAG": "", "REQUESTED_TAG": ""}},
+  {"name": "adopted_home", "accept": true, "set": {"HOME_VOLUME_ADOPTED": "1"}},
+  {"name": "future_format", "accept": false, "set": {"FORMAT": "2"}},
+  {"name": "unknown_field", "accept": false, "append": ["DELETE_THIS=/"]},
+  {"name": "duplicate_field", "accept": false, "append": ["HOME_VOLUME=other"]},
+  {"name": "missing_field", "accept": false, "remove": ["WORKSPACE_DIR"]},
+  {"name": "malformed_line", "accept": false, "append": ["NOT_A_FIELD"]},
+  {"name": "unsafe_workspace", "accept": false, "set": {"WORKSPACE_DIR": "/"}},
+  {"name": "unnormalized_workspace", "accept": false, "set": {"WORKSPACE_DIR": "{ROOT}//workspace"}},
+  {"name": "edge_without_build", "accept": false, "set": {"EDGE": "1", "SOURCE_REF": "refs/remotes/origin/main", "RELEASE_TAG": "", "REQUESTED_TAG": ""}},
+  {"name": "invalid_install_id", "accept": false, "set": {"INSTALL_ID": "short"}},
+  {"name": "invalid_uid", "accept": false, "set": {"PUID": "0"}},
+  {"name": "mismatched_release_source", "accept": false, "set": {"SOURCE_REF": "v1.2.2"}},
+  {"name": "mismatched_release_image", "accept": false, "set": {"IMAGE_REF": "ghcr.io/squarewavesystems/squarebox@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}}
+]

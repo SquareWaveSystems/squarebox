@@ -109,6 +109,8 @@ function Test-ReparsePoint([string]$Path) {
 }
 function Test-StatePath([string]$Value) {
     if ([string]::IsNullOrEmpty($Value) -or $Value -match '[\x00-\x1f\x7f]' -or -not [IO.Path]::IsPathFullyQualified($Value)) { return $false }
+    $pathTail = if ($IsWindows -and $Value.StartsWith('\\', [StringComparison]::Ordinal)) { $Value.Substring(2) } else { $Value }
+    if ($pathTail -match '[\\/]{2,}') { return $false }
     try { $full = [IO.Path]::GetFullPath($Value) } catch { return $false }
     return $Value -ceq $full
 }
@@ -205,6 +207,7 @@ function Read-InstallState([string]$Path, [string]$ExpectedInstallDir) {
     Assert-InstallState $state $Path $ExpectedInstallDir
     return $state
 }
+if ($env:SQUAREBOX_LIFECYCLE_FUNCTIONS_ONLY -eq '1') { return }
 function Test-Origin([string]$Origin) {
     return @(
         'https://github.com/SquareWaveSystems/squarebox',
