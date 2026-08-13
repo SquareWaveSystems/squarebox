@@ -167,18 +167,25 @@ assert_true "grep -qx 'set -g mouse on' '$HOME_DIR/.config/tmux/tmux.conf'" "rec
 assert_true "[ \"\$(cat '$STATE/multiplexer')\" = tmux ]" "successful reconciliation preserves the saved Selection"
 assert_true "[ \"\$(cat '$STATE/editor-default')\" = fresh ] && grep -qx \"export EDITOR='fresh'\" '$HOME_DIR/.squarebox-editor-aliases'" "reconcile preserves a non-first default editor Selection"
 
-printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/codex"
+for ai_binary in copilot gemini codex pi omp; do
+	printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/$ai_binary"
+done
 printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/npm"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/node"
+printf '#!/usr/bin/env bash\nif [ "${1:-}" = -p ]; then printf "22\\n"; else printf "v22.0.0\\n"; fi\n' > "$BIN/node"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/mise"
-chmod +x "$BIN/codex" "$BIN/npm" "$BIN/node" "$BIN/mise"
-printf 'codex,removed-assistant\n' > "$STATE/ai-tool"
+chmod +x "$BIN/copilot" "$BIN/gemini" "$BIN/codex" "$BIN/pi" "$BIN/omp" \
+	"$BIN/npm" "$BIN/node" "$BIN/mise"
+printf 'copilot,gemini,codex,pi,omp,removed-assistant\n' > "$STATE/ai-tool"
 if HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
 	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
 	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --rerun ai >"$TMP/reconcile-ai.out" 2>"$TMP/reconcile-ai.err"; then
-	assert_true "[ \"\$(cat '$STATE/ai-tool')\" = codex ] && grep -q 'removing unsupported AI assistant' '$TMP/reconcile-ai.err'" "reconcile removes unsupported assistants from a saved Selection"
+	assert_true "[ \"\$(cat '$STATE/ai-tool')\" = copilot,gemini,codex,pi,omp ] && grep -q 'removing unsupported AI assistant' '$TMP/reconcile-ai.err'" "reconcile removes unsupported assistants from a saved Selection"
+	assert_true "grep -Fqx \"alias copilot-yolo='copilot --allow-all'\" '$HOME_DIR/.squarebox-ai-aliases' && grep -Fqx \"alias gemini-yolo='gemini --approval-mode=yolo'\" '$HOME_DIR/.squarebox-ai-aliases' && grep -Fqx \"alias codex-yolo='codex --dangerously-bypass-approvals-and-sandbox'\" '$HOME_DIR/.squarebox-ai-aliases' && grep -Fqx \"alias omp-yolo='omp --approval-mode yolo'\" '$HOME_DIR/.squarebox-ai-aliases'" "reconcile generates the supported AI YOLO aliases"
+	assert_true "! grep -Fq 'pi-yolo' '$HOME_DIR/.squarebox-ai-aliases'" "reconcile does not invent an unsupported Pi YOLO alias"
 else
 	not_ok "reconcile removes unsupported assistants from a saved Selection"
+	not_ok "reconcile generates the supported AI YOLO aliases"
+	not_ok "reconcile does not invent an unsupported Pi YOLO alias"
 fi
 
 printf 'set -g mouse off\n' > "$HOME_DIR/.config/tmux/tmux.conf"
