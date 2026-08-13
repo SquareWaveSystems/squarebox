@@ -111,7 +111,7 @@ scripted installs). Values use the same keys as `sqrbx-setup`:
 | `SQUAREBOX_SDKS` | language SDKs (`node,python,go,dotnet,rust`) |
 | `SQUAREBOX_EDITORS` | editors (`micro,edit,fresh,nvim`) |
 | `SQUAREBOX_TUIS` | TUI tools (`lazygit,gh-dash,yazi`) |
-| `SQUAREBOX_MULTIPLEXERS` | multiplexers (`tmux,zellij`) |
+| `SQUAREBOX_MULTIPLEXERS` | multiplexers (`tmux,zellij,herdr`) |
 | `SQUAREBOX_GIT_NAME` / `SQUAREBOX_GIT_EMAIL` | git identity (when no host gitconfig) |
 
 Example: `SQUAREBOX_AI=claude SQUAREBOX_SDKS=node,python curl -fsSL …/install.sh | bash`
@@ -257,12 +257,32 @@ Installed during first-run setup. Choose any combination:
 
 ### Terminal Multiplexers
 
-Installed during first-run setup. Choose either, both, or neither:
+Installed during first-run setup. Choose any combination, or none:
 
 | Name | Description |
 |------|-------------|
 | [tmux](https://github.com/tmux/tmux) | Classic terminal multiplexer |
 | [zellij](https://github.com/zellij-org/zellij) | Friendly terminal workspace |
+| [herdr](https://herdr.dev) | Agent multiplexer — run multiple coding agents from one terminal |
+
+### Shared Herdr Keyboard Language (Experimental)
+
+Herdr uses `Ctrl` for immediate actions in the focused application and `Shift`
+to modify or move the target. Its `F12` prefix remains available as a
+compatibility fallback:
+
+| Feature | Herdr |
+|---------|-------|
+| New / close | `Ctrl+T` / `Ctrl+W` |
+| Cycle / select tabs | `Ctrl+Tab`, `Ctrl+Shift+Tab` / `Ctrl+1-9` |
+| Focus / swap pane | `Ctrl+Arrow` / `Ctrl+Shift+Arrow` |
+| Sidebar / go to | `Ctrl+B` / `Ctrl+G` |
+| Split right / down | `Ctrl+\\` / `Ctrl+Shift+\\` |
+| Zoom / new workspace | `Ctrl+Shift+Z` / `Ctrl+Shift+N` |
+| Compatibility prefix | `F12` |
+
+Existing `~/.config/herdr/config.toml` files remain user-managed and are not
+replaced by setup.
 
 ### Shell (Experimental)
 

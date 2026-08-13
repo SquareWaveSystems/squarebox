@@ -185,7 +185,7 @@ suite_setup_editors() {
 	echo "opencode,pi,paseo" > /workspace/.squarebox/ai-tool
 	echo "micro,edit,fresh,nvim" > /workspace/.squarebox/editors
 	echo "lazygit,gh-dash,yazi" > /workspace/.squarebox/tuis
-	echo "tmux,zellij" > /workspace/.squarebox/multiplexer
+	echo "tmux,zellij,herdr" > /workspace/.squarebox/multiplexer
 	echo "node,go" > /workspace/.squarebox/sdks
 	# Shell section (experimental): exercise the bash path here. The zsh
 	# install (apt zsh + Oh My Zsh + two plugin clones) is network-heavy and
@@ -231,6 +231,9 @@ suite_setup_editors() {
 	# 3.8 multiplexers installed
 	run_test "3.8a tmux installed" command -v tmux
 	run_test "3.8b zellij installed" command -v zellij
+	run_test "3.8c herdr installed" command -v herdr
+	run_test "3.8d herdr config installed" test -f "$HOME/.config/herdr/config.toml"
+	run_test_grep "3.8e herdr uses Ctrl+T for new tab" 'new_tab = ["ctrl+t", "prefix+c"]' cat "$HOME/.config/herdr/config.toml"
 
 	# 3.9 SDKs installed (via mise)
 	run_test "3.9a node installed (via mise)" command -v node

@@ -83,7 +83,7 @@ has_tool() {
 	case "$tool" in
 		lazygit|gh-dash|yazi)
 			grep -qw "$tool" "$SQUAREBOX_DIR/tuis" 2>/dev/null ;;
-		tmux|zellij)
+		tmux|zellij|herdr)
 			grep -qw "$tool" "$SQUAREBOX_DIR/multiplexer" 2>/dev/null ;;
 		*)
 			command -v "$tool" &>/dev/null ;;

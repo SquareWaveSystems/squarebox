@@ -206,3 +206,12 @@ tools:
     tar_extract: zellij
     dest: user
     group: setup
+
+  herdr:
+    repo: ogulcancelik/herdr
+    version_prefix: v
+    artifact: herdr-linux-{zarch}
+    method: binary
+    binaries: herdr
+    dest: user
+    group: setup
