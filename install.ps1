@@ -34,6 +34,15 @@ $script:ContainerCreated = $false
 $script:ImageAliasMutated = $false
 $script:PriorImageAliasId = ''
 $script:NewImageAliasId = ''
+$script:PriorSourceCommit = ''
+$script:CandidateName = ''
+$script:RollbackName = ''
+$script:OldContainerRenamed = $false
+$script:CandidatePromoted = $false
+$script:StatePublished = $false
+$script:ProfileBackups = @()
+$script:ManagedBackupDir = ''
+$script:ManagedBackups = @()
 
 function Invoke-InstallRollback {
     if (-not $script:RollbackArmed -or $script:RollbackInProgress) { return }
@@ -41,12 +50,25 @@ function Invoke-InstallRollback {
     $script:RollbackArmed = $false
     try {
         if ($script:RuntimeReady) {
+			if ($script:CandidatePromoted) {
+				& $Runtime rename $ContainerName $script:CandidateName 2>$null | Out-Null
+				if ($LASTEXITCODE -eq 0) { $script:CandidatePromoted = $false }
+				else { Write-Warning "Rollback could not rename '$ContainerName' to '$($script:CandidateName)'." }
+			}
+			if ($script:OldContainerRenamed) {
+				& $Runtime rename $script:RollbackName $ContainerName 2>$null | Out-Null
+				if ($LASTEXITCODE -eq 0) { $script:OldContainerRenamed = $false }
+				else {
+					Write-Warning "Rollback could not restore '$($script:RollbackName)' to '$ContainerName'."
+					Write-Warning "Recovery: inspect '$($script:CandidateName)' and '$($script:RollbackName)', then restore the rollback Box to '$ContainerName'."
+				}
+			}
             if ($script:ContainerCreated) {
-                & $Runtime container inspect $ContainerName 2>$null | Out-Null
+                & $Runtime container inspect $script:CandidateName 2>$null | Out-Null
                 if ($LASTEXITCODE -eq 0) {
-                    $owner = (& $Runtime inspect -f '{{ index .Config.Labels "io.squarebox.install-id" }}' $ContainerName 2>$null)
+                    $owner = (& $Runtime inspect -f '{{ index .Config.Labels "io.squarebox.install-id" }}' $script:CandidateName 2>$null)
                     if ($LASTEXITCODE -eq 0 -and $owner -and $owner.Trim() -ceq $InstallId) {
-                        & $Runtime rm -f $ContainerName 2>$null | Out-Null
+                        & $Runtime rm -f $script:CandidateName 2>$null | Out-Null
                     }
                 }
             }
@@ -73,6 +95,39 @@ function Invoke-InstallRollback {
     } catch {
         Write-Warning "Install rollback could not clean every runtime resource: $($_.Exception.Message)"
     }
+    if (-not $script:StatePublished -and $script:PriorSourceCommit -and -not $script:CheckoutCreated) {
+        try {
+            & git -C $InstallDir checkout --detach $script:PriorSourceCommit 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "git checkout could not restore source $($script:PriorSourceCommit)" }
+            & git -C $InstallDir reset --hard $script:PriorSourceCommit 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "git reset could not restore source $($script:PriorSourceCommit)" }
+        } catch { Write-Warning "Install rollback could not restore source: $($_.Exception.Message)" }
+    }
+	if (-not $script:StatePublished) {
+		try {
+			foreach ($profileBackup in $script:ProfileBackups) {
+				if ($profileBackup.Existed) { [IO.File]::Copy($profileBackup.Backup, $profileBackup.Path, $true) }
+				elseif (Test-Path -LiteralPath $profileBackup.Path) { Remove-Item -Force -LiteralPath $profileBackup.Path }
+			}
+        } catch { Write-Warning "Install rollback could not restore profiles: $($_.Exception.Message)" }
+    }
+    if (-not $script:StatePublished -and $script:ManagedBackupDir) {
+        try {
+            foreach ($backup in $script:ManagedBackups) {
+                if ($backup.Existed) {
+                    [IO.Directory]::CreateDirectory((Split-Path $backup.Path)) | Out-Null
+                    [IO.File]::Copy($backup.Backup, $backup.Path, $true)
+                } elseif (Test-Path -LiteralPath $backup.Path -PathType Leaf) {
+                    Remove-Item -Force -LiteralPath $backup.Path
+                }
+            }
+        } catch { Write-Warning "Install rollback could not restore managed configuration: $($_.Exception.Message)" }
+    }
+    foreach ($profileBackup in $script:ProfileBackups) {
+        Remove-Item -Force -LiteralPath $profileBackup.Backup -ErrorAction SilentlyContinue
+    }
+    if ($script:ManagedBackupDir) { Remove-Item -Recurse -Force -LiteralPath $script:ManagedBackupDir -ErrorAction SilentlyContinue }
+    if ($StateTemp) { Remove-Item -Force -LiteralPath $StateTemp -ErrorAction SilentlyContinue }
     try {
         if ($script:CheckoutCreated -and $InstallDir -and $StateFile -and -not (Test-Path -LiteralPath $StateFile)) {
             Remove-Item -Recurse -Force -LiteralPath $InstallDir -ErrorAction Stop
@@ -86,6 +141,9 @@ function Abort([string]$Message) {
     Invoke-InstallRollback
     Write-Host "Error: $Message" -ForegroundColor Red
     exit 1
+}
+function Invoke-FailureInjection([string]$Boundary) {
+    if ($env:SQUAREBOX_FAIL_AT -ceq $Boundary) { throw "Injected lifecycle failure at '$Boundary'." }
 }
 trap {
     $failure = $_.Exception.Message
@@ -289,6 +347,10 @@ if (Test-Path $InstallDir) {
     $origin = (& git -C $InstallDir remote get-url origin 2>$null)
     if ($LASTEXITCODE -ne 0 -or -not (Test-Origin $origin)) { Abort "Unexpected checkout origin '$origin'; refusing reset." }
     if (-not $State -and -not $Adopt) { Abort 'Existing checkout has no Install identity; verify it, then use -Adopt.' }
+    $priorCommit = (& git -C $InstallDir rev-parse HEAD 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $priorCommit -and $priorCommit.Trim() -cmatch '^[0-9a-f]{40}$') {
+        $script:PriorSourceCommit = $priorCommit.Trim()
+    }
     Write-Host 'Updating managed checkout...'
     & git -C $InstallDir fetch --force origin '+refs/heads/main:refs/remotes/origin/main' '+refs/tags/*:refs/tags/*'
     if ($LASTEXITCODE -ne 0) { Abort 'git fetch failed.' }
@@ -351,6 +413,7 @@ if ($Edge) {
 }
 $SourceCommit = (& git -C $InstallDir rev-parse HEAD).Trim()
 if ($Manifest -and $SourceCommit -cne $Manifest.source_sha) { Abort 'Checked-out source does not match release.json.' }
+Invoke-FailureInjection 'checkout'
 
 if (-not $Runtime) {
     if ($env:SQUAREBOX_RUNTIME) { $Runtime = $env:SQUAREBOX_RUNTIME }
@@ -440,6 +503,7 @@ if ($Build) {
 $ImageId = (& $Runtime image inspect -f '{{.Id}}' $ImageAlias).Trim()
 if ($LASTEXITCODE -ne 0) { Abort 'Unable to inspect the Candidate image.' }
 $script:NewImageAliasId = $ImageId
+Invoke-FailureInjection 'image-alias'
 $repoDigestOutput = @()
 if (-not $Build) {
     $repoDigestOutput = @(& $Runtime image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' $ImageRef 2>$null)
@@ -481,14 +545,38 @@ if ($LASTEXITCODE -eq 0) {
     if ($LASTEXITCODE -ne 0) { Abort "Unable to create Managed home '$HomeVolume'." }
     $script:VolumeCreated = $true
     $HomeVolumeAdopted = $false
+    Invoke-FailureInjection 'managed-home-create'
 }
 
 & $Runtime container inspect $ContainerName 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) {
+$HadContainer = $LASTEXITCODE -eq 0
+if ($HadContainer) {
     $owner = Get-ResourceOwner container $ContainerName
     if ($owner -cne $InstallId -and -not (-not $owner -and $Adopt)) { Abort "Box '$ContainerName' is not owned by this Install identity." }
-    & $Runtime rm -f $ContainerName | Out-Null
-    if ($LASTEXITCODE -ne 0) { Abort "Unable to replace managed Box '$ContainerName'." }
+}
+$suffix = ($InstallId -replace '[^A-Za-z0-9_.-]', '-').Substring(0, [Math]::Min(12, $InstallId.Length))
+$prefix = $ContainerName.Substring(0, [Math]::Min(96, $ContainerName.Length))
+$script:CandidateName = "$prefix-candidate-$suffix"
+$script:RollbackName = "$prefix-rollback-$suffix"
+foreach ($transactionName in @($script:CandidateName, $script:RollbackName)) {
+    & $Runtime container inspect $transactionName 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { Abort "Lifecycle transaction Box '$transactionName' already exists; inspect and remove or rename it before retrying." }
+}
+$script:ManagedBackupDir = Join-Path ([IO.Path]::GetTempPath()) "squarebox-managed-$([guid]::NewGuid().ToString('N'))"
+[IO.Directory]::CreateDirectory($script:ManagedBackupDir) | Out-Null
+$managedPaths = @(
+    (Join-Path $GitConfigDir 'config'),
+    (Join-Path $InstallDir '.config\starship.toml'),
+    (Join-Path $InstallDir '.config\lazygit\config.yml'),
+    (Join-Path $InstallDir '.squarebox\managed-config\starship.toml.blob'),
+    (Join-Path $InstallDir '.squarebox\managed-config\lazygit-config.yml.blob')
+)
+for ($index = 0; $index -lt $managedPaths.Count; $index++) {
+    $path = $managedPaths[$index]
+    $existed = Test-Path -LiteralPath $path -PathType Leaf
+    $backup = Join-Path $script:ManagedBackupDir ([string]$index)
+    if ($existed) { [IO.File]::Copy($path, $backup, $true) }
+    $script:ManagedBackups += [pscustomobject]@{ Path = $path; Backup = $backup; Existed = $existed }
 }
 
 # Copy only Git identity values into private install state; never mount the
@@ -640,6 +728,7 @@ try {
     # Blob identity of the v1.0 generated default after repository EOL rules.
     $LegacyLazygitBlobs = if ($State -or $Adopt) { @($LegacyLazygitBlob) } else { @() }
     Update-ManagedFile $LazygitDefault $LazygitConfig (Join-Path $ManagedConfigDir 'lazygit-config.yml.blob') $LegacyLazygitBlobs
+    Invoke-FailureInjection 'managed-config'
 } finally {
     if (Test-Path -LiteralPath $LazygitDefault) { Remove-Item -Force -LiteralPath $LazygitDefault }
 }
@@ -709,10 +798,11 @@ $RuntimeVolumes = @(
 $SshDir = Join-Path $UserHome '.ssh'
 if (Test-Path $SshDir) { $RuntimeVolumes += @('-v', "${SshDir}:/home/dev/.ssh$ReadOnlyBindSuffix") }
 
-Write-Host 'Creating managed Box...'
-& $Runtime create -it --name $ContainerName @RuntimeOptions @RuntimeVolumes $ImageAlias | Out-Null
-if ($LASTEXITCODE -ne 0) { Abort "Unable to create managed Box '$ContainerName'." }
+Write-Host 'Creating Candidate Box...'
+& $Runtime create -it --name $script:CandidateName @RuntimeOptions @RuntimeVolumes $ImageAlias | Out-Null
+if ($LASTEXITCODE -ne 0) { Abort "Unable to create Candidate Box '$($script:CandidateName)'." }
 $script:ContainerCreated = $true
+Invoke-FailureInjection 'candidate-create'
 
 $ProfilePath = $PROFILE.CurrentUserAllHosts
 $ShellInit = $ProfilePath
@@ -743,10 +833,9 @@ try {
         if ($LASTEXITCODE -ne 0) { Abort 'Unable to secure the Install identity state.' }
     }
     [void](Read-InstallState $StateTemp $InstallDir)
-    [IO.File]::Move($StateTemp, $StateFile, $true)
-    $script:RollbackArmed = $false
-} finally {
+} catch {
     if (Test-Path -LiteralPath $StateTemp) { Remove-Item -Force -LiteralPath $StateTemp }
+    throw
 }
 
 $ProfileDir = Split-Path $ProfilePath
@@ -804,6 +893,12 @@ function Add-SquareboxProfileBlock([string]$Path, [string]$Block) {
 # installing the portable all-hosts adapter so stale definitions cannot win.
 $ProfilePaths = @($ProfilePath, $PROFILE.CurrentUserCurrentHost) | Select-Object -Unique
 foreach ($path in $ProfilePaths) {
+    $existed = Test-Path -LiteralPath $path -PathType Leaf
+    $backup = Join-Path ([IO.Path]::GetTempPath()) "squarebox-profile-$([guid]::NewGuid().ToString('N'))"
+    if ($existed) { [IO.File]::Copy($path, $backup, $true) }
+    $script:ProfileBackups += [pscustomobject]@{ Path = $path; Backup = $backup; Existed = $existed }
+}
+foreach ($path in $ProfilePaths) {
     $hasBlock = Test-SquareboxProfileBlock $path
     if ($hasBlock) {
         if ($hasBlock -and $State -and -not ([IO.File]::ReadAllLines($path) -ccontains "# squarebox-install-id=$InstallId")) {
@@ -855,19 +950,51 @@ try { [void][scriptblock]::Create($profileBlock) }
 catch { Abort "Generated PowerShell profile failed to parse after interpolation: $($_.Exception.Message)" }
 Add-SquareboxProfileBlock $ProfilePath $profileBlock
 Write-Host "Installed shell integration -> $ProfilePath"
+Invoke-FailureInjection 'host-profile'
+
+Write-Host 'Validating Candidate Box...'
+& $Runtime start $script:CandidateName | Out-Null
+if ($LASTEXITCODE -ne 0) { Abort 'Unable to start the Candidate Box.' }
+$candidateRunning = (& $Runtime inspect -f '{{.State.Running}}' $script:CandidateName 2>$null)
+if ($LASTEXITCODE -ne 0 -or -not $candidateRunning -or $candidateRunning.Trim() -cne 'true') { Abort 'Candidate Box exited during validation.' }
+Invoke-FailureInjection 'candidate-start'
 
 if ($SeedSections.Count -gt 0) {
-    Write-Host "Provisioning requested Selection on the retained Box ($($SeedSections -join ', '))..."
-    & $Runtime start $ContainerName | Out-Null
-    if ($LASTEXITCODE -ne 0) { Abort 'Unable to start the retained Box for provisioning.' }
-    & $Runtime exec -u dev -e HOME=/home/dev $ContainerName /usr/local/lib/squarebox/setup.sh --rerun @SeedSections
+    Write-Host "Provisioning requested Selection on the Candidate Box ($($SeedSections -join ', '))..."
+    & $Runtime exec -u dev -e HOME=/home/dev $script:CandidateName /usr/local/lib/squarebox/setup.sh --rerun @SeedSections
     $provisionExit = $LASTEXITCODE
-    & $Runtime stop $ContainerName | Out-Null
     if ($provisionExit -ne 0) {
-        foreach ($path in $SeededFiles) { Remove-Item -Force -LiteralPath $path -ErrorAction SilentlyContinue }
-        Abort 'Requested provisioning failed; the retained Box was not discarded.'
+		& $Runtime stop $script:CandidateName 2>$null | Out-Null
+        Abort 'Requested provisioning failed; the prior Box remains available.'
     }
+    Invoke-FailureInjection 'provision'
 }
+& $Runtime stop $script:CandidateName | Out-Null
+if ($LASTEXITCODE -ne 0) { Abort 'Unable to stop the validated Candidate Box.' }
+
+if ($HadContainer) {
+    Write-Host 'Promoting Candidate Box...'
+    & $Runtime rename $ContainerName $script:RollbackName
+    if ($LASTEXITCODE -ne 0) { Abort 'Unable to preserve the prior Box for rollback.' }
+    $script:OldContainerRenamed = $true
+    Invoke-FailureInjection 'old-box-preserved'
+}
+& $Runtime rename $script:CandidateName $ContainerName
+if ($LASTEXITCODE -ne 0) { Abort 'Unable to promote the Candidate Box.' }
+$script:CandidatePromoted = $true
+Invoke-FailureInjection 'candidate-promoted'
+Invoke-FailureInjection 'state-publish'
+[IO.File]::Move($StateTemp, $StateFile, $true)
+$script:StatePublished = $true
+$script:RollbackArmed = $false
+if ($HadContainer) {
+    & $Runtime rm -f $script:RollbackName | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Warning "Committed successfully; remove stale prior Box with: $Runtime rm -f '$($script:RollbackName)'" }
+}
+foreach ($profileBackup in $script:ProfileBackups) {
+    if (Test-Path -LiteralPath $profileBackup.Backup) { Remove-Item -Force -LiteralPath $profileBackup.Backup }
+}
+if ($script:ManagedBackupDir -and (Test-Path -LiteralPath $script:ManagedBackupDir)) { Remove-Item -Recurse -Force -LiteralPath $script:ManagedBackupDir }
 
 Write-Host "Install identity recorded at $StateFile"
 if ([Console]::IsInputRedirected) {
