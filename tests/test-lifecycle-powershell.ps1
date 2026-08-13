@@ -106,7 +106,13 @@ try {
                 ORIGIN = $Repo; HOME_VOLUME_ADOPTED = '0'
             }
             foreach ($property in $case.set.PSObject.Properties) {
-                $values[$property.Name] = ([string]$property.Value).Replace('{ROOT}', $fixtureRoot)
+                $fixtureValue = [string]$property.Value
+                if ($fixtureValue.StartsWith('{ROOT}/', [StringComparison]::Ordinal)) {
+                    $values[$property.Name] = [IO.Path]::Combine(
+                        $fixtureRoot, $fixtureValue.Substring('{ROOT}/'.Length).Replace('/', [IO.Path]::DirectorySeparatorChar))
+                } else {
+                    $values[$property.Name] = $fixtureValue.Replace('{ROOT}', $fixtureRoot)
+                }
             }
             $removed = @($case.remove)
             $lines = @($StateFields | Where-Object { $_ -cnotin $removed } | ForEach-Object { "$_=$($values[$_])" })
