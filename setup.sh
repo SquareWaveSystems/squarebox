@@ -1788,14 +1788,15 @@ _install_herdr_inner() {
 		agent_panel_sort = "spaces"
 
 		# Super belongs to the OS/window manager. Ctrl acts immediately in Herdr;
-		# Shift modifies or moves. F12 keeps the upstream-style prefix fallbacks.
+		# Ctrl+Alt keeps direct letter chords distinguishable across terminals.
+		# F12 keeps the upstream-style prefix fallbacks.
 		[keys]
 		prefix = "f12"
 		help = ["ctrl+?", "prefix+?"]
 		goto = ["ctrl+g", "prefix+g"]
 		workspace_picker = "prefix+w"
 		toggle_sidebar = ["ctrl+b", "prefix+b"]
-		detach = ["ctrl+shift+q", "prefix+q"]
+		detach = ["ctrl+alt+q", "prefix+q"]
 
 		new_tab = ["ctrl+t", "prefix+c"]
 		previous_tab = ["ctrl+shift+tab", "prefix+p"]
@@ -1804,7 +1805,7 @@ _install_herdr_inner() {
 		rename_tab = "prefix+shift+t"
 		close_tab = "prefix+shift+x"
 
-		new_workspace = ["ctrl+shift+n", "prefix+shift+n"]
+		new_workspace = ["ctrl+alt+n", "prefix+shift+n"]
 		rename_workspace = "prefix+shift+w"
 		close_workspace = "prefix+shift+d"
 
@@ -1819,12 +1820,17 @@ _install_herdr_inner() {
 
 		close_pane = ["ctrl+w", "prefix+x"]
 		split_vertical = ["ctrl+backslash", "prefix+v"]
-		split_horizontal = ["ctrl+shift+backslash", "prefix+minus"]
-		zoom = ["ctrl+shift+z", "prefix+z"]
+		split_horizontal = ["ctrl+alt+backslash", "prefix+minus"]
+		zoom = ["ctrl+alt+z", "prefix+z"]
 		resize_mode = "prefix+r"
-		HERDRCONF
+			HERDRCONF
 			mv -fT -- "$config_tmp" "$config_path" || exit 1
 			config_tmp=""
+			if ! herdr config check >/dev/null 2>&1; then
+				echo "ERROR: Generated Herdr config failed validation: $config_path" >&2
+				rm -f -- "$config_path"
+				exit 1
+			fi
 		); then
 			return 1
 		fi

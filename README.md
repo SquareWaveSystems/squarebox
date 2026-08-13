@@ -404,8 +404,9 @@ commands you trust.
 
 Squarebox builds on Omarchy's defaults with one portable rule: `Super` belongs
 to the OS/window manager, while `Ctrl` acts immediately in the focused app.
-Adding `Shift` modifies or moves the target. Herdr follows this language
-directly; its `F12` prefix remains available as a compatibility fallback.
+Herdr uses `Ctrl+Alt` for direct letter chords because many terminals collapse
+`Ctrl+Shift+letter` into the unshifted control key. Its `F12` prefix remains
+available as a compatibility fallback.
 
 Herdr's generated default uses familiar app shortcuts:
 
@@ -415,8 +416,8 @@ Herdr's generated default uses familiar app shortcuts:
 | Cycle / select tabs | `Ctrl+Tab`, `Ctrl+Shift+Tab` / `Ctrl+1-9` |
 | Focus / swap pane | `Ctrl+Arrow` / `Ctrl+Shift+Arrow` |
 | Sidebar / go to | `Ctrl+B` / `Ctrl+G` |
-| Split right / down | `Ctrl+\\` / `Ctrl+Shift+\\` |
-| Zoom / new workspace | `Ctrl+Shift+Z` / `Ctrl+Shift+N` |
+| Split right / down | `Ctrl+\\` / `Ctrl+Alt+\\` |
+| Zoom / new workspace | `Ctrl+Alt+Z` / `Ctrl+Alt+N` |
 | Compatibility prefix | `F12` |
 
 These bindings intentionally take precedence over matching shell or nested-app
