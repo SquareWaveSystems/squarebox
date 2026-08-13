@@ -7,8 +7,10 @@ trim_trailing_whitespace = true
 charset = utf-8
 
 [*.{sh,bash}]
-indent_style = space
-indent_size = 2
+# Shell files predate one repository-wide indent convention. Preserve each
+# file's local style; safety reviews should not be obscured by reindent churn.
+indent_style = unset
+indent_size = unset
 
 [Dockerfile]
 indent_style = space

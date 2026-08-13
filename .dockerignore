@@ -14,4 +14,17 @@ CONTRIBUTING.md
 .devcontainer
 docker-compose.yml
 .env
+.env.*
 .env.example
+credentials.json
+workspace/
+.config/
+.squarebox/
+.vscode/
+.idea/
+.agents/
+.codex/
+*.bak
+*.sublime-project
+*.sublime-workspace
+Thumbs.db

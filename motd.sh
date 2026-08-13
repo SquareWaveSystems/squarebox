@@ -1,6 +1,11 @@
 #!/bin/bash
 # squarebox MOTD — orange metallic banner with SDK info
 
+# Herdr creates a fresh interactive shell for every managed pane and exports
+# HERDR_ENV=1 there. The outer Box shell has already shown the MOTD, so avoid
+# repeating the full banner in every Herdr tab and split.
+[ "${HERDR_ENV:-}" = 1 ] && exit 0
+
 # Orange metallic: bright orange heading, muted orange date
 printf '\e[1;38;5;208m'
 toilet -f smblock --metal "squarebox"
@@ -22,7 +27,16 @@ if [ -f "$sdk_config" ]; then
 	for sdk in $(tr ',' ' ' < "$sdk_config"); do
 		case "$sdk" in
 			node)   ver=$(node -v 2>/dev/null | tr -d 'v') && [ -n "$ver" ] && sdks+=("Node $ver") ;;
-			python) ver=$(python3 --version 2>/dev/null | awk '{print $2}'); [ -z "$ver" ] && ver=$(uv --version 2>/dev/null | awk '{print $2}') && ver="uv $ver"; [ -n "$ver" ] && sdks+=("Python $ver") ;;
+			python)
+				ver=""
+				if command -v python3 >/dev/null 2>&1; then
+					ver=$(python3 --version 2>/dev/null | awk '{print $2}')
+				elif command -v uv >/dev/null 2>&1; then
+					ver=$(uv --version 2>/dev/null | awk '{print $2}')
+					[ -z "$ver" ] || ver="uv $ver"
+				fi
+				[ -z "$ver" ] || sdks+=("Python $ver")
+				;;
 			go)     ver=$(go version 2>/dev/null | awk '{print $3}' | tr -d 'go') && [ -n "$ver" ] && sdks+=("Go $ver") ;;
 			dotnet) ver=$(DOTNET_NOLOGO=1 dotnet --version 2>/dev/null | tail -1) && [ -n "$ver" ] && sdks+=(".NET $ver") ;;
 			rust)   ver=$(rustc --version 2>/dev/null | awk '{print $2}') && [ -n "$ver" ] && sdks+=("Rust $ver") ;;
@@ -45,11 +59,6 @@ if [ ${#sdks[@]} -gt 0 ]; then
 		sdk_str+="${sdks[$i]}"
 	done
 	[ -n "$sdk_str" ] && printf '\e[38;5;245m  %s\e[0m\n' "$sdk_str"
-fi
-
-# Learn mode hint
-if [ -f "/workspace/.squarebox/learn" ] && grep -qx "enabled" /workspace/.squarebox/learn 2>/dev/null; then
-	printf '\e[38;5;208m  ✦ sqrbx-learn\e[0m\e[38;5;245m — learn the toolkit hands-on with your AI agent\e[0m\n'
 fi
 
 # Help hint
