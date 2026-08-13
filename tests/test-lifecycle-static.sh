@@ -96,28 +96,7 @@ grep -q "Read-Host 'Continue? \[y/N\]'" uninstall.ps1
 grep -q 'ReadAllLines' install.ps1
 grep -Fq 'line="${line%$'"'"'\r'"'"'}"' install.sh
 
-python3 - <<'PY'
-import re
-from pathlib import Path
-
-expected = [
-    'FORMAT', 'INSTALL_ID', 'RUNTIME', 'INSTALL_DIR', 'WORKSPACE_DIR',
-    'GIT_CONFIG_DIR', 'HOME_VOLUME', 'CONTAINER_NAME', 'IMAGE_ALIAS',
-    'IMAGE_REPOSITORY', 'IMAGE_REF', 'IMAGE_ID', 'IMAGE_DIGEST', 'SOURCE_REF',
-    'SOURCE_COMMIT', 'RELEASE_TAG', 'REQUESTED_TAG', 'PUID', 'PGID', 'BUILD',
-    'EDGE', 'SHELL_INIT', 'SHELL_RC', 'ORIGIN', 'HOME_VOLUME_ADOPTED',
-]
-for name in ('install.ps1', 'uninstall.ps1'):
-    text = Path(name).read_text()
-    match = re.search(r'\$StateFields = @\((.*?)\n\)', text, re.S)
-    assert match, f'{name}: no closed state schema'
-    fields = re.findall(r"'([A-Z_]+)'", match.group(1))
-    assert fields == expected, f'{name}: state schema differs: {fields}'
-
-writer = Path('install.ps1').read_text().split('$stateLines = @(', 1)[1].split('\n)', 1)[0]
-emitted = re.findall(r'["\']([A-Z_]+)=', writer)
-assert emitted == expected, f'install.ps1: emitted state differs: {emitted}'
-PY
+scripts/verify-install-state-schema.py
 
 if command -v pwsh >/dev/null 2>&1; then
   pwsh -NoProfile -NonInteractive -Command \

@@ -89,6 +89,7 @@ digest='ghcr.io/squarewavesystems/squarebox@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 decoy_digest='ghcr.io/squarewavesystems/squarebox@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
 case "${1:-}" in
   info)
+    [ "${FAIL_RUNTIME_INFO:-0}" != 1 ] || exit 42
     if [[ "$*" == *'{{.Host.Security.Rootless}}'* ]] && [ "${MOCK_ROOTLESS:-0}" = 1 ]; then echo true
     else echo ok
     fi ;;
@@ -126,19 +127,39 @@ case "${1:-}" in
     esac ;;
   container)
     [ "${2:-}" = inspect ] || exit 2
-    [ -f "$MOCK_RUNTIME/container" ] || exit 1
+    name="${@: -1}"
+    case "$name" in
+      *-candidate-*|*-rollback-*) [ -f "$MOCK_RUNTIME/name-$name" ] || exit 1 ;;
+      *) [ -f "$MOCK_RUNTIME/container" ] || exit 1 ;;
+    esac
     echo '{}' ;;
   inspect)
-    [ -f "$MOCK_RUNTIME/container" ] || exit 1
-    if [[ "$*" == *Labels* ]]; then cat "$MOCK_RUNTIME/container"; else echo false; fi ;;
+    name="${@: -1}"
+    case "$name" in
+      *-candidate-*|*-rollback-*) resource="$MOCK_RUNTIME/name-$name" ;;
+      *) resource="$MOCK_RUNTIME/container" ;;
+    esac
+    [ -f "$resource" ] || exit 1
+    if [[ "$*" == *Labels* ]]; then cat "$resource"
+    elif [[ "$*" == *State.Running* ]]; then echo true
+    else echo false
+    fi ;;
   create)
-    owner=''
+    owner=''; name=''
     while [ $# -gt 0 ]; do
       if [ "$1" = --label ] && [[ "$2" == io.squarebox.install-id=* ]]; then owner="${2#*=}"; fi
+      if [ "$1" = --name ]; then name="$2"; fi
       shift
     done
-    printf '%s' "$owner" >"$MOCK_RUNTIME/container" ;;
-  rm) rm -f "$MOCK_RUNTIME/container" ;;
+    printf '%s' "$owner" >"$MOCK_RUNTIME/name-$name" ;;
+  rename)
+    old="$2"; new="$3"
+    case "$old" in *-candidate-*|*-rollback-*) source="$MOCK_RUNTIME/name-$old" ;; *) source="$MOCK_RUNTIME/container" ;; esac
+    case "$new" in *-candidate-*|*-rollback-*) destination="$MOCK_RUNTIME/name-$new" ;; *) destination="$MOCK_RUNTIME/container" ;; esac
+    mv "$source" "$destination" ;;
+  rm)
+    name="${@: -1}"
+    case "$name" in *-candidate-*|*-rollback-*) rm -f "$MOCK_RUNTIME/name-$name" ;; *) rm -f "$MOCK_RUNTIME/container" ;; esac ;;
   rmi) rm -f "$MOCK_RUNTIME/image" ;;
   start|stop) ;;
   exec) [ "${FAIL_PROVISION:-0}" != 1 ] ;;
@@ -215,6 +236,18 @@ for requested_identity in "$BAD_UID:$HOST_GID" "$HOST_UID:$BAD_GID"; do
   test ! -e "$MISMATCH_INSTALL"
   test ! -e "$MISMATCH_RUNTIME/calls"
 done
+
+# An unreachable runtime fails before any lifecycle mutation, including with a
+# custom Install path, and retains the diagnostic from the runtime boundary.
+UNREACHABLE_RUNTIME="$TMP/runtime-unreachable"
+mkdir -p "$UNREACHABLE_RUNTIME" "$TMP/unreachable-home"
+if HOME="$TMP/unreachable-home" MOCK_RUNTIME="$UNREACHABLE_RUNTIME" FAIL_RUNTIME_INFO=1 \
+  SQUAREBOX_DIR="$TMP/unreachable-install" SQUAREBOX_RUNTIME=docker SQUAREBOX_TAG=v1.1.0 \
+  "$ROOT/install.sh" </dev/null >"$TMP/unreachable.out" 2>&1; then
+  echo 'installer treated an unreachable runtime as usable' >&2; exit 1
+fi
+grep -q 'installed but unreachable' "$TMP/unreachable.out"
+test ! -e "$UNREACHABLE_RUNTIME/container"
 
 MATCH_RUNTIME="$TMP/runtime-puid-match"
 mkdir -p "$MATCH_RUNTIME" "$TMP/puid-match-home"
@@ -355,9 +388,8 @@ if "$ROOT/install.sh" </dev/null >"$TMP/provision-failure.out" 2>&1; then
   echo 'installer ignored an injected requested-provisioning failure' >&2; exit 1
 fi
 grep -q 'requested provisioning failed' "$TMP/provision-failure.out"
-test -f "$SQUAREBOX_DIR/.squarebox/install-state"
-test -f "$MOCK_RUNTIME/container"
-test ! -e "$SQUAREBOX_DIR/workspace/.squarebox/ai-tool"
+test ! -e "$SQUAREBOX_DIR"
+test ! -e "$MOCK_RUNTIME/container"
 unset SQUAREBOX_AI FAIL_PROVISION
 
 # First v1 adoption can claim only byte-exact v1.0 generated defaults. Track
@@ -430,10 +462,36 @@ grep -q 'user.name=Lifecycle Test' "$INSTALL/.squarebox/identity/git/config"
 grep -q 'user.email=lifecycle@example.test' "$INSTALL/.squarebox/identity/git/config"
 grep -q 'pull ghcr.io/squarewavesystems/squarebox@sha256:' "$MOCK_RUNTIME/calls"
 grep -q -- '--label io.squarebox.install-id=' "$MOCK_RUNTIME/calls"
-grep -q '^start squarebox$' "$MOCK_RUNTIME/calls"
-grep -q '^exec -u dev -e HOME=/home/dev squarebox ' "$MOCK_RUNTIME/calls"
+grep -Eq '^start squarebox-candidate-' "$MOCK_RUNTIME/calls"
+grep -Eq '^exec -u dev -e HOME=/home/dev squarebox-candidate-.* /usr/local/lib/squarebox/setup.sh' "$MOCK_RUNTIME/calls"
+grep -Eq '^rename squarebox-candidate-.* squarebox$' "$MOCK_RUNTIME/calls"
 ! grep -q '^run ' "$MOCK_RUNTIME/calls"
+
+# Every handled rebuild boundary before state publication restores the same
+# canonical Box and Install identity. Temporary names must not survive cleanup.
+cp "$STATE" "$TMP/transaction-state.before"
 INSTALL_ID=$(sed -n 's/^INSTALL_ID=//p' "$STATE")
+for boundary in checkout image-alias managed-config candidate-create host-profile candidate-start provision old-box-preserved candidate-promoted state-publish; do
+  if SQUAREBOX_FAIL_AT="$boundary" "$INSTALL/install.sh" </dev/null >"$TMP/fail-$boundary.out" 2>&1; then
+    echo "installer ignored injected lifecycle failure at $boundary" >&2; exit 1
+  fi
+  grep -q "injected lifecycle failure at '$boundary'" "$TMP/fail-$boundary.out"
+  cmp -s "$STATE" "$TMP/transaction-state.before"
+  test -f "$MOCK_RUNTIME/container"
+  test "$(cat "$MOCK_RUNTIME/container")" = "$INSTALL_ID"
+  ! find "$MOCK_RUNTIME" -maxdepth 1 -type f \( -name 'name-*-candidate-*' -o -name 'name-*-rollback-*' \) | grep -q .
+done
+
+# Recorded custom Box names use bounded, derived transaction names and return to
+# their exact canonical identity after promotion.
+sed -i 's/^CONTAINER_NAME=.*/CONTAINER_NAME=team.box-custom/' "$STATE"
+: >"$MOCK_RUNTIME/calls"
+"$INSTALL/install.sh" </dev/null
+grep -Eq '^create .*--name team\.box-custom-candidate-' "$MOCK_RUNTIME/calls"
+grep -Eq '^rename team\.box-custom-candidate-.* team\.box-custom$' "$MOCK_RUNTIME/calls"
+sed -i 's/^CONTAINER_NAME=.*/CONTAINER_NAME=squarebox/' "$STATE"
+"$INSTALL/install.sh" </dev/null
+
 grep -qxF "# squarebox-install-id=$INSTALL_ID" "$HOME/.squarebox-shell-init"
 bash -c '. "$HOME/.squarebox-shell-init"; sqrbx' >/dev/null
 printf '%s' other-install >"$MOCK_RUNTIME/container"

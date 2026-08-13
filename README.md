@@ -11,8 +11,10 @@ assistants, language SDKs, and an opinionated set of shell aliases. Run the
 same box anywhere (desktop, VPS, or Codespace) and SSH in from your laptop,
 tablet, or phone (please don't).
 
-The goal is to make modern terminal tooling easy and accessible. One-line
-install, interactive first-run setup, sensible defaults (thanks [omarchy](https://omarchy.org)).
+The goal is multi-faceted: a playground for modern CLI/TUI tools, a Box for
+running AI agents, and a persistent terminal environment for remote development.
+One-line install, interactive first-run setup, sensible defaults (thanks
+[omarchy](https://omarchy.org)).
 
 Preparing an existing installation for v1.2? Read the
 [migration guide](docs/releases/v1.2.1.md) and [changelog](CHANGELOG.md).
@@ -162,6 +164,9 @@ Once installed, you can re-run or pass flags from the local copy:
 > Native PowerShell mounts `%USERPROFILE%\.ssh` read-only when it exists and
 > does not forward `SSH_AUTH_SOCK`. The separate Git Bash adapter supports SSH
 > agent-socket forwarding with its Bash lifecycle.
+> Use `./scripts/migrate-windows-adapter.ps1 -Target PowerShell` or
+> `-Target GitBash` from PowerShell 7 for an explicit cross-adapter migration.
+> Normal installers and uninstallers continue to reject foreign adapter state.
 
 Start
 -----
@@ -384,7 +389,16 @@ Aliases
 | `gcad` | `git commit -a --amend` | Stage all and amend |
 | `lg` | `lazygit` | Launch lazygit (if installed) |
 | `claude-yolo` | `claude --dangerously-skip-permissions` | Claude without prompts |
+| `copilot-yolo` | `copilot --allow-all` | Copilot CLI without permission prompts |
+| `codex-yolo` | `codex --dangerously-bypass-approvals-and-sandbox` | Codex without prompts or sandboxing |
+| `gemini-yolo` | `gemini --approval-mode=yolo` | Gemini CLI without prompts |
 | `opencode-yolo` | `opencode --dangerously-skip-permissions` | OpenCode without prompts |
+| `omp-yolo` | `omp --approval-mode yolo` | Oh My Pi without prompts |
+
+The `*-yolo` aliases are generated only for selected AI tools that are
+installed. They disable that tool's normal approval prompts; `codex-yolo` also
+disables Codex's sandbox. Use them only in a workspace whose contents and
+commands you trust.
 
 ### Shared Keyboard Language (Experimental)
 

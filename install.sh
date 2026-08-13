@@ -101,7 +101,7 @@ is_absolute_state_path() {
 		[A-Za-z]:/*) [ "$WINDOWS_BASH" = 1 ] || return 1 ;;
 		*) return 1 ;;
 	esac
-	case "$1" in */../*|*/..|*/./*|*/.|*[$'\001'-$'\037'$'\177']*) return 1 ;; esac
+	case "$1" in *//*|*/../*|*/..|*/./*|*/.|*[$'\001'-$'\037'$'\177']*) return 1 ;; esac
 }
 is_root_state_path() {
 	case "$1" in
@@ -221,6 +221,10 @@ load_state() {
 	validate_state_schema "$file"
 }
 
+if [ "${SQUAREBOX_LIFECYCLE_FUNCTIONS_ONLY:-0}" = 1 ]; then
+	return 0 2>/dev/null || exit 0
+fi
+
 HAD_STATE=0
 if [ -f "$STATE_FILE" ]; then load_state "$STATE_FILE"; HAD_STATE=1; fi
 
@@ -296,6 +300,12 @@ rt_interactive() {
 		MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' winpty "$RUNTIME" "$@"
 	else "$RUNTIME" "$@"; fi
 }
+fail_at() {
+	[ "${SQUAREBOX_FAIL_AT:-}" != "$1" ] || {
+		echo "Error: injected lifecycle failure at '$1'." >&2
+		return 97
+	}
+}
 canonical_origin() {
 	case "$1" in
 		https://github.com/SquareWaveSystems/squarebox|https://github.com/SquareWaveSystems/squarebox.git|git@github.com:SquareWaveSystems/squarebox.git|ssh://git@github.com/SquareWaveSystems/squarebox.git) return 0 ;;
@@ -307,14 +317,25 @@ GIT_QUIET=(--quiet); [ "$VERBOSE" = 1 ] && GIT_QUIET=()
 _release_json=""; _log=""; _create_log=""; _rc_tmp=""; _lazygit_default=""; _shell_init_tmp=""
 CHECKOUT_CREATED=0; RUNTIME_READY=0; VOLUME_CREATED=0; CONTAINER_CREATED=0
 IMAGE_ALIAS_MUTATED=0; PRIOR_IMAGE_ALIAS_ID=""; STATE_WRITTEN=0
+PRIOR_SOURCE_COMMIT=""; HAD_CONTAINER=0; OLD_CONTAINER_RENAMED=0; CANDIDATE_PROMOTED=0
+CANDIDATE_NAME=""; ROLLBACK_NAME=""; HOST_BACKUP_DIR=""; MANAGED_BACKUP_DIR=""
+MANAGED_PATHS=(); MANAGED_EXISTED=()
 cleanup_install() {
-	local rc=$? owner="" current_id=""
+	local rc=$? owner="" current_id="" rollback_failed=0
 	trap - EXIT
 	rm -f "$_release_json" "$_log" "$_create_log" "$_rc_tmp" "$_lazygit_default" "$_shell_init_tmp" 2>/dev/null || true
 	if [ "$rc" -ne 0 ] && [ "$STATE_WRITTEN" != 1 ] && [ "$RUNTIME_READY" = 1 ]; then
-		if [ "$CONTAINER_CREATED" = 1 ] && rt_cmd container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
-			owner="$(rt_cmd inspect -f '{{ index .Config.Labels "io.squarebox.install-id" }}' "$CONTAINER_NAME" 2>/dev/null || true)"
-			[ "$owner" = "$INSTALL_ID" ] && rt_cmd rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+		if [ "$CANDIDATE_PROMOTED" = 1 ]; then
+			rt_cmd rename "$CONTAINER_NAME" "$CANDIDATE_NAME" >/dev/null 2>&1 || rollback_failed=1
+			CANDIDATE_PROMOTED=0
+		fi
+		if [ "$OLD_CONTAINER_RENAMED" = 1 ]; then
+			rt_cmd rename "$ROLLBACK_NAME" "$CONTAINER_NAME" >/dev/null 2>&1 || rollback_failed=1
+			OLD_CONTAINER_RENAMED=0
+		fi
+		if [ "$CONTAINER_CREATED" = 1 ] && [ -n "$CANDIDATE_NAME" ] && rt_cmd container inspect "$CANDIDATE_NAME" >/dev/null 2>&1; then
+			owner="$(rt_cmd inspect -f '{{ index .Config.Labels "io.squarebox.install-id" }}' "$CANDIDATE_NAME" 2>/dev/null || true)"
+			[ "$owner" = "$INSTALL_ID" ] && rt_cmd rm -f "$CANDIDATE_NAME" >/dev/null 2>&1 || rollback_failed=1
 		fi
 		if [ "$VOLUME_CREATED" = 1 ] && rt_cmd volume inspect "$HOME_VOLUME" >/dev/null 2>&1; then
 			owner="$(rt_cmd volume inspect -f '{{ index .Labels "io.squarebox.install-id" }}' "$HOME_VOLUME" 2>/dev/null || true)"
@@ -330,9 +351,39 @@ cleanup_install() {
 			fi
 		fi
 	fi
+	if [ "$rc" -ne 0 ] && [ "$STATE_WRITTEN" != 1 ] && [ -n "$PRIOR_SOURCE_COMMIT" ] && [ "$CHECKOUT_CREATED" != 1 ]; then
+		git -C "$INSTALL_DIR" checkout --detach "${GIT_QUIET[@]}" "$PRIOR_SOURCE_COMMIT" >/dev/null 2>&1 || rollback_failed=1
+		git -C "$INSTALL_DIR" reset --hard "${GIT_QUIET[@]}" "$PRIOR_SOURCE_COMMIT" >/dev/null 2>&1 || rollback_failed=1
+	fi
+	if [ "$rc" -ne 0 ] && [ "$STATE_WRITTEN" != 1 ] && [ -n "$HOST_BACKUP_DIR" ]; then
+		for _host_file in .bashrc .zshrc .bash_profile .squarebox-shell-init; do
+			if [ -f "$HOST_BACKUP_DIR/$_host_file" ]; then
+				cp -p -- "$HOST_BACKUP_DIR/$_host_file" "$HOME/$_host_file" 2>/dev/null || rollback_failed=1
+			else
+				rm -f -- "$HOME/$_host_file" 2>/dev/null || rollback_failed=1
+			fi
+		done
+	fi
+	if [ "$rc" -ne 0 ] && [ "$STATE_WRITTEN" != 1 ] && [ -n "$MANAGED_BACKUP_DIR" ]; then
+		for _managed_index in "${!MANAGED_PATHS[@]}"; do
+			_managed_path="${MANAGED_PATHS[$_managed_index]}"
+			if [ "${MANAGED_EXISTED[$_managed_index]}" = 1 ]; then
+				mkdir -p -- "$(dirname "$_managed_path")"
+				cp -p -- "$MANAGED_BACKUP_DIR/$_managed_index" "$_managed_path" 2>/dev/null || rollback_failed=1
+			else
+				rm -f -- "$_managed_path" 2>/dev/null || rollback_failed=1
+			fi
+		done
+	fi
 	if [ "$rc" -ne 0 ] && [ "$STATE_WRITTEN" != 1 ] && [ "$CHECKOUT_CREATED" = 1 ] && [ ! -e "$STATE_FILE" ]; then
 		rm -rf -- "$INSTALL_DIR" 2>/dev/null || true
 	fi
+	if [ "$rollback_failed" = 1 ]; then
+		echo "Warning: rollback cleanup was incomplete; original failure status $rc is preserved." >&2
+		echo "Recovery: inspect '$CANDIDATE_NAME' and '$ROLLBACK_NAME', then restore '$ROLLBACK_NAME' to '$CONTAINER_NAME'." >&2
+	fi
+	[ -z "$HOST_BACKUP_DIR" ] || rm -rf -- "$HOST_BACKUP_DIR" 2>/dev/null || true
+	[ -z "$MANAGED_BACKUP_DIR" ] || rm -rf -- "$MANAGED_BACKUP_DIR" 2>/dev/null || true
 	exit "$rc"
 }
 trap cleanup_install EXIT
@@ -343,6 +394,8 @@ if [ -e "$INSTALL_DIR" ]; then
 	if [ "$HAD_STATE" = 0 ] && [ "$ADOPT" != 1 ]; then
 		echo "Error: existing checkout has no Install identity; verify it, then re-run with --adopt." >&2; exit 1
 	fi
+	PRIOR_SOURCE_COMMIT="$(git -C "$INSTALL_DIR" rev-parse HEAD 2>/dev/null || true)"
+	[[ "$PRIOR_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || PRIOR_SOURCE_COMMIT=""
 	echo "Updating managed checkout..."
 	git -C "$INSTALL_DIR" fetch "${GIT_QUIET[@]}" --force origin '+refs/heads/main:refs/remotes/origin/main' '+refs/tags/*:refs/tags/*'
 else
@@ -453,6 +506,7 @@ else
 	fi
 	SOURCE_REF="${MANIFEST_SOURCE_REF:-$RELEASE_TAG}"
 fi
+fail_at checkout
 
 # Runtime selection consumes the recorded adapter on rebuild.
 if [ -n "${SQUAREBOX_RUNTIME:-}" ]; then RUNTIME="$SQUAREBOX_RUNTIME"
@@ -555,6 +609,7 @@ else
 	rt_cmd tag "$IMAGE_REF" "$IMAGE_ALIAS"
 	IMAGE_ALIAS_MUTATED=1
 fi
+fail_at image-alias
 IMAGE_ID="$(rt_cmd image inspect -f '{{.Id}}' "$IMAGE_ALIAS")"
 IMAGE_DIGEST=""
 if [ "$BUILD" = 0 ] && [ "$LEGACY_RELEASE" = 0 ]; then
@@ -588,6 +643,7 @@ else
 	rt_cmd volume create --label "$MANAGED_LABEL=true" --label "$IDENTITY_LABEL=$INSTALL_ID" "$HOME_VOLUME" >/dev/null
 	VOLUME_CREATED=1
 	HOME_VOLUME_ADOPTED=0
+	fail_at managed-home-create
 fi
 
 if rt_cmd container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
@@ -595,8 +651,37 @@ if rt_cmd container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
 	if [ "$_c_owner" != "$INSTALL_ID" ] && ! { [ -z "$_c_owner" ] && [ "$ADOPT" = 1 ]; }; then
 		echo "Error: Box '$CONTAINER_NAME' is not owned by this Install identity." >&2; exit 1
 	fi
-	echo "Replacing managed Box..."; rt_cmd rm -f "$CONTAINER_NAME" >/dev/null
+	HAD_CONTAINER=1
 fi
+
+_transaction_suffix="${INSTALL_ID//[^A-Za-z0-9_.-]/-}"
+_transaction_suffix="${_transaction_suffix:0:12}"
+_candidate_prefix="${CONTAINER_NAME:0:96}"
+CANDIDATE_NAME="${_candidate_prefix}-candidate-${_transaction_suffix}"
+ROLLBACK_NAME="${_candidate_prefix}-rollback-${_transaction_suffix}"
+for _transaction_name in "$CANDIDATE_NAME" "$ROLLBACK_NAME"; do
+	if rt_cmd container inspect "$_transaction_name" >/dev/null 2>&1; then
+		echo "Error: lifecycle transaction name already exists: '$_transaction_name'." >&2
+		echo "       Inspect and remove or rename that stale Box before retrying." >&2
+		exit 1
+	fi
+done
+
+MANAGED_BACKUP_DIR="$(mktemp -d)"
+MANAGED_PATHS=(
+	"$GIT_CONFIG_DIR/config"
+	"$INSTALL_DIR/.config/starship.toml"
+	"$INSTALL_DIR/.config/lazygit/config.yml"
+	"$INSTALL_DIR/.squarebox/managed-config/starship.toml.blob"
+	"$INSTALL_DIR/.squarebox/managed-config/lazygit-config.yml.blob"
+)
+for _managed_index in "${!MANAGED_PATHS[@]}"; do
+	if [ -f "${MANAGED_PATHS[$_managed_index]}" ]; then
+		MANAGED_EXISTED[$_managed_index]=1
+		cp -p -- "${MANAGED_PATHS[$_managed_index]}" "$MANAGED_BACKUP_DIR/$_managed_index"
+	else MANAGED_EXISTED[$_managed_index]=0
+	fi
+done
 
 # Host Git configuration is never mounted. Copy only identity values into a
 # private, install-owned config directory. Every managed path segment is
@@ -726,6 +811,7 @@ extract_lazygit_default "$INSTALL_DIR/install.sh" "$_lazygit_default"
 if [ "$HAD_STATE" = 1 ] || [ "$ADOPT" = 1 ]; then _legacy_lazygit_blob="$LEGACY_LAZYGIT_BLOB"; fi
 update_managed_file "$_lazygit_default" "$INSTALL_DIR/.config/lazygit/config.yml" \
 	"$INSTALL_DIR/.squarebox/managed-config/lazygit-config.yml.blob" "$_legacy_lazygit_blob"
+fail_at managed-config
 [ -f "$INSTALL_DIR/dotfiles/bashrc" ] || { echo "Error: selected source lacks dotfiles/bashrc." >&2; exit 1; }
 
 _seed_dir="$WORKSPACE_DIR/.squarebox"; _seed_sections=(); _seeded_files=()
@@ -798,17 +884,22 @@ elif [ -d "$USER_HOME/.ssh" ]; then
 	RT_VOLUMES+=(-v "$(bind_spec "$USER_HOME/.ssh" /home/dev/.ssh "$ro_bind_mode")")
 fi
 
-echo "Creating managed Box..."
+echo "Creating Candidate Box..."
 _create_log="$(mktemp)"
-if ! rt_cmd create -it --name "$CONTAINER_NAME" "${RT_OPTS[@]}" "${RT_VOLUMES[@]}" "$IMAGE_ALIAS" >"$_create_log" 2>&1; then
+if ! rt_cmd create -it --name "$CANDIDATE_NAME" "${RT_OPTS[@]}" "${RT_VOLUMES[@]}" "$IMAGE_ALIAS" >"$_create_log" 2>&1; then
 	cat "$_create_log" >&2; exit 1
 fi
 CONTAINER_CREATED=1
+fail_at candidate-create
 
 if [ -n "${MSYSTEM:-}" ]; then SHELL_RC="$HOME/.bashrc"
 else case "${SHELL:-}" in */zsh) SHELL_RC="$HOME/.zshrc" ;; *) SHELL_RC="$HOME/.bashrc" ;; esac
 fi
 SHELL_INIT="$HOME/.squarebox-shell-init"
+HOST_BACKUP_DIR="$(mktemp -d)"
+for _host_file in .bashrc .zshrc .bash_profile .squarebox-shell-init; do
+	[ ! -f "$HOME/$_host_file" ] || cp -p -- "$HOME/$_host_file" "$HOST_BACKUP_DIR/$_host_file"
+done
 
 write_state() {
 	local tmp value
@@ -830,9 +921,6 @@ write_state() {
 	if ! load_state "$tmp"; then rm -f -- "$tmp"; return 1; fi
 	mv -f -- "$tmp" "$STATE_FILE"
 }
-write_state
-STATE_WRITTEN=1
-
 assert_regular_host_file() {
 	local file="$1" description="$2"
 	[ ! -L "$file" ] || { echo "Error: $description must not be a symlink: $file" >&2; return 1; }
@@ -976,22 +1064,53 @@ if [ -n "${MSYSTEM:-}" ] && [ "$SHELL_RC" = "$HOME/.bashrc" ]; then
 EOF
 fi
 
-case "$SHELL_RC" in
+	case "$SHELL_RC" in
 	*.zshrc) if command -v zsh >/dev/null 2>&1; then zsh -n "$SHELL_RC"; fi ;;
 	*) bash -n "$SHELL_RC" ;;
-esac
+	esac
+	fail_at host-profile
 
-# Requested provisioning must mutate the retained Box layer. A failed request
-# is reported as an install failure and the Box remains available to inspect.
-if [ ${#_seed_sections[@]} -gt 0 ]; then
-	echo "Provisioning requested Selection on the retained Box (${_seed_sections[*]})..."
-	rt_cmd start "$CONTAINER_NAME" >/dev/null
-	if ! rt_cmd exec -u dev -e HOME=/home/dev "$CONTAINER_NAME" /usr/local/lib/squarebox/setup.sh --rerun "${_seed_sections[@]}"; then
-		rt_cmd stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
-		[ ${#_seeded_files[@]} -eq 0 ] || rm -f -- "${_seeded_files[@]}"
-		echo "Error: requested provisioning failed; the retained Box was not discarded." >&2; exit 1
+	# Every Candidate must prove that its entrypoint reaches a running state.
+	echo "Validating Candidate Box..."
+	rt_cmd start "$CANDIDATE_NAME" >/dev/null
+	_candidate_running="$(rt_cmd inspect -f '{{.State.Running}}' "$CANDIDATE_NAME" 2>/dev/null || true)"
+	[ "$_candidate_running" = true ] || { echo "Error: Candidate Box exited during validation." >&2; exit 1; }
+	fail_at candidate-start
+
+	# Provision the Candidate before it can replace the prior canonical Box.
+	if [ ${#_seed_sections[@]} -gt 0 ]; then
+		echo "Provisioning requested Selection on the Candidate Box (${_seed_sections[*]})..."
+		if ! rt_cmd exec -u dev -e HOME=/home/dev "$CANDIDATE_NAME" /usr/local/lib/squarebox/setup.sh --rerun "${_seed_sections[@]}"; then
+			rt_cmd stop "$CANDIDATE_NAME" >/dev/null 2>&1 || true
+			echo "Error: requested provisioning failed; the prior Box remains available." >&2; exit 1
+		fi
+		fail_at provision
 	fi
-	rt_cmd stop "$CONTAINER_NAME" >/dev/null
+	rt_cmd stop "$CANDIDATE_NAME" >/dev/null
+
+# Commit point: preserve the prior Box under a rollback name, promote the
+# validated Candidate to the canonical name, then atomically publish state.
+if [ "$HAD_CONTAINER" = 1 ]; then
+	echo "Promoting Candidate Box..."
+	rt_cmd rename "$CONTAINER_NAME" "$ROLLBACK_NAME"
+	OLD_CONTAINER_RENAMED=1
+	fail_at old-box-preserved
+fi
+rt_cmd rename "$CANDIDATE_NAME" "$CONTAINER_NAME"
+CANDIDATE_PROMOTED=1
+fail_at candidate-promoted
+fail_at state-publish
+write_state
+STATE_WRITTEN=1
+[ -z "$HOST_BACKUP_DIR" ] || rm -rf -- "$HOST_BACKUP_DIR"
+HOST_BACKUP_DIR=""
+rm -rf -- "$MANAGED_BACKUP_DIR"
+MANAGED_BACKUP_DIR=""
+if [ "$OLD_CONTAINER_RENAMED" = 1 ]; then
+	rt_cmd rm -f "$ROLLBACK_NAME" >/dev/null || {
+		echo "Warning: committed successfully but could not remove prior Box '$ROLLBACK_NAME'." >&2
+		echo "Recovery: verify '$CONTAINER_NAME', then run: $RUNTIME rm -f '$ROLLBACK_NAME'" >&2
+	}
 fi
 
 echo "Install identity recorded at $STATE_FILE"

@@ -216,6 +216,9 @@ LABEL org.opencontainers.image.version="$SQUAREBOX_VERSION"
 # the running process is `dev` — identical to a plain `USER dev` image. PUID/
 # PGID are declared here so docker-compose / Unraid template UIs surface them.
 ENV HOME=/home/dev
+# Keep child processes launched via `docker exec` on the same interactive shell
+# path as the image's default CMD, even when the runtime does not export SHELL.
+ENV SHELL=/bin/bash
 ENV SQUAREBOX=1
 ENV PUID=1000
 ENV PGID=1000

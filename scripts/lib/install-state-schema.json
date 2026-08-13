@@ -1,0 +1,64 @@
+{
+  "format": 1,
+  "fields": [
+    "FORMAT",
+    "INSTALL_ID",
+    "RUNTIME",
+    "INSTALL_DIR",
+    "WORKSPACE_DIR",
+    "GIT_CONFIG_DIR",
+    "HOME_VOLUME",
+    "CONTAINER_NAME",
+    "IMAGE_ALIAS",
+    "IMAGE_REPOSITORY",
+    "IMAGE_REF",
+    "IMAGE_ID",
+    "IMAGE_DIGEST",
+    "SOURCE_REF",
+    "SOURCE_COMMIT",
+    "RELEASE_TAG",
+    "REQUESTED_TAG",
+    "PUID",
+    "PGID",
+    "BUILD",
+    "EDGE",
+    "SHELL_INIT",
+    "SHELL_RC",
+    "ORIGIN",
+    "HOME_VOLUME_ADOPTED"
+  ],
+  "rules": [
+    {
+      "id": "closed-field-set",
+      "contract": "Every field appears exactly once; unknown, duplicate, and missing fields fail closed."
+    },
+    {
+      "id": "data-only",
+      "contract": "State is parsed as KEY=VALUE data and is never sourced or evaluated."
+    },
+    {
+      "id": "format-1-only",
+      "contract": "FORMAT must equal 1; future formats fail closed."
+    },
+    {
+      "id": "normalized-absolute-paths",
+      "contract": "Recorded paths are adapter-native, absolute, normalized, control-free, and constrained to their recorded roles."
+    },
+    {
+      "id": "resource-identities",
+      "contract": "Install, runtime-resource, image, source, and numeric host identities use their closed lexical forms."
+    },
+    {
+      "id": "boolean-flags",
+      "contract": "BUILD, EDGE, and HOME_VOLUME_ADOPTED are 0 or 1, and EDGE requires BUILD."
+    },
+    {
+      "id": "source-image-coherence",
+      "contract": "Stable, prerelease, legacy, edge, and source-build fields form one coherent source and image identity."
+    },
+    {
+      "id": "adapter-ownership",
+      "contract": "FORMAT=1 field names and shared constraints match, while path/profile values remain adapter-native and creator-owned."
+    }
+  ]
+}
