@@ -468,7 +468,7 @@ grep -Eq '^rename squarebox-candidate-.* squarebox$' "$MOCK_RUNTIME/calls"
 # canonical Box and Install identity. Temporary names must not survive cleanup.
 cp "$STATE" "$TMP/transaction-state.before"
 INSTALL_ID=$(sed -n 's/^INSTALL_ID=//p' "$STATE")
-for boundary in checkout image-alias managed-config candidate-create provision old-box-preserved candidate-promoted state-publish; do
+for boundary in checkout image-alias managed-config candidate-create host-profile candidate-start provision old-box-preserved candidate-promoted state-publish; do
   if SQUAREBOX_FAIL_AT="$boundary" "$INSTALL/install.sh" </dev/null >"$TMP/fail-$boundary.out" 2>&1; then
     echo "installer ignored injected lifecycle failure at $boundary" >&2; exit 1
   fi

@@ -59,7 +59,7 @@ Assert-True ($install.Contains('$script:RollbackArmed')) 'installer has no pre-s
 Assert-True ($install.Contains('$script:CandidateName')) 'installer has no temporary Candidate Box identity'
 Assert-True ($install.Contains('& $Runtime rename $ContainerName $script:RollbackName')) 'installer does not preserve the prior Box before promotion'
 Assert-True ($install.Contains('& $Runtime rename $script:CandidateName $ContainerName')) 'installer does not promote the Candidate Box by rename'
-foreach ($boundary in @('checkout', 'image-alias', 'managed-home-create', 'managed-config', 'candidate-create', 'provision', 'old-box-preserved', 'candidate-promoted', 'state-publish')) {
+foreach ($boundary in @('checkout', 'image-alias', 'managed-home-create', 'managed-config', 'candidate-create', 'host-profile', 'candidate-start', 'provision', 'old-box-preserved', 'candidate-promoted', 'state-publish')) {
     Assert-True ($install.Contains("Invoke-FailureInjection '$boundary'")) "installer lacks deterministic failure boundary '$boundary'"
 }
 Assert-True ($install.Contains('Malformed squarebox marker block') -and $uninstall.Contains('Malformed squarebox marker block')) 'profile marker validation is absent'

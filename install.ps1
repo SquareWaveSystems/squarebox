@@ -40,9 +40,7 @@ $script:RollbackName = ''
 $script:OldContainerRenamed = $false
 $script:CandidatePromoted = $false
 $script:StatePublished = $false
-$script:ProfileBackup = ''
-$script:ProfilePath = ''
-$script:ProfileExisted = $false
+$script:ProfileBackups = @()
 $script:ManagedBackupDir = ''
 $script:ManagedBackups = @()
 
@@ -98,13 +96,17 @@ function Invoke-InstallRollback {
         Write-Warning "Install rollback could not clean every runtime resource: $($_.Exception.Message)"
     }
     try {
-        if (-not $script:StatePublished -and $script:PriorSourceCommit -and -not $script:CheckoutCreated) {
+		if (-not $script:StatePublished -and $script:PriorSourceCommit -and -not $script:CheckoutCreated) {
             & git -C $InstallDir checkout --detach $script:PriorSourceCommit 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "git checkout could not restore source $($script:PriorSourceCommit)" }
             & git -C $InstallDir reset --hard $script:PriorSourceCommit 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "git reset could not restore source $($script:PriorSourceCommit)" }
         }
-        if (-not $script:StatePublished -and $script:ProfilePath) {
-            if ($script:ProfileExisted) { [IO.File]::Copy($script:ProfileBackup, $script:ProfilePath, $true) }
-            elseif (Test-Path -LiteralPath $script:ProfilePath) { Remove-Item -Force -LiteralPath $script:ProfilePath }
+		if (-not $script:StatePublished) {
+			foreach ($profileBackup in $script:ProfileBackups) {
+				if ($profileBackup.Existed) { [IO.File]::Copy($profileBackup.Backup, $profileBackup.Path, $true) }
+				elseif (Test-Path -LiteralPath $profileBackup.Path) { Remove-Item -Force -LiteralPath $profileBackup.Path }
+			}
         }
         if (-not $script:StatePublished -and $script:ManagedBackupDir) {
             foreach ($backup in $script:ManagedBackups) {
@@ -794,12 +796,6 @@ $script:ContainerCreated = $true
 Invoke-FailureInjection 'candidate-create'
 
 $ProfilePath = $PROFILE.CurrentUserAllHosts
-$script:ProfilePath = $ProfilePath
-$script:ProfileExisted = Test-Path -LiteralPath $ProfilePath -PathType Leaf
-if ($script:ProfileExisted) {
-    $script:ProfileBackup = Join-Path ([IO.Path]::GetTempPath()) "squarebox-profile-$([guid]::NewGuid().ToString('N'))"
-    [IO.File]::Copy($ProfilePath, $script:ProfileBackup, $true)
-}
 $ShellInit = $ProfilePath
 $stateValues = @(
     $InstallDir, $WorkspaceDir, $GitConfigDir, $HomeVolume, $ContainerName,
@@ -888,6 +884,12 @@ function Add-SquareboxProfileBlock([string]$Path, [string]$Block) {
 # installing the portable all-hosts adapter so stale definitions cannot win.
 $ProfilePaths = @($ProfilePath, $PROFILE.CurrentUserCurrentHost) | Select-Object -Unique
 foreach ($path in $ProfilePaths) {
+    $existed = Test-Path -LiteralPath $path -PathType Leaf
+    $backup = Join-Path ([IO.Path]::GetTempPath()) "squarebox-profile-$([guid]::NewGuid().ToString('N'))"
+    if ($existed) { [IO.File]::Copy($path, $backup, $true) }
+    $script:ProfileBackups += [pscustomobject]@{ Path = $path; Backup = $backup; Existed = $existed }
+}
+foreach ($path in $ProfilePaths) {
     $hasBlock = Test-SquareboxProfileBlock $path
     if ($hasBlock) {
         if ($hasBlock -and $State -and -not ([IO.File]::ReadAllLines($path) -ccontains "# squarebox-install-id=$InstallId")) {
@@ -939,11 +941,15 @@ try { [void][scriptblock]::Create($profileBlock) }
 catch { Abort "Generated PowerShell profile failed to parse after interpolation: $($_.Exception.Message)" }
 Add-SquareboxProfileBlock $ProfilePath $profileBlock
 Write-Host "Installed shell integration -> $ProfilePath"
+Invoke-FailureInjection 'host-profile'
+
+Write-Host 'Validating Candidate Box...'
+& $Runtime start $script:CandidateName | Out-Null
+if ($LASTEXITCODE -ne 0) { Abort 'Unable to start the Candidate Box.' }
+Invoke-FailureInjection 'candidate-start'
 
 if ($SeedSections.Count -gt 0) {
     Write-Host "Provisioning requested Selection on the Candidate Box ($($SeedSections -join ', '))..."
-    & $Runtime start $script:CandidateName | Out-Null
-    if ($LASTEXITCODE -ne 0) { Abort 'Unable to start the Candidate Box for provisioning.' }
     & $Runtime exec -u dev -e HOME=/home/dev $script:CandidateName /usr/local/lib/squarebox/setup.sh --rerun @SeedSections
     $provisionExit = $LASTEXITCODE
     & $Runtime stop $script:CandidateName | Out-Null
@@ -952,6 +958,8 @@ if ($SeedSections.Count -gt 0) {
     }
     Invoke-FailureInjection 'provision'
 }
+& $Runtime stop $script:CandidateName | Out-Null
+if ($LASTEXITCODE -ne 0) { Abort 'Unable to stop the validated Candidate Box.' }
 
 if ($HadContainer) {
     Write-Host 'Promoting Candidate Box...'
@@ -972,7 +980,9 @@ if ($HadContainer) {
     & $Runtime rm -f $script:RollbackName | Out-Null
     if ($LASTEXITCODE -ne 0) { Write-Warning "Committed successfully; remove stale prior Box with: $Runtime rm -f '$($script:RollbackName)'" }
 }
-if ($script:ProfileBackup -and (Test-Path -LiteralPath $script:ProfileBackup)) { Remove-Item -Force -LiteralPath $script:ProfileBackup }
+foreach ($profileBackup in $script:ProfileBackups) {
+    if (Test-Path -LiteralPath $profileBackup.Backup) { Remove-Item -Force -LiteralPath $profileBackup.Backup }
+}
 if ($script:ManagedBackupDir -and (Test-Path -LiteralPath $script:ManagedBackupDir)) { Remove-Item -Recurse -Force -LiteralPath $script:ManagedBackupDir }
 
 Write-Host "Install identity recorded at $StateFile"

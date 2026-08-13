@@ -16,7 +16,8 @@ Lifecycle adapters use a prepare/promote transaction for Docker and Podman.
 
 During prepare they resolve and check out the Candidate source, acquire its
 image, update installer-owned configuration, create the replacement under a
-bounded `<box>-candidate-<install-id>` name, and complete requested provisioning.
+bounded `<box>-candidate-<install-id>` name, start it successfully, and complete
+requested provisioning.
 The canonical prior Box remains present throughout prepare. Workspace and the
 Managed-home volume may be mounted and used, but rollback never copies, deletes,
 or reconstructs either data tier.
@@ -44,8 +45,9 @@ would be more dangerous than retaining it.
 
 `SQUAREBOX_FAIL_AT` is a test-only deterministic fault hook at the checkout,
 image-alias, Managed-home creation, managed-config, Candidate creation,
-provisioning, prior-Box rename, Candidate promotion, and state-publication
-boundaries. Both native adapters implement the same named boundaries.
+host-profile publication, Candidate start, provisioning, prior-Box rename,
+Candidate promotion, and state-publication boundaries. Both native adapters
+implement the same named boundaries.
 
 ## Crash consistency
 

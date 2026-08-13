@@ -1064,22 +1064,27 @@ if [ -n "${MSYSTEM:-}" ] && [ "$SHELL_RC" = "$HOME/.bashrc" ]; then
 EOF
 fi
 
-case "$SHELL_RC" in
+	case "$SHELL_RC" in
 	*.zshrc) if command -v zsh >/dev/null 2>&1; then zsh -n "$SHELL_RC"; fi ;;
 	*) bash -n "$SHELL_RC" ;;
-esac
+	esac
+	fail_at host-profile
+
+	# Every Candidate must prove that its entrypoint reaches a running state.
+	echo "Validating Candidate Box..."
+	rt_cmd start "$CANDIDATE_NAME" >/dev/null
+	fail_at candidate-start
 
 	# Provision the Candidate before it can replace the prior canonical Box.
 	if [ ${#_seed_sections[@]} -gt 0 ]; then
 		echo "Provisioning requested Selection on the Candidate Box (${_seed_sections[*]})..."
-		rt_cmd start "$CANDIDATE_NAME" >/dev/null
 		if ! rt_cmd exec -u dev -e HOME=/home/dev "$CANDIDATE_NAME" /usr/local/lib/squarebox/setup.sh --rerun "${_seed_sections[@]}"; then
 			rt_cmd stop "$CANDIDATE_NAME" >/dev/null 2>&1 || true
 			echo "Error: requested provisioning failed; the prior Box remains available." >&2; exit 1
 		fi
-		rt_cmd stop "$CANDIDATE_NAME" >/dev/null
 		fail_at provision
 	fi
+	rt_cmd stop "$CANDIDATE_NAME" >/dev/null
 
 # Commit point: preserve the prior Box under a rollback name, promote the
 # validated Candidate to the canonical name, then atomically publish state.
