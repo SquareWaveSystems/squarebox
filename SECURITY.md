@@ -310,7 +310,11 @@ authority to delete it.
 
 `FORMAT=1` versions each lifecycle adapter's native state contract; it does not
 make Bash/Git Bash and PowerShell Install-identity files interchangeable. Use
-the matching adapter family for rebuild and uninstall operations.
+the matching adapter family for rebuild and uninstall operations, or explicitly
+convert it with `scripts/migrate-windows-adapter.ps1`. The converter parses the
+closed field set as data, verifies Box and Managed-home ownership, and
+atomically transfers profile ownership; it never evaluates state or copies
+Workspace, Managed home, or private keys.
 
 If the runtime is unreachable, uninstall reports incomplete cleanup and returns
 nonzero instead of treating the engine as empty. Host-only shell cleanup and
