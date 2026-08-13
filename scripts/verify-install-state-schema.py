@@ -63,6 +63,8 @@ for name in ("install.ps1", "uninstall.ps1"):
     text = texts[name]
     require("[IO.Path]::GetFullPath($Value)" in text and "$Value -ceq $full" in text,
             f"{name} does not enforce normalized paths")
+    require("$pathTail -match '[\\\\/]{2,}'" in text,
+            f"{name} does not reject repeated path separators consistently")
     require("$State.EDGE -eq '1' -and $State.BUILD -ne '1'" in text,
             f"{name} does not enforce EDGE requires BUILD")
 
