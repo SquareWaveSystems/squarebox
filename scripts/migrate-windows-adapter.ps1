@@ -59,7 +59,7 @@ function Read-State([string]$Path) {
     foreach ($name in @('INSTALL_DIR', 'WORKSPACE_DIR', 'GIT_CONFIG_DIR', 'SHELL_INIT', 'SHELL_RC')) {
 		if (-not [IO.Path]::IsPathFullyQualified($state[$name])) { Fail "non-absolute $name" }
 		$full = [IO.Path]::GetFullPath($state[$name])
-		$normalizedInput = $state[$name].Replace('/', '\')
+		$normalizedInput = if ($IsWindows) { $state[$name].Replace('/', '\') } else { $state[$name] }
 		if (-not [string]::Equals($full, $normalizedInput, [StringComparison]::OrdinalIgnoreCase)) { Fail "unnormalized $name" }
     }
     if (-not [string]::Equals([IO.Path]::GetFullPath($state.INSTALL_DIR), $InstallDir, [StringComparison]::OrdinalIgnoreCase)) {
@@ -71,7 +71,7 @@ function Read-State([string]$Path) {
 	if ([string]::Equals($workspace, [IO.Path]::GetPathRoot($workspace), [StringComparison]::OrdinalIgnoreCase) -or
 		[string]::Equals($workspace, $InstallDir, [StringComparison]::OrdinalIgnoreCase) -or
 		[string]::Equals($workspace, $UserHome, [StringComparison]::OrdinalIgnoreCase)) { Fail 'unsafe WORKSPACE_DIR' }
-    $expectedGit = Join-Path $InstallDir '.squarebox\identity\git'
+    $expectedGit = [IO.Path]::Combine($InstallDir, '.squarebox', 'identity', 'git')
     if (-not [string]::Equals([IO.Path]::GetFullPath($state.GIT_CONFIG_DIR), [IO.Path]::GetFullPath($expectedGit), [StringComparison]::OrdinalIgnoreCase)) { Fail 'GIT_CONFIG_DIR escaped managed identity state' }
     return $state
 }
