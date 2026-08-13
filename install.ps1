@@ -95,20 +95,24 @@ function Invoke-InstallRollback {
     } catch {
         Write-Warning "Install rollback could not clean every runtime resource: $($_.Exception.Message)"
     }
-    try {
-		if (-not $script:StatePublished -and $script:PriorSourceCommit -and -not $script:CheckoutCreated) {
+    if (-not $script:StatePublished -and $script:PriorSourceCommit -and -not $script:CheckoutCreated) {
+        try {
             & git -C $InstallDir checkout --detach $script:PriorSourceCommit 2>$null | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "git checkout could not restore source $($script:PriorSourceCommit)" }
             & git -C $InstallDir reset --hard $script:PriorSourceCommit 2>$null | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "git reset could not restore source $($script:PriorSourceCommit)" }
-        }
-		if (-not $script:StatePublished) {
+        } catch { Write-Warning "Install rollback could not restore source: $($_.Exception.Message)" }
+    }
+	if (-not $script:StatePublished) {
+		try {
 			foreach ($profileBackup in $script:ProfileBackups) {
 				if ($profileBackup.Existed) { [IO.File]::Copy($profileBackup.Backup, $profileBackup.Path, $true) }
 				elseif (Test-Path -LiteralPath $profileBackup.Path) { Remove-Item -Force -LiteralPath $profileBackup.Path }
 			}
-        }
-        if (-not $script:StatePublished -and $script:ManagedBackupDir) {
+        } catch { Write-Warning "Install rollback could not restore profiles: $($_.Exception.Message)" }
+    }
+    if (-not $script:StatePublished -and $script:ManagedBackupDir) {
+        try {
             foreach ($backup in $script:ManagedBackups) {
                 if ($backup.Existed) {
                     [IO.Directory]::CreateDirectory((Split-Path $backup.Path)) | Out-Null
@@ -117,8 +121,13 @@ function Invoke-InstallRollback {
                     Remove-Item -Force -LiteralPath $backup.Path
                 }
             }
-        }
-    } catch { Write-Warning "Install rollback could not restore source or profile: $($_.Exception.Message)" }
+        } catch { Write-Warning "Install rollback could not restore managed configuration: $($_.Exception.Message)" }
+    }
+    foreach ($profileBackup in $script:ProfileBackups) {
+        Remove-Item -Force -LiteralPath $profileBackup.Backup -ErrorAction SilentlyContinue
+    }
+    if ($script:ManagedBackupDir) { Remove-Item -Recurse -Force -LiteralPath $script:ManagedBackupDir -ErrorAction SilentlyContinue }
+    if ($StateTemp) { Remove-Item -Force -LiteralPath $StateTemp -ErrorAction SilentlyContinue }
     try {
         if ($script:CheckoutCreated -and $InstallDir -and $StateFile -and -not (Test-Path -LiteralPath $StateFile)) {
             Remove-Item -Recurse -Force -LiteralPath $InstallDir -ErrorAction Stop
@@ -946,6 +955,8 @@ Invoke-FailureInjection 'host-profile'
 Write-Host 'Validating Candidate Box...'
 & $Runtime start $script:CandidateName | Out-Null
 if ($LASTEXITCODE -ne 0) { Abort 'Unable to start the Candidate Box.' }
+$candidateRunning = (& $Runtime inspect -f '{{.State.Running}}' $script:CandidateName 2>$null)
+if ($LASTEXITCODE -ne 0 -or -not $candidateRunning -or $candidateRunning.Trim() -cne 'true') { Abort 'Candidate Box exited during validation.' }
 Invoke-FailureInjection 'candidate-start'
 
 if ($SeedSections.Count -gt 0) {

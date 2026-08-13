@@ -1073,6 +1073,8 @@ fi
 	# Every Candidate must prove that its entrypoint reaches a running state.
 	echo "Validating Candidate Box..."
 	rt_cmd start "$CANDIDATE_NAME" >/dev/null
+	_candidate_running="$(rt_cmd inspect -f '{{.State.Running}}' "$CANDIDATE_NAME" 2>/dev/null || true)"
+	[ "$_candidate_running" = true ] || { echo "Error: Candidate Box exited during validation." >&2; exit 1; }
 	fail_at candidate-start
 
 	# Provision the Candidate before it can replace the prior canonical Box.

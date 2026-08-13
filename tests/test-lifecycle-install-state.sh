@@ -140,7 +140,10 @@ case "${1:-}" in
       *) resource="$MOCK_RUNTIME/container" ;;
     esac
     [ -f "$resource" ] || exit 1
-    if [[ "$*" == *Labels* ]]; then cat "$resource"; else echo false; fi ;;
+    if [[ "$*" == *Labels* ]]; then cat "$resource"
+    elif [[ "$*" == *State.Running* ]]; then echo true
+    else echo false
+    fi ;;
   create)
     owner=''; name=''
     while [ $# -gt 0 ]; do

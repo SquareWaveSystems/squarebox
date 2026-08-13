@@ -70,6 +70,78 @@ Assert-True ($install.Contains('{{range .RepoDigests}}{{println .}}{{end}}') -an
 Assert-True ($install -match '\$repoDigestOutput = @\(\)\s+if \(-not \$Build\)') 'local builds still derive identity from unordered RepoDigests'
 Assert-True ($install.Contains('$SelectionStateFiles') -and $install.Contains('Selection state file must not be a reparse point or symlink')) 'PowerShell seeding can follow Workspace Selection links'
 
+# Execute the native rollback implementation against an in-memory runtime. This
+# complements source-contract assertions by proving both rename phases restore
+# the canonical Box and remove the Candidate without requiring Docker on CI.
+foreach ($functionName in @('Invoke-InstallRollback', 'Invoke-FailureInjection')) {
+    $definition = $installAst.Find({
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $functionName
+    }, $true)
+    Assert-True ($null -ne $definition) "install.ps1 has no $functionName function"
+    Invoke-Expression $definition.Extent.Text
+}
+function global:docker {
+    param([Parameter(ValueFromRemainingArguments = $true)][object[]]$RuntimeArgs)
+    $global:LASTEXITCODE = 0
+    $command = @($RuntimeArgs | ForEach-Object { [string]$_ })
+    switch ($command[0]) {
+        'rename' {
+            if (-not $script:RuntimeBoxes.ContainsKey($command[1]) -or $script:RuntimeBoxes.ContainsKey($command[2])) {
+                $global:LASTEXITCODE = 1; return
+            }
+            $script:RuntimeBoxes[$command[2]] = $script:RuntimeBoxes[$command[1]]
+            $script:RuntimeBoxes.Remove($command[1])
+        }
+        'container' {
+            if ($command[1] -cne 'inspect' -or -not $script:RuntimeBoxes.ContainsKey($command[-1])) { $global:LASTEXITCODE = 1 }
+            else { '{}' }
+        }
+        'inspect' {
+            if (-not $script:RuntimeBoxes.ContainsKey($command[-1])) { $global:LASTEXITCODE = 1 }
+            else { $script:RuntimeBoxes[$command[-1]] }
+        }
+        'rm' { $script:RuntimeBoxes.Remove($command[-1]) }
+        'tag' {}
+        'image' { $global:LASTEXITCODE = 1 }
+        'volume' { $global:LASTEXITCODE = 1 }
+        default { throw "unexpected mock runtime command: $($command -join ' ')" }
+    }
+}
+function global:git { $global:LASTEXITCODE = 0 }
+$Runtime = 'docker'; $ContainerName = 'custom.box'; $InstallId = 'test-install-123'
+$HomeVolume = 'custom-home'; $ImageAlias = 'custom-image'; $StateFile = ''
+$script:StatePublished = $false; $script:RuntimeReady = $true; $script:VolumeCreated = $false
+$script:ImageAliasMutated = $false; $script:PriorSourceCommit = ''; $script:CheckoutCreated = $false
+$script:ProfileBackups = @(); $script:ManagedBackupDir = ''; $script:ManagedBackups = @()
+foreach ($phase in @('candidate-created', 'old-preserved', 'candidate-promoted')) {
+    $script:CandidateName = 'custom.box-candidate-test'; $script:RollbackName = 'custom.box-rollback-test'
+    $script:RuntimeBoxes = @{ 'custom.box' = $InstallId; 'custom.box-candidate-test' = $InstallId }
+    $script:ContainerCreated = $true; $script:OldContainerRenamed = $false; $script:CandidatePromoted = $false
+    if ($phase -cin @('old-preserved', 'candidate-promoted')) {
+        $script:RuntimeBoxes[$script:RollbackName] = $script:RuntimeBoxes[$ContainerName]
+        $script:RuntimeBoxes.Remove($ContainerName)
+        $script:OldContainerRenamed = $true
+    }
+    if ($phase -ceq 'candidate-promoted') {
+        $script:RuntimeBoxes[$ContainerName] = $script:RuntimeBoxes[$script:CandidateName]
+        $script:RuntimeBoxes.Remove($script:CandidateName)
+        $script:CandidatePromoted = $true
+    }
+    $script:RollbackArmed = $true; $script:RollbackInProgress = $false
+    Invoke-InstallRollback
+    Assert-True ($script:RuntimeBoxes.ContainsKey($ContainerName)) "rollback phase '$phase' lost canonical custom Box"
+    Assert-True ($script:RuntimeBoxes[$ContainerName] -ceq $InstallId) "rollback phase '$phase' changed canonical ownership"
+    Assert-True (-not $script:RuntimeBoxes.ContainsKey($script:CandidateName)) "rollback phase '$phase' retained Candidate"
+    Assert-True (-not $script:RuntimeBoxes.ContainsKey($script:RollbackName)) "rollback phase '$phase' retained rollback name"
+}
+$env:SQUAREBOX_FAIL_AT = 'candidate-promoted'
+$injected = $false
+try { Invoke-FailureInjection 'candidate-promoted' } catch { $injected = $_.Exception.Message -like '*candidate-promoted*' }
+Remove-Item Env:SQUAREBOX_FAIL_AT
+Assert-True $injected 'native failure injection did not throw at the selected boundary'
+Remove-Item Function:docker, Function:git -ErrorAction SilentlyContinue
+
 $schema = Get-Content -Raw (Join-Path $Root 'scripts/lib/install-state-schema.json') | ConvertFrom-Json
 $cases = Get-Content -Raw (Join-Path $Root 'tests/fixtures/install-state-cases.json') | ConvertFrom-Json
 $StateFields = @($schema.fields)
