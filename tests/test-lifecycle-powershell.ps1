@@ -259,7 +259,7 @@ $migrationValues = [ordered]@{
 [IO.File]::WriteAllLines($migrationState, @($StateFields | ForEach-Object { "$_=$($migrationValues[$_])" }), [Text.UTF8Encoding]::new($false))
 $oldPath = $env:PATH
 try {
-    $env:PATH = "$mockBin;$oldPath"
+    $env:PATH = "$mockBin$([IO.Path]::PathSeparator)$oldPath"
     & pwsh -NoProfile -File (Join-Path $Root 'scripts/migrate-windows-adapter.ps1') -Target PowerShell -InstallDir $migrationInstall `
         -PowerShellProfile $profileAll -PowerShellCurrentHostProfile $profileHost -UserHomePath $migrationHome -Yes
     Assert-True ($LASTEXITCODE -eq 0) 'Git Bash to PowerShell migration failed'
