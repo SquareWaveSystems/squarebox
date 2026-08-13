@@ -164,6 +164,9 @@ Once installed, you can re-run or pass flags from the local copy:
 > Native PowerShell mounts `%USERPROFILE%\.ssh` read-only when it exists and
 > does not forward `SSH_AUTH_SOCK`. The separate Git Bash adapter supports SSH
 > agent-socket forwarding with its Bash lifecycle.
+> Use `./scripts/migrate-windows-adapter.ps1 -Target PowerShell` or
+> `-Target GitBash` from PowerShell 7 for an explicit cross-adapter migration.
+> Normal installers and uninstallers continue to reject foreign adapter state.
 
 Start
 -----

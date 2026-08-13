@@ -8,6 +8,17 @@ qualification matrix is not required for this release.
 Native PowerShell remains a separate adapter and does not claim `SSH_AUTH_SOCK` forwarding;
 adapter boundaries are covered by automated/static checks.
 
+## Windows adapter migration
+
+- [ ] Install with Git Bash under a custom path containing spaces and non-ASCII
+  characters; migrate to PowerShell, rebuild, start, and uninstall natively.
+- [ ] Install with PowerShell; migrate to Git Bash, rebuild, start, and uninstall
+  there. Repeat both directions with Docker Desktop and Podman.
+- [ ] Malformed, duplicate-field, foreign-owner, and unexpected-profile state
+  fails without changing state or either profile.
+- [ ] Migration changes no Box/image identity or Workspace, Managed-home, or SSH
+  content.
+
 Record the Candidate version, source SHA, image digest, and result for any
 optional follow-up run.
 

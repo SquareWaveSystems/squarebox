@@ -8,12 +8,13 @@ function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw "lifecycle PowerShell regression: $Message" }
 }
 
-foreach ($name in @('install.ps1', 'uninstall.ps1')) {
+foreach ($name in @('install.ps1', 'uninstall.ps1', 'scripts/migrate-windows-adapter.ps1')) {
     $path = Join-Path $Root $name
     $tokens = $null; $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
     Assert-True ($errors.Count -eq 0) "$name has parser errors: $($errors -join '; ')"
 
+    if ($name -ceq 'scripts/migrate-windows-adapter.ps1') { continue }
     $releaseFunction = $ast.Find({
         param($node)
         $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Test-ReleaseTag'
@@ -26,6 +27,12 @@ foreach ($name in @('install.ps1', 'uninstall.ps1')) {
     Assert-True (-not (Test-ReleaseTag 'v1.1.0+build-1')) "$name accepts excluded build metadata"
     Assert-True (-not (Test-ReleaseTag ("v1.1.0-" + ('a' * 122)))) "$name accepts a tag longer than 128 characters"
 }
+
+$migration = [IO.File]::ReadAllText((Join-Path $Root 'scripts/migrate-windows-adapter.ps1'))
+Assert-True ($migration.Contains("[ValidateSet('PowerShell', 'GitBash')]")) 'migration command has no closed target set'
+Assert-True ($migration.Contains('Box ownership check failed') -and $migration.Contains('Managed-home ownership check failed')) 'migration skips runtime ownership checks'
+Assert-True ($migration.Contains('[IO.File]::Move($temp, $Path, $true)')) 'migration does not publish state/profile files atomically'
+Assert-True (-not ($migration -match 'Invoke-Expression|\biex\b')) 'migration evaluates Install identity data'
 
 $installTokens = $null; $installErrors = $null
 $installAst = [System.Management.Automation.Language.Parser]::ParseFile(
