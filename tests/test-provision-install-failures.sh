@@ -539,6 +539,10 @@ if [ -n "$PWSH_FAKE_ASSET" ]; then
 		"PowerShell activation marker is exclusive"
 	assert_true "grep -Fq '# squarebox pwsh config' '$PWSH_SUCCESS_CASE/home/.config/powershell/profile.ps1' && grep -Fq 'squarebox-selections.ps1' '$PWSH_SUCCESS_CASE/home/.config/powershell/profile.ps1'" \
 		"PowerShell generates a managed profile that sources the selection snippet"
+	assert_true "grep -Fq 'mise activate pwsh' '$PWSH_SUCCESS_CASE/home/.config/powershell/profile.ps1' && ! grep -Fq 'mise activate powershell' '$PWSH_SUCCESS_CASE/home/.config/powershell/profile.ps1'" \
+		"PowerShell profile uses mise's pwsh shell name"
+	assert_true "grep -Fq 'SQUAREBOX_PWSH_MOTD' '$PWSH_SUCCESS_CASE/home/.config/powershell/profile.ps1'" \
+		"PowerShell profile gates the MOTD to the login handoff"
 	assert_true "grep -Fq 'apt-get install' '$PWSH_SUCCESS_CASE/apt.calls'" \
 		"PowerShell installs through the verified local .deb"
 fi

@@ -340,7 +340,7 @@ arguments); AI/editor/TUI selections are translated from their bash files into
 > `sqrbx-setup shell` to switch back permanently. Tooling is primarily tested
 > against bash, so a few edge cases may need polish — please file an issue if
 > you hit one. SDK shims are wired into all four shells via
-> `mise activate {bash,zsh,fish,powershell}`.
+> `mise activate {bash,zsh,fish,pwsh}`.
 
 ### SDKs
 

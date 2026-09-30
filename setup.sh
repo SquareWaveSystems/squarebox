@@ -2427,13 +2427,19 @@ _install_pwsh_inner() {
 		Invoke-Expression (starship init powershell | Out-String)
 		Invoke-Expression (zoxide init powershell | Out-String)
 		if (Get-Command mise -ErrorAction SilentlyContinue) {
-			Invoke-Expression (mise activate powershell | Out-String)
+			Invoke-Expression (mise activate pwsh | Out-String)
 		}
 		if (Test-Path "$HOME/.config/powershell/squarebox-selections.ps1") {
 			. "$HOME/.config/powershell/squarebox-selections.ps1"
 		}
-		if (Test-Path /usr/local/lib/squarebox/motd.sh) {
-			& /usr/local/lib/squarebox/motd.sh
+		# pwsh loads profiles even for `pwsh -Command`, so show the MOTD only on
+		# the bashrc login handoff; clearing the one-shot flag keeps scripted
+		# child pwsh processes' stdout clean.
+		if ($env:SQUAREBOX_PWSH_MOTD) {
+			Remove-Item Env:SQUAREBOX_PWSH_MOTD
+			if (Test-Path /usr/local/lib/squarebox/motd.sh) {
+				& /usr/local/lib/squarebox/motd.sh
+			}
 		}
 	PWSHRC
 	[ -f "$HOME/.config/powershell/profile.ps1" ] || return 1
