@@ -2341,7 +2341,7 @@ install_fish() {
 }
 
 _install_pwsh_inner() {
-	local repo="PowerShell/PowerShell" body tag version pattern count digest url deb
+	local repo="PowerShell/PowerShell" body tag version arch pattern count digest url deb
 	# Resolve the exact latest release and one architecture-matching asset
 	# (with GitHub's release-asset SHA-256) before downloading or installing.
 	# GitHub metadata failure is authoritative: nothing is fetched or changed.
