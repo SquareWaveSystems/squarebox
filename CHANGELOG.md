@@ -17,6 +17,9 @@
 - Herdr uses terminal-safe direct shortcuts while retaining `F12` as a
   compatibility prefix.
 - The selected default shell is exported consistently to child processes.
+- Lifecycle adapters and Compose bound the Box to 4096 PIDs
+  (`--pids-limit=4096` / `pids_limit`), so a runaway Box process cannot
+  exhaust the host process table.
 
 See the [v1.3 migration guide](docs/releases/v1.3.0.md).
 
