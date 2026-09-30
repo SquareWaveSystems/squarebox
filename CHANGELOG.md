@@ -11,6 +11,11 @@
 - A mechanically verified, shared Install identity schema contract for the Bash
   and PowerShell adapters.
 - Trust-explicit `*-yolo` aliases for installed AI assistants.
+- Setup offers PowerShell 7 (`pwsh`) as an alternative default shell, installed
+  from Microsoft's GitHub release `.deb` after its release-asset SHA-256 is
+  verified. A managed `~/.config/powershell/profile.ps1` mirrors the bashrc
+  (starship, zoxide, mise, aliases) and a `~/.squarebox-use-pwsh` marker hands
+  interactive logins off to pwsh, matching the existing Zsh/Fish flow.
 
 ### Changed
 
