@@ -55,6 +55,36 @@ test "$(jq '[.mounts[]? | select(
 )] | length' .devcontainer/devcontainer.json)" = 1 \
 	|| fail "Dev Container Managed home is not a rebuild-stable, per-Box volume"
 
+# The Dev Container must keep the installers' capability reduction and PID
+# bound. Its only documented extra is SYS_CHROOT, which the SSH server Feature
+# needs for OpenSSH privilege separation (see SECURITY.md).
+DEVCONTAINER_SSHD_EXTRA_CAPS=SYS_CHROOT
+installer_caps=$(grep -oE -- '--cap-add=[A-Z_]+' install.sh | sed 's/^--cap-add=//' | sort -u)
+test -n "$installer_caps" || fail "install.sh capability set could not be read"
+ps_caps=$(grep -oE -- "--cap-add=[A-Z_]+" install.ps1 | sed 's/^--cap-add=//' | sort -u)
+test "$ps_caps" = "$installer_caps" \
+	|| fail "install.ps1 and install.sh capability sets differ"
+grep -Fq -- '--cap-drop=ALL' install.sh || fail "install.sh no longer drops all capabilities"
+test "$(jq -r '[.runArgs[]? | select(. == "--cap-drop=ALL")] | length' \
+	.devcontainer/devcontainer.json)" = 1 \
+	|| fail "Dev Container does not drop all capabilities"
+test "$(jq -r '[.runArgs[]? | select(. == "--pids-limit=4096")] | length' \
+	.devcontainer/devcontainer.json)" = 1 \
+	|| fail "Dev Container is not bounded to 4096 PIDs"
+test "$(jq -r '[.runArgs[]? | select(test("^--(privileged|cap-add=ALL|security-opt|pids-limit=(-1|0)$)"))] | length' \
+	.devcontainer/devcontainer.json)" = 0 \
+	|| fail "Dev Container runArgs weaken the hardened Box"
+test "$(jq -r '[.capAdd[]?, .privileged // empty, .securityOpt[]?] | length' \
+	.devcontainer/devcontainer.json)" = 0 \
+	|| fail "Dev Container must not widen authority through capAdd/privileged/securityOpt"
+devcontainer_caps=$(jq -r '.runArgs[]? | select(startswith("--cap-add=")) | ltrimstr("--cap-add=")' \
+	.devcontainer/devcontainer.json | sort -u)
+expected_devcontainer_caps=$(printf '%s\n' $installer_caps $DEVCONTAINER_SSHD_EXTRA_CAPS | sort -u)
+test "$devcontainer_caps" = "$expected_devcontainer_caps" \
+	|| fail "Dev Container capability set must equal the installers' set plus SYS_CHROOT"
+grep -Fq 'SYS_CHROOT' SECURITY.md \
+	|| fail "SECURITY.md does not justify the Dev Container SYS_CHROOT capability"
+
 if grep -E '(USER_HOME|\$HOME|USERPROFILE).*[.]config/git' \
 	install.sh install.ps1 docker-compose.yml >/dev/null; then
 	fail "host real Git config is still referenced"

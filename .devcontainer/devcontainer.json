@@ -22,5 +22,16 @@
   "containerEnv": {
     "DEVCONTAINER": "1"
   },
+  "runArgs": [
+    "--cap-drop=ALL",
+    "--cap-add=CHOWN",
+    "--cap-add=DAC_OVERRIDE",
+    "--cap-add=FOWNER",
+    "--cap-add=SETUID",
+    "--cap-add=SETGID",
+    "--cap-add=KILL",
+    "--cap-add=SYS_CHROOT",
+    "--pids-limit=4096"
+  ],
   "postCreateCommand": ["bash", "${containerWorkspaceFolder}/scripts/devcontainer-postcreate.sh"]
 }
