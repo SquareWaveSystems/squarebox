@@ -45,6 +45,8 @@
   passed, and the confirmation summary lists that Workspace.
 - difftastic is pinned to 0.71.0, whose release assets now carry the version
   in their names; the registry artifact pattern follows that change.
+- Image-tier tools refreshed: yq 4.54.1, glow 3.0.0, just 1.58.0, and mise
+  2026.9.18 (checksums from GitHub's release-asset digests).
 
 ### Removed
 
