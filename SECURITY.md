@@ -169,6 +169,17 @@ Unsupported architectures and invalid Tool-tier/destination combinations fail
 before network or destination mutation. Extracted archives reject escaping
 links, special files, and ambiguous executable matches before promotion.
 
+GitHub API metadata requests are optionally authenticated to raise the
+unauthenticated rate limit. The token comes from `GH_TOKEN`, then
+`GITHUB_TOKEN`, then an already-authenticated `gh` CLI (`gh auth token`, only
+for the default `https://api.github.com` base; never prompted). It is sent as
+an `Authorization: Bearer` header only to the configured HTTPS API base, never
+to artifact downloads or redirect targets, and reaches curl through a stdin
+config rather than its command line. It is not logged or written to the
+metadata cache. An HTTP 401 drops the token for the rest of that run and
+retries once unauthenticated. Authentication changes only rate limits; it does
+not relax digest verification.
+
 The GitHub CLI and Eza APT repositories are configured only while the image
 builds (then removed). Their signing keys are not trusted on download alone:
 the Dockerfile pins each key's expected full 40-hex primary-key fingerprint set
