@@ -255,6 +255,15 @@ does not contain that server. The upstream Feature enables root login in its
 SSHD configuration, but Squarebox publishes no SSH host port or password, and
 restricts remote-forwarded listeners to loopback.
 
+The Dev Container applies the same `runArgs` hardening as the installers and
+Compose: `--cap-drop=ALL`, re-adding only `CHOWN`, `DAC_OVERRIDE`, `FOWNER`,
+`SETUID`, `SETGID`, and `KILL`, plus `--pids-limit=4096`. It adds exactly one
+extra capability, `SYS_CHROOT`, because the SSH server Feature's OpenSSH uses
+privilege separation: the pre-authentication child `chroot`s into `/run/sshd`,
+and without `SYS_CHROOT` every connection is reset during key exchange. The
+Feature listens on port 2222, so `NET_BIND_SERVICE` is not needed, and logins
+were verified to succeed without `AUDIT_WRITE`.
+
 Linux capabilities are reduced, and the Box is bounded to 4096 PIDs so a
 runaway process cannot exhaust the host's process table. The Box has network
 access and the host resources explicitly mounted by its Install identity.
