@@ -94,7 +94,7 @@ Key rules:
 - Keep Bash, Zsh, Fish, and PowerShell derived configuration synchronized after section reruns.
 - Respect explicit user configuration during migrations (for example tmux mouse off).
 - Runtime APT must work with the read-only timezone mount and show actionable failures.
-- `sqrbx-learn` and its command logger are not shipped in the default v1.1 Box.
+- `sqrbx-learn` was removed in v1.3; do not reintroduce a command logger.
 
 GitHub authentication uses the normal Managed-home `~/.config/gh` plus
 `~/.squarebox-gh-skip`; legacy Workspace markers are migrated.

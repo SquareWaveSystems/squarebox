@@ -21,7 +21,7 @@ fi
 
 if grep -F 'COPY scripts/sqrbx-learn' Dockerfile >/dev/null \
 	|| grep -F 'COPY scripts/sqrbx-agent-tool-log' Dockerfile >/dev/null; then
-	fail "disabled learn implementation is still shipped"
+	fail "removed learn implementation is referenced by the image"
 fi
 
 test "$(jq -r .workspaceFolder .devcontainer/devcontainer.json)" = /workspace \
