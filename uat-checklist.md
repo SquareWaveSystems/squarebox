@@ -26,6 +26,7 @@ optional follow-up run.
 
 - [ ] Fresh Bash installer: launch, interactive setup, exit, resume, rebuild, uninstall
 - [ ] Existing v1.1 Managed home upgrade: no repeated prompts; Selections reconcile
+- [ ] No SSH agent: rebuild mounts no `~/.ssh` and prints the opt-in note; `SQUAREBOX_MOUNT_SSH=1` mounts it read-only and persists through a plain rebuild
 - [ ] Genuine host UID/GID other than 1000: default identity, Workspace, and managed files remain host-owned through rebuild and purge
 - [ ] Unprivileged Linux PUID/PGID mismatch fails before checkout, config, Install-state, or runtime mutation; a stale recorded identity can be adopted to the current account
 - [ ] Root-run rootful Docker/Podman PUID/PGID override starts with lifecycle-managed read-only files mounted beneath `/home/dev`

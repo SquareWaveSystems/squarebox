@@ -17,7 +17,7 @@ $Fields = @(
     'HOME_VOLUME', 'CONTAINER_NAME', 'IMAGE_ALIAS', 'IMAGE_REPOSITORY', 'IMAGE_REF',
     'IMAGE_ID', 'IMAGE_DIGEST', 'SOURCE_REF', 'SOURCE_COMMIT', 'RELEASE_TAG',
     'REQUESTED_TAG', 'PUID', 'PGID', 'BUILD', 'EDGE', 'SHELL_INIT', 'SHELL_RC',
-    'ORIGIN', 'HOME_VOLUME_ADOPTED'
+    'ORIGIN', 'HOME_VOLUME_ADOPTED', 'MOUNT_SSH'
 )
 $UserHome = [IO.Path]::GetFullPath($UserHomePath)
 if (-not $InstallDir) { $InstallDir = Join-Path $UserHome 'squarebox' }
@@ -39,8 +39,15 @@ function Read-State([string]$Path) {
         if ($value -match '[\x00-\x1f\x7f]') { Fail "control character in '$key'" }
         $state[$key] = $value
     }
+    if ($state.FORMAT -ceq '1') {
+        # FORMAT=1 predates MOUNT_SSH. Its absence is the default opt-out, so
+        # the converted state is published as the equivalent FORMAT=2 record.
+        if ($state.Contains('MOUNT_SSH')) { Fail "field 'MOUNT_SSH' requires FORMAT=2" }
+        $state.FORMAT = '2'; $state['MOUNT_SSH'] = '0'
+    }
     foreach ($field in $Fields) { if (-not $state.Contains($field)) { Fail "missing field '$field'" } }
-    if ($state.FORMAT -cne '1' -or $state.INSTALL_ID -cnotmatch '^[A-Za-z0-9._-]{8,128}$') { Fail 'invalid FORMAT or INSTALL_ID' }
+    if ($state.MOUNT_SSH -cnotin @('0', '1')) { Fail 'invalid MOUNT_SSH flag' }
+    if ($state.FORMAT -cne '2' -or $state.INSTALL_ID -cnotmatch '^[A-Za-z0-9._-]{8,128}$') { Fail 'invalid FORMAT or INSTALL_ID' }
     if ($state.RUNTIME -cnotin @('docker', 'podman')) { Fail 'invalid runtime' }
     if ($state.ORIGIN -cne 'https://github.com/SquareWaveSystems/squarebox.git') { Fail 'noncanonical origin' }
     foreach ($name in @('HOME_VOLUME', 'CONTAINER_NAME')) {

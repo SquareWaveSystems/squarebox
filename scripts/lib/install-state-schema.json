@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "fields": [
     "FORMAT",
     "INSTALL_ID",
@@ -25,20 +25,31 @@
     "SHELL_INIT",
     "SHELL_RC",
     "ORIGIN",
-    "HOME_VOLUME_ADOPTED"
+    "HOME_VOLUME_ADOPTED",
+    "MOUNT_SSH"
   ],
+  "readable_formats": {
+    "1": {
+      "absent_fields": {
+        "MOUNT_SSH": "0"
+      }
+    },
+    "2": {
+      "absent_fields": {}
+    }
+  },
   "rules": [
     {
       "id": "closed-field-set",
-      "contract": "Every field appears exactly once; unknown, duplicate, and missing fields fail closed."
+      "contract": "Every field of the record's format appears exactly once; unknown, duplicate, and missing fields fail closed. FORMAT=1 omits MOUNT_SSH and must not contain it."
     },
     {
       "id": "data-only",
       "contract": "State is parsed as KEY=VALUE data and is never sourced or evaluated."
     },
     {
-      "id": "format-1-only",
-      "contract": "FORMAT must equal 1; future formats fail closed."
+      "id": "known-formats-only",
+      "contract": "Writers emit FORMAT=2. Readers accept FORMAT=2 and FORMAT=1, reading each absent field at its listed default; future formats fail closed."
     },
     {
       "id": "normalized-absolute-paths",
@@ -50,7 +61,7 @@
     },
     {
       "id": "boolean-flags",
-      "contract": "BUILD, EDGE, and HOME_VOLUME_ADOPTED are 0 or 1, and EDGE requires BUILD."
+      "contract": "BUILD, EDGE, HOME_VOLUME_ADOPTED, and MOUNT_SSH are 0 or 1, and EDGE requires BUILD."
     },
     {
       "id": "source-image-coherence",
@@ -58,7 +69,7 @@
     },
     {
       "id": "adapter-ownership",
-      "contract": "FORMAT=1 field names and shared constraints match, while path/profile values remain adapter-native and creator-owned."
+      "contract": "Field names and shared constraints match across adapters, while path/profile values remain adapter-native and creator-owned."
     }
   ]
 }

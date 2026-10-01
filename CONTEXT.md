@@ -18,8 +18,8 @@ _Avoid_: Raw tag, latest commit
 
 **Install identity**:
 The durable record of the runtime, paths, resource names, source revision,
-host identity, and observed image identity managed by one Squarebox
-installation. Release pulls record an immutable digest; source/edge builds
+host identity, observed image identity, and lifecycle preferences (such as the
+opt-in SSH-directory mount) managed by one Squarebox installation. Release pulls record an immutable digest; source/edge builds
 record their local image ID and reference.
 _Avoid_: Installer environment, defaults
 

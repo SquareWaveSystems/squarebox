@@ -29,8 +29,12 @@ Usage: install.sh [--edge] [--build] [--adopt] [--verbose]
   --verbose   Show runtime and Git output.
 
 Configuration: SQUAREBOX_DIR, SQUAREBOX_WORKSPACE, SQUAREBOX_RUNTIME,
-SQUAREBOX_IMAGE, SQUAREBOX_TAG, SQUAREBOX_HOME_VOLUME, PUID, and PGID.
-Omitted values on rebuild are read from the recorded Install identity.
+SQUAREBOX_IMAGE, SQUAREBOX_TAG, SQUAREBOX_HOME_VOLUME, SQUAREBOX_MOUNT_SSH,
+PUID, and PGID. Omitted values on rebuild are read from the recorded Install
+identity.
+
+SQUAREBOX_MOUNT_SSH=1 opts in to mounting ~/.ssh (including private keys)
+read-only when no SSH agent socket is forwarded; 0 turns it back off.
 EOF
 }
 
@@ -81,9 +85,9 @@ STATE_CONTAINER_NAME=""; STATE_IMAGE_ALIAS=""; STATE_IMAGE_REPOSITORY=""
 STATE_IMAGE_REF=""; STATE_IMAGE_ID=""; STATE_IMAGE_DIGEST=""; STATE_SOURCE_REF=""
 STATE_SOURCE_COMMIT=""; STATE_RELEASE_TAG=""; STATE_REQUESTED_TAG=""
 STATE_PUID=""; STATE_PGID=""; STATE_BUILD=""; STATE_EDGE=""
-STATE_SHELL_INIT=""; STATE_SHELL_RC=""; STATE_ORIGIN=""; STATE_HOME_VOLUME_ADOPTED=0
+STATE_SHELL_INIT=""; STATE_SHELL_RC=""; STATE_ORIGIN=""; STATE_HOME_VOLUME_ADOPTED=0; STATE_MOUNT_SSH=0
 
-STATE_KEYS="FORMAT INSTALL_ID RUNTIME INSTALL_DIR WORKSPACE_DIR GIT_CONFIG_DIR HOME_VOLUME CONTAINER_NAME IMAGE_ALIAS IMAGE_REPOSITORY IMAGE_REF IMAGE_ID IMAGE_DIGEST SOURCE_REF SOURCE_COMMIT RELEASE_TAG REQUESTED_TAG PUID PGID BUILD EDGE SHELL_INIT SHELL_RC ORIGIN HOME_VOLUME_ADOPTED"
+STATE_KEYS="FORMAT INSTALL_ID RUNTIME INSTALL_DIR WORKSPACE_DIR GIT_CONFIG_DIR HOME_VOLUME CONTAINER_NAME IMAGE_ALIAS IMAGE_REPOSITORY IMAGE_REF IMAGE_ID IMAGE_DIGEST SOURCE_REF SOURCE_COMMIT RELEASE_TAG REQUESTED_TAG PUID PGID BUILD EDGE SHELL_INIT SHELL_RC ORIGIN HOME_VOLUME_ADOPTED MOUNT_SSH"
 STATE_SCHEMA_VALID=1
 
 invalid_state() {
@@ -122,7 +126,7 @@ valid_state_id() {
 validate_state_schema() {
 	local file="$1"
 	STATE_SCHEMA_VALID=1
-	[ "$STATE_FORMAT" = 1 ] || invalid_state "$file" 'FORMAT must be 1'
+	case "$STATE_FORMAT" in 1|2) ;; *) invalid_state "$file" 'FORMAT must be 1 or 2' ;; esac
 	[[ "$STATE_INSTALL_ID" =~ ^[A-Za-z0-9._-]{8,128}$ ]] || invalid_state "$file" 'invalid INSTALL_ID'
 	case "$STATE_RUNTIME" in docker|podman) ;; *) invalid_state "$file" 'invalid RUNTIME' ;; esac
 	same_state_path "$STATE_INSTALL_DIR" "$INSTALL_DIR" || invalid_state "$file" "path mismatch: $STATE_INSTALL_DIR != $INSTALL_DIR"
@@ -156,6 +160,7 @@ validate_state_schema() {
 		0:0:0|0:0:1|1:0:0|1:0:1|1:1:0|1:1:1) ;;
 		*) invalid_state "$file" 'invalid BUILD, EDGE, or HOME_VOLUME_ADOPTED flag' ;;
 	esac
+	case "$STATE_MOUNT_SSH" in 0|1) ;; *) invalid_state "$file" 'invalid MOUNT_SSH flag' ;; esac
 	[ "$STATE_ORIGIN" = "$REPO" ] || invalid_state "$file" 'noncanonical ORIGIN'
 	if [ "$STATE_EDGE" = 1 ]; then
 		[ -z "$STATE_RELEASE_TAG" ] && [ -z "$STATE_REQUESTED_TAG" ] \
@@ -195,7 +200,7 @@ load_state() {
 		key="${line%%=*}"; value="${line#*=}"
 		[ "$key" != "$line" ] || { echo "Error: malformed Install identity: $file" >&2; return 1; }
 		case "$key" in
-			FORMAT|INSTALL_ID|RUNTIME|INSTALL_DIR|WORKSPACE_DIR|GIT_CONFIG_DIR|HOME_VOLUME|CONTAINER_NAME|IMAGE_ALIAS|IMAGE_REPOSITORY|IMAGE_REF|IMAGE_ID|IMAGE_DIGEST|SOURCE_REF|SOURCE_COMMIT|RELEASE_TAG|REQUESTED_TAG|PUID|PGID|BUILD|EDGE|SHELL_INIT|SHELL_RC|ORIGIN|HOME_VOLUME_ADOPTED) ;;
+			FORMAT|INSTALL_ID|RUNTIME|INSTALL_DIR|WORKSPACE_DIR|GIT_CONFIG_DIR|HOME_VOLUME|CONTAINER_NAME|IMAGE_ALIAS|IMAGE_REPOSITORY|IMAGE_REF|IMAGE_ID|IMAGE_DIGEST|SOURCE_REF|SOURCE_COMMIT|RELEASE_TAG|REQUESTED_TAG|PUID|PGID|BUILD|EDGE|SHELL_INIT|SHELL_RC|ORIGIN|HOME_VOLUME_ADOPTED|MOUNT_SSH) ;;
 			*) echo "Error: malformed Install identity: $file (unknown field '$key')" >&2; return 1 ;;
 		esac
 		case "|$seen|" in *"|$key|"*) echo "Error: malformed Install identity: $file (duplicate field '$key')" >&2; return 1 ;; esac
@@ -213,11 +218,18 @@ load_state() {
 			PGID) STATE_PGID="$value" ;; BUILD) STATE_BUILD="$value" ;; EDGE) STATE_EDGE="$value" ;;
 			SHELL_INIT) STATE_SHELL_INIT="$value" ;; SHELL_RC) STATE_SHELL_RC="$value" ;;
 			ORIGIN) STATE_ORIGIN="$value" ;; HOME_VOLUME_ADOPTED) STATE_HOME_VOLUME_ADOPTED="$value" ;;
+			MOUNT_SSH) STATE_MOUNT_SSH="$value" ;;
 		esac
 	done <"$file"
 	for expected in $STATE_KEYS; do
+		# FORMAT=1 predates MOUNT_SSH; its absence there is the default opt-out.
+		[ "$expected" = MOUNT_SSH ] && [ "$STATE_FORMAT" = 1 ] && continue
 		case "|$seen|" in *"|$expected|"*) ;; *) echo "Error: malformed Install identity: $file (missing field '$expected')" >&2; return 1 ;; esac
 	done
+	if [ "$STATE_FORMAT" = 1 ]; then
+		case "|$seen|" in *"|MOUNT_SSH|"*) echo "Error: malformed Install identity: $file (MOUNT_SSH requires FORMAT=2)" >&2; return 1 ;; esac
+		STATE_MOUNT_SSH=0
+	fi
 	validate_state_schema "$file"
 }
 
@@ -238,6 +250,10 @@ REQUESTED_TAG="${SQUAREBOX_TAG:-${STATE_REQUESTED_TAG:-}}"
 EDGE="${CLI_EDGE:-${SQUAREBOX_EDGE:-${STATE_EDGE:-0}}}"
 BUILD="${CLI_BUILD:-${SQUAREBOX_BUILD:-${STATE_BUILD:-0}}}"
 [ "$EDGE" = 1 ] && BUILD=1
+# Mounting ~/.ssh exposes private keys to every Box process, including
+# unattended AI agents, so it is an explicit opt-in recorded for rebuilds.
+MOUNT_SSH="${SQUAREBOX_MOUNT_SSH:-${STATE_MOUNT_SSH:-0}}"
+case "$MOUNT_SSH" in 0|1) ;; *) echo "Error: SQUAREBOX_MOUNT_SSH must be 0 or 1 (got '$MOUNT_SSH')." >&2; exit 64 ;; esac
 if [ "$HAD_STATE" = 1 ] && [ "$HOME_VOLUME" != "$STATE_HOME_VOLUME" ]; then
 	echo "Error: cannot change the recorded Managed-home name during rebuild; uninstall this identity first." >&2; exit 1
 fi
@@ -880,9 +896,11 @@ if [ -n "${SSH_AUTH_SOCK:-}" ] && [ -S "$SSH_AUTH_SOCK" ]; then
 	RT_VOLUMES+=(-v "$SSH_AUTH_SOCK:/tmp/ssh-agent.sock"); RT_OPTS+=(-e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
 	[ -f "$USER_HOME/.ssh/config" ] && RT_VOLUMES+=(-v "$(bind_spec "$USER_HOME/.ssh/config" /home/dev/.ssh/config "$ro_bind_mode")")
 	[ -f "$USER_HOME/.ssh/known_hosts" ] && RT_VOLUMES+=(-v "$(bind_spec "$USER_HOME/.ssh/known_hosts" /home/dev/.ssh/known_hosts "$ro_bind_mode")")
-elif [ -d "$USER_HOME/.ssh" ]; then
-	echo "Note: SSH agent unavailable; mounting ~/.ssh read-only."
+elif [ -d "$USER_HOME/.ssh" ] && [ "$MOUNT_SSH" = 1 ]; then
+	echo "Note: SSH agent unavailable; mounting ~/.ssh read-only (SQUAREBOX_MOUNT_SSH=1)."
 	RT_VOLUMES+=(-v "$(bind_spec "$USER_HOME/.ssh" /home/dev/.ssh "$ro_bind_mode")")
+elif [ -d "$USER_HOME/.ssh" ]; then
+	echo "Note: SSH agent unavailable and ~/.ssh is not mounted. Start an SSH agent, or rebuild with SQUAREBOX_MOUNT_SSH=1 to mount ~/.ssh (including private keys) read-only."
 fi
 
 echo "Creating Candidate Box..."
@@ -910,13 +928,14 @@ write_state() {
 		case "$value" in *$'\n'*|*$'\r'*) echo "Error: newline in Install identity value." >&2; return 1 ;; esac
 	done
 	{
-		printf 'FORMAT=1\nINSTALL_ID=%s\nRUNTIME=%s\n' "$INSTALL_ID" "$RUNTIME"
+		printf 'FORMAT=2\nINSTALL_ID=%s\nRUNTIME=%s\n' "$INSTALL_ID" "$RUNTIME"
 		printf 'INSTALL_DIR=%s\nWORKSPACE_DIR=%s\nGIT_CONFIG_DIR=%s\n' "$INSTALL_DIR" "$WORKSPACE_DIR" "$GIT_CONFIG_DIR"
 		printf 'HOME_VOLUME=%s\nCONTAINER_NAME=%s\nIMAGE_ALIAS=%s\n' "$HOME_VOLUME" "$CONTAINER_NAME" "$IMAGE_ALIAS"
 		printf 'IMAGE_REPOSITORY=%s\nIMAGE_REF=%s\nIMAGE_ID=%s\nIMAGE_DIGEST=%s\n' "$IMAGE_REPOSITORY" "$IMAGE_REF" "$IMAGE_ID" "$IMAGE_DIGEST"
 		printf 'SOURCE_REF=%s\nSOURCE_COMMIT=%s\nRELEASE_TAG=%s\nREQUESTED_TAG=%s\n' "$SOURCE_REF" "$SOURCE_COMMIT" "$RELEASE_TAG" "$REQUESTED_TAG"
 		printf 'PUID=%s\nPGID=%s\nBUILD=%s\nEDGE=%s\n' "$PUID" "$PGID" "$BUILD" "$EDGE"
 		printf 'SHELL_INIT=%s\nSHELL_RC=%s\nORIGIN=%s\nHOME_VOLUME_ADOPTED=%s\n' "$SHELL_INIT" "$SHELL_RC" "$REPO" "$HOME_VOLUME_ADOPTED"
+		printf 'MOUNT_SSH=%s\n' "$MOUNT_SSH"
 	} >"$tmp"
 	chmod 600 "$tmp" 2>/dev/null || true
 	if ! load_state "$tmp"; then rm -f -- "$tmp"; return 1; fi

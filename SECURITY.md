@@ -234,14 +234,22 @@ Treat code and tools run inside it as having access to:
 - the Workspace, read-write;
 - the Managed home, including persisted tool credentials;
 - the installation-private Git name/email config;
-- an SSH agent socket when the Bash/POSIX or Git Bash adapter forwards it, or
-  explicitly mounted read-only SSH files (the native PowerShell path);
+- an SSH agent socket, plus read-only `~/.ssh/config` and `~/.ssh/known_hosts`,
+  when the Bash/POSIX or Git Bash adapter forwards an available agent;
+- the read-only `~/.ssh` directory, including private keys, only when the
+  operator opts in with `SQUAREBOX_MOUNT_SSH=1` (or `-MountSsh` on native
+  PowerShell) and no agent is forwarded;
 - any additional mounts the operator supplies.
 
 Agent forwarding keeps private-key files on the host, but processes inside the
-Box can ask the forwarded agent to sign while the socket is available. Mounting
-SSH files as a fallback—or as native PowerShell's current SSH path—exposes their
-contents read-only to Box processes.
+Box can ask the forwarded agent to sign while the socket is available. Because
+AI assistants may run unattended in the Box (for example the `*-yolo` aliases),
+the `~/.ssh` directory is never mounted by default: without an agent the Box
+gets no SSH material and install prints how to opt in. The opt-in exposes every
+file in that directory, private keys included, read-only to all Box processes.
+It is recorded as `MOUNT_SSH` in the Install identity and reused on rebuild
+until a rebuild sets `SQUAREBOX_MOUNT_SSH=0`. Prefer an agent, ideally with
+per-use confirmation, or a dedicated key with narrow scope.
 
 The entrypoint validates numeric UID/GID inputs and refuses unsafe Managed-home
 dotfile symlinks. On native Linux, an unprivileged lifecycle install also
@@ -309,7 +317,7 @@ verify ownership before removal. Recorded directories require a Squarebox
 marker; an unrelated directory or resource with a familiar fixed name is not
 authority to delete it.
 
-`FORMAT=1` versions each lifecycle adapter's native state contract; it does not
+`FORMAT` versions each lifecycle adapter's native state contract; it does not
 make Bash/Git Bash and PowerShell Install-identity files interchangeable. Use
 the matching adapter family for rebuild and uninstall operations, or explicitly
 convert it with `scripts/migrate-windows-adapter.ps1`. The converter parses the

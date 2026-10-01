@@ -105,6 +105,7 @@ Flags: `--build` (build from source), `--edge` (latest `main`), `--adopt`
 | `SQUAREBOX_RUNTIME` | auto | Force `docker` or `podman`. |
 | `SQUAREBOX_HOME_VOLUME` | `squarebox-home` | Name of the named volume backing `/home/dev`. |
 | `SQUAREBOX_EDGE` | `0` | `1` is equivalent to `--edge`. |
+| `SQUAREBOX_MOUNT_SSH` | `0` | `1` mounts your host `~/.ssh` directory, **private keys included**, read-only into the Box when no SSH agent is forwarded. Recorded for rebuilds; set `0` to turn it back off. See **SSH access** below. |
 
 **Non-interactive provisioning** — set any of these to a comma-separated list to
 pre-select a toolset and install it without prompts (handy for servers and
@@ -136,6 +137,23 @@ code. Release pulls record an immutable image digest; source/edge builds record
 their local image ID/reference. Existing pre-v1.1 checkouts require a one-time
 reviewed `--adopt`/`-Adopt`.
 
+**SSH access**
+
+The Box does not receive your SSH private-key files by default, because anything
+running inside it, including unattended `*-yolo` AI agents, could read them.
+
+- **SSH agent (recommended).** When `SSH_AUTH_SOCK` points at a running agent,
+  the Bash/POSIX and Git Bash adapters forward the agent socket and mount only
+  `~/.ssh/config` and `~/.ssh/known_hosts` read-only. Key files stay on the
+  host, though Box processes can ask the agent to sign while the socket is
+  available.
+- **No agent.** `~/.ssh` is not mounted, and install prints a note. To mount
+  the directory read-only instead, opt in with `SQUAREBOX_MOUNT_SSH=1` (native
+  PowerShell: `.\install.ps1 -MountSsh` or `$env:SQUAREBOX_MOUNT_SSH = '1'`).
+  The choice is recorded in the Install identity and reused by
+  `sqrbx-rebuild`; set `SQUAREBOX_MOUNT_SSH=0` (or `-MountSsh:$false`) on a
+  rebuild to turn it back off.
+
 **Windows (PowerShell 7+)**
 
 Windows users can install directly from PowerShell - no Git Bash required.
@@ -150,18 +168,21 @@ Once installed, you can re-run or pass flags from the local copy:
     .\install.ps1 -Edge        # latest main instead of latest release
     .\install.ps1 -Build       # build the resolved source locally
     .\install.ps1 -Adopt       # migrate a legacy pre-v1.1 installation
+    .\install.ps1 -MountSsh    # opt in to mounting %USERPROFILE%\.ssh read-only
 
 > **Note:** `irm ... | iex` does not support flags - PowerShell interprets them
 > as arguments to `Invoke-Expression`, not the script. Use the local
-> `.\install.ps1` form for `-Edge`, `-Build`, or `-Adopt`. PowerShell streams
-> runtime and Git failures directly by default.
+> `.\install.ps1` form for `-Edge`, `-Build`, `-Adopt`, or `-MountSsh`.
+> PowerShell streams runtime and Git failures directly by default.
 
 > **Windows adapter boundary:** Keep install, rebuild, and uninstall on the
 > adapter that created the Install identity. Native PowerShell and Git Bash
-> use the same `FORMAT=1` field names, but their native path and shell-profile
-> values are not interchangeable; cross-adapter state consumption is rejected.
-> Native PowerShell mounts `%USERPROFILE%\.ssh` read-only when it exists and
-> does not forward `SSH_AUTH_SOCK`. The separate Git Bash adapter supports SSH
+> use the same Install identity field names, but their native path and
+> shell-profile values are not interchangeable;
+> cross-adapter state consumption is rejected.
+> Native PowerShell does not forward `SSH_AUTH_SOCK` and mounts
+> `%USERPROFILE%\.ssh` read-only only when you opt in with `-MountSsh` or
+> `SQUAREBOX_MOUNT_SSH=1`. The separate Git Bash adapter supports SSH
 > agent-socket forwarding with its Bash lifecycle.
 > Use `./scripts/migrate-windows-adapter.ps1 -Target PowerShell` or
 > `-Target GitBash` from PowerShell 7 for an explicit cross-adapter migration.
@@ -493,7 +514,7 @@ Manually installed apt packages are still lost, since the image is rebuilt.
 | Workspace code on the host | Selected tmux/Zsh/Fish packages are reconciled into the new Box |
 | Managed home: history, auth, assistant data, mise toolchains | Manually installed, unselected APT packages are lost |
 | Selection state in `/workspace/.squarebox` | Image-tier binaries are replaced by the Candidate digest |
-| Host SSH access exposed by the selected lifecycle adapter | Image-managed dotfiles are safely refreshed |
+| Host SSH access (agent forwarding, or the recorded `SQUAREBOX_MOUNT_SSH` opt-in) | Image-managed dotfiles are safely refreshed |
 
 Use `sqrbx-uninstall --purge` to wipe recorded state. Do not remove a volume by
 name alone; lifecycle commands verify the Install identity and ownership

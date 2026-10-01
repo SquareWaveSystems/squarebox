@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory() as temporary:
     home.mkdir()
     state_dir.mkdir(parents=True)
     base = {
-        "FORMAT": "1",
+        "FORMAT": "2",
         "INSTALL_ID": "test-install-123",
         "RUNTIME": "docker",
         "INSTALL_DIR": str(install_dir),
@@ -47,6 +47,7 @@ with tempfile.TemporaryDirectory() as temporary:
         "SHELL_RC": str(home / ".bashrc"),
         "ORIGIN": "https://github.com/SquareWaveSystems/squarebox.git",
         "HOME_VOLUME_ADOPTED": "0",
+        "MOUNT_SSH": "0",
     }
     env = os.environ.copy()
     env.update({

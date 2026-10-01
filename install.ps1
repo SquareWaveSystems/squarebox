@@ -6,6 +6,7 @@ param(
     [switch]$Edge,
     [switch]$Build,
     [switch]$Adopt,
+    [switch]$MountSsh,
     [string]$InstallDir,
     [string]$WorkspaceDir,
     [ValidateSet('docker', 'podman')][string]$Runtime,
@@ -156,7 +157,7 @@ $StateFields = @(
     'HOME_VOLUME', 'CONTAINER_NAME', 'IMAGE_ALIAS', 'IMAGE_REPOSITORY', 'IMAGE_REF',
     'IMAGE_ID', 'IMAGE_DIGEST', 'SOURCE_REF', 'SOURCE_COMMIT', 'RELEASE_TAG',
     'REQUESTED_TAG', 'PUID', 'PGID', 'BUILD', 'EDGE', 'SHELL_INIT', 'SHELL_RC',
-    'ORIGIN', 'HOME_VOLUME_ADOPTED'
+    'ORIGIN', 'HOME_VOLUME_ADOPTED', 'MOUNT_SSH'
 )
 function Test-ReleaseTag([string]$Value) {
     return $Value.Length -le 128 -and $Value -cmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?$'
@@ -181,7 +182,7 @@ function Test-StateId([string]$Value) {
     return $Value -cmatch '^[0-9]{1,10}$' -and [long]::TryParse($Value, [ref]$parsed) -and $parsed -ge 1 -and $parsed -le 2147483647
 }
 function Assert-InstallState([hashtable]$State, [string]$Path, [string]$ExpectedInstallDir) {
-    if ($State.FORMAT -ne '1' -or $State.INSTALL_ID -cnotmatch '^[A-Za-z0-9._-]{8,128}$') { Abort "Invalid Install identity: $Path" }
+    if ($State.FORMAT -cnotin @('1', '2') -or $State.INSTALL_ID -cnotmatch '^[A-Za-z0-9._-]{8,128}$') { Abort "Invalid Install identity: $Path" }
     if ($State.RUNTIME -cnotin @('docker', 'podman')) { Abort "Invalid Install identity: $Path (invalid RUNTIME)" }
     foreach ($name in @('INSTALL_DIR', 'WORKSPACE_DIR', 'GIT_CONFIG_DIR', 'SHELL_INIT', 'SHELL_RC')) {
         if (-not (Test-StatePath $State[$name])) { Abort "Invalid Install identity: $Path (invalid $name path)" }
@@ -220,6 +221,7 @@ function Assert-InstallState([hashtable]$State, [string]$Path, [string]$Expected
         ($State.EDGE -eq '1' -and $State.BUILD -ne '1')) {
         Abort "Invalid Install identity: $Path (BUILD, EDGE, and HOME_VOLUME_ADOPTED must be 0 or 1)"
     }
+    if ($State.MOUNT_SSH -cnotin @('0', '1')) { Abort "Invalid Install identity: $Path (MOUNT_SSH must be 0 or 1)" }
     if ($State.ORIGIN -cne $Repo) { Abort "Invalid Install identity: $Path (noncanonical ORIGIN)" }
     if ($State.EDGE -eq '1') {
         if ($State.RELEASE_TAG -or $State.REQUESTED_TAG -or $State.SOURCE_REF -cne 'refs/remotes/origin/main') {
@@ -258,6 +260,11 @@ function Read-InstallState([string]$Path, [string]$ExpectedInstallDir) {
         $value = $line.Substring($at + 1)
         if ($value -match "[`r`n]") { Abort "Malformed Install identity: $Path" }
         $state.Add($key, $value)
+    }
+    if ($state.FORMAT -ceq '1') {
+        # FORMAT=1 predates MOUNT_SSH; its absence there is the default opt-out.
+        if ($state.ContainsKey('MOUNT_SSH')) { Abort "Install identity field 'MOUNT_SSH' requires FORMAT=2: $Path" }
+        $state.Add('MOUNT_SSH', '0')
     }
     foreach ($key in $StateFields) {
         if (-not $state.ContainsKey($key)) { Abort "Missing Install identity field '$key': $Path" }
@@ -320,6 +327,14 @@ if (-not $PSBoundParameters.ContainsKey('Build') -and $State -and $State.BUILD -
 if ($env:SQUAREBOX_EDGE -eq '1') { $Edge = $true }
 if ($env:SQUAREBOX_BUILD -eq '1') { $Build = $true }
 if ($Edge) { $Build = $true }
+# Mounting .ssh exposes private keys to every Box process, including unattended
+# AI agents, so it is an explicit opt-in recorded for rebuilds.
+if (-not $PSBoundParameters.ContainsKey('MountSsh')) {
+    if ($env:SQUAREBOX_MOUNT_SSH) {
+        if ($env:SQUAREBOX_MOUNT_SSH -cnotin @('0', '1')) { Abort "SQUAREBOX_MOUNT_SSH must be 0 or 1 (got '$($env:SQUAREBOX_MOUNT_SSH)')." }
+        $MountSsh = $env:SQUAREBOX_MOUNT_SSH -ceq '1'
+    } elseif ($State) { $MountSsh = $State.MOUNT_SSH -ceq '1' }
+}
 $DefaultPuid = 1000; $DefaultPgid = 1000
 if ($IsLinux) {
     $hostUid = [int](& id -u); $hostGid = [int](& id -g)
@@ -795,8 +810,15 @@ $RuntimeVolumes = @(
     '-v', "${StarshipDest}:/home/dev/.config/starship.toml$BindSuffix",
     '-v', "${LazygitDir}:/home/dev/.config/lazygit$BindSuffix"
 )
+# Native PowerShell never forwards an SSH agent, so .ssh is mounted only on
+# explicit opt-in (-MountSsh or SQUAREBOX_MOUNT_SSH=1).
 $SshDir = Join-Path $UserHome '.ssh'
-if (Test-Path $SshDir) { $RuntimeVolumes += @('-v', "${SshDir}:/home/dev/.ssh$ReadOnlyBindSuffix") }
+if ((Test-Path $SshDir) -and $MountSsh) {
+    Write-Host 'Note: mounting .ssh read-only (SSH directory opt-in is on).'
+    $RuntimeVolumes += @('-v', "${SshDir}:/home/dev/.ssh$ReadOnlyBindSuffix")
+} elseif (Test-Path $SshDir) {
+    Write-Host 'Note: .ssh is not mounted into the Box. Rebuild with -MountSsh or SQUAREBOX_MOUNT_SSH=1 to mount it (including private keys) read-only, or use the Git Bash adapter for SSH agent forwarding.'
+}
 
 Write-Host 'Creating Candidate Box...'
 & $Runtime create -it --name $script:CandidateName @RuntimeOptions @RuntimeVolumes $ImageAlias | Out-Null
@@ -815,7 +837,7 @@ if (@($stateValues | Where-Object { $_ -match "[`r`n]" }).Count -gt 0) { Abort '
 $StateDir = Split-Path $StateFile
 if (-not (Test-Path $StateDir)) { New-Item -ItemType Directory -Path $StateDir -Force | Out-Null }
 $stateLines = @(
-    'FORMAT=1', "INSTALL_ID=$InstallId", "RUNTIME=$Runtime", "INSTALL_DIR=$InstallDir",
+    'FORMAT=2', "INSTALL_ID=$InstallId", "RUNTIME=$Runtime", "INSTALL_DIR=$InstallDir",
     "WORKSPACE_DIR=$WorkspaceDir", "GIT_CONFIG_DIR=$GitConfigDir", "HOME_VOLUME=$HomeVolume",
     "CONTAINER_NAME=$ContainerName", "IMAGE_ALIAS=$ImageAlias", "IMAGE_REPOSITORY=$ImageRepository",
     "IMAGE_REF=$ImageRef", "IMAGE_ID=$ImageId", "IMAGE_DIGEST=$ImageDigest",
@@ -823,7 +845,7 @@ $stateLines = @(
     "REQUESTED_TAG=$RequestedTag", "PUID=$Puid", "PGID=$Pgid",
     "BUILD=$([int][bool]$Build)", "EDGE=$([int][bool]$Edge)",
     "SHELL_INIT=$ShellInit", "SHELL_RC=$ProfilePath", "ORIGIN=$Repo",
-    "HOME_VOLUME_ADOPTED=$([int]$HomeVolumeAdopted)"
+    "HOME_VOLUME_ADOPTED=$([int]$HomeVolumeAdopted)", "MOUNT_SSH=$([int][bool]$MountSsh)"
 )
 $StateTemp = Join-Path $StateDir ".install-state.$([guid]::NewGuid().ToString('N'))"
 try {
