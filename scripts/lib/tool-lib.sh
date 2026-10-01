@@ -376,8 +376,68 @@ _sb_gh_cache_failure() {
 	/bin/mv -fT -- "$stage" "$path" 2>/dev/null || rm -f -- "$stage" 2>/dev/null || true
 }
 
+# Optional GitHub API authentication raises the unauthenticated 60 requests per
+# hour limit. Precedence: GH_TOKEN, GITHUB_TOKEN, then an already-authenticated
+# gh CLI (evaluated lazily, at most once per shell; never prompts). The token is
+# sent only to the configured HTTPS SB_GITHUB_API_BASE, reaches curl through a
+# stdin config rather than argv, and is never logged or written to the metadata
+# cache. curl does not forward a custom Authorization header to another host
+# when following a redirect.
+_SB_GH_TOKEN=""
+_SB_GH_TOKEN_RESOLVED=false
+_SB_GH_TOKEN_DISABLED=false
+
+_sb_gh_resolve_token() {
+	local token="" source=""
+	[ "$_SB_GH_TOKEN_RESOLVED" = false ] || return 0
+	_SB_GH_TOKEN_RESOLVED=true
+	_SB_GH_TOKEN=""
+	if [ -n "${GH_TOKEN:-}" ]; then
+		token=$GH_TOKEN; source=GH_TOKEN
+	elif [ -n "${GITHUB_TOKEN:-}" ]; then
+		token=$GITHUB_TOKEN; source=GITHUB_TOKEN
+	elif [ "${SB_GITHUB_API_BASE%/}" = "https://api.github.com" ] && command -v gh >/dev/null 2>&1; then
+		# gh's stored credential belongs to github.com; never offer it to a
+		# custom API base. Without a stored login this fails without prompting.
+		token=$(GH_PROMPT_DISABLED=1 gh auth token --hostname github.com </dev/null 2>/dev/null) || token=""
+		source="gh auth token"
+	fi
+	[ -n "$token" ] || return 0
+	# Restrict to token characters so the value cannot alter curl's config.
+	if ! [[ "$token" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+		echo "Warning: ignoring malformed GitHub token from ${source}; using unauthenticated GitHub API requests" >&2
+		return 0
+	fi
+	_SB_GH_TOKEN=$token
+}
+
+# Succeed (with _SB_GH_TOKEN set) only when url targets the configured HTTPS
+# API base and a usable token exists. Runs in the current shell so lazy token
+# resolution is remembered.
+_sb_gh_token_applies() {
+	local url="$1" base="${SB_GITHUB_API_BASE%/}"
+	[ "$_SB_GH_TOKEN_DISABLED" = false ] || return 1
+	[[ "$base" == https://?* ]] || return 1
+	[[ "$url" == "$base/"* ]] || return 1
+	_sb_gh_resolve_token
+	[ -n "$_SB_GH_TOKEN" ]
+}
+
+# One metadata GET. With authentication, the header is supplied through a curl
+# config here-string on stdin so the token never appears in argv or ps output.
+_sb_gh_curl_metadata() {
+	local url="$1" authenticated="$2"
+	if [ "$authenticated" = true ]; then
+		curl -K - -sSL -w '\n%{http_code}' "$url" 2>/dev/null \
+			<<<"header = \"Authorization: Bearer ${_SB_GH_TOKEN}\""
+	else
+		curl -sSL -w '\n%{http_code}' "$url" 2>/dev/null
+	fi
+}
+
 _sb_gh_api_get() {
 	local url="$1" context="$2" response curl_rc http_code body message cache_path failed_path
+	local authenticated=false
 	if [ -n "${_SB_GH_BODY_CACHE[$url]+x}" ]; then
 		SB_GH_API_BODY=${_SB_GH_BODY_CACHE[$url]}
 		printf '%s\n' "$SB_GH_API_BODY"
@@ -400,8 +460,19 @@ _sb_gh_api_get() {
 		_SB_GH_FAILED_CACHE[$url]=1
 		return 1
 	fi
-	response=$(curl -sSL -w '\n%{http_code}' "$url" 2>/dev/null)
+	! _sb_gh_token_applies "$url" || authenticated=true
+	response=$(_sb_gh_curl_metadata "$url" "$authenticated")
 	curl_rc=$?
+	if [ "$authenticated" = true ] && [ "$curl_rc" -eq 0 ] && [ "${response##*$'\n'}" = "401" ]; then
+		# A rejected token must not block public metadata: drop it for the rest
+		# of this shell and retry once without credentials.
+		echo "Warning: GitHub API rejected the configured token (HTTP 401) for ${context}; retrying unauthenticated" >&2
+		_SB_GH_TOKEN_DISABLED=true
+		_SB_GH_TOKEN=""
+		authenticated=false
+		response=$(_sb_gh_curl_metadata "$url" false)
+		curl_rc=$?
+	fi
 	if [ "$curl_rc" -ne 0 ]; then
 		_SB_GH_FAILED_CACHE[$url]=1
 		_sb_gh_cache_failure "$url"
@@ -440,8 +511,10 @@ _sb_gh_api_get() {
 	_SB_GH_FAILED_CACHE[$url]=1
 	_sb_gh_cache_failure "$url"
 	message=$(printf '%s' "$body" | jq -r '.message // empty' 2>/dev/null || true)
-	if [ "$http_code" = "403" ]; then
-		echo "Error: GitHub API returned HTTP 403 for ${context}${message:+: $message} (possible rate limit)" >&2
+	if { [ "$http_code" = "403" ] || [ "$http_code" = "429" ]; } && [ "$authenticated" = false ]; then
+		echo "Error: GitHub API returned HTTP ${http_code} for ${context}${message:+: $message} (possible unauthenticated rate limit; set GH_TOKEN or run 'gh auth login' to raise it)" >&2
+	elif [ "$http_code" = "403" ] || [ "$http_code" = "429" ]; then
+		echo "Error: GitHub API returned HTTP ${http_code} for ${context}${message:+: $message} (possible rate limit)" >&2
 	else
 		echo "Error: GitHub API returned HTTP ${http_code} for ${context}${message:+: $message}" >&2
 	fi

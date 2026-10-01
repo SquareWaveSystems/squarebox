@@ -421,6 +421,122 @@ if (
 	[ "$(grep -c 'api.test/' "$CACHE_CASE/curl.log")" -eq 1 ]
 ); then ok "release metadata cache survives command substitution and exact-version install"; else not_ok "release metadata cache survives command substitution and exact-version install"; fi
 
+# ── Optional GitHub API authentication ───────────────────────────────
+# The auth mock curl records every argv element and, only when given a config
+# on stdin (-K -), that config. AUTH_STATUS_WITH_TOKEN overrides the API status
+# for authenticated requests (401 fallback). Downloads copy PAYLOAD.
+AUTH_TOKEN_VALUE=ghp_SyntheticSecretToken0123456789
+run_auth_case() {
+	local name=$1 body=$2
+	local case_dir="$TMP/auth-$name"
+	mkdir -p "$case_dir/home" "$case_dir/cache"
+	(
+		unset GH_TOKEN GITHUB_TOKEN
+		export HOME="$case_dir/home" SB_TOOLS_YAML="$REGISTRY" SB_DPKG_ARCH=amd64
+		export SB_GITHUB_API_BASE=https://api.test SB_GH_METADATA_CACHE_DIR="$case_dir/cache"
+		export CASE_DIR="$case_dir" PAYLOAD_HASH
+		source "$REPO_ROOT/scripts/lib/tool-lib.sh"
+		gh() { printf 'gh %s\n' "$*" >> "$CASE_DIR/gh.log"; return 1; }
+		curl() {
+			local output="" url="" config="" arg
+			for arg in "$@"; do printf '%s\n' "$arg" >> "$CASE_DIR/argv.log"; done
+			printf -- '--\n' >> "$CASE_DIR/argv.log"
+			while [ "$#" -gt 0 ]; do
+				case "$1" in
+					-K) [ "$2" = - ] && config=$(cat); shift 2 ;;
+					-w) shift 2 ;;
+					-o) output=$2; shift 2 ;;
+					-*o) output=$2; shift 2 ;;
+					-*) shift ;;
+					*) url=$1; shift ;;
+				esac
+			done
+			printf '%s|%s\n' "$url" "${config:-none}" >> "$CASE_DIR/requests.log"
+			if [[ "$url" == http*://api.test/* || "$url" == https://api.github.com/* ]]; then
+				if [ -n "$config" ] && [ -n "${AUTH_STATUS_WITH_TOKEN:-}" ]; then
+					printf '{"message":"Bad credentials"}\n%s\n' "$AUTH_STATUS_WITH_TOKEN"
+				else
+					printf '{"tag_name":"v1.0.0","assets":[{"name":"sample-1.0.0-amd64","digest":"sha256:%s"}]}\n%s\n' \
+						"$PAYLOAD_HASH" "${API_STATUS:-200}"
+				fi
+			else
+				cp "$PAYLOAD" "$output"
+			fi
+		}
+		eval "$body"
+	) >"$case_dir/out" 2>"$case_dir/err"
+}
+auth_header_line="header = \"Authorization: Bearer $AUTH_TOKEN_VALUE\""
+token_leaked() {
+	local case_dir=$1
+	grep -rqF "$AUTH_TOKEN_VALUE" "$case_dir/argv.log" "$case_dir/cache" "$case_dir/out" "$case_dir/err" 2>/dev/null
+}
+
+if run_auth_case gh-token "export GH_TOKEN=$AUTH_TOKEN_VALUE GITHUB_TOKEN=other_token; sb_install sample latest" \
+	&& grep -qxF "https://api.test/repos/example/sample/releases/latest|$auth_header_line" "$TMP/auth-gh-token/requests.log" \
+	&& [ -x "$TMP/auth-gh-token/home/.local/bin/sample" ]; then
+	ok "GH_TOKEN sends a Bearer Authorization header to the GitHub API"
+else not_ok "GH_TOKEN sends a Bearer Authorization header to the GitHub API"; fi
+
+if ! token_leaked "$TMP/auth-gh-token" && [ -n "$(ls -A "$TMP/auth-gh-token/cache")" ]; then
+	ok "GitHub token is absent from curl argv, output, and the metadata cache"
+else not_ok "GitHub token is absent from curl argv, output, and the metadata cache"; fi
+
+if grep -q '/releases/download/v1.0.0/sample-1.0.0-amd64|none$' "$TMP/auth-gh-token/requests.log" \
+	&& [ "$(grep -c '|none$' "$TMP/auth-gh-token/requests.log")" -eq 1 ]; then
+	ok "GitHub token is never sent with artifact downloads"
+else not_ok "GitHub token is never sent with artifact downloads"; fi
+
+if run_auth_case github-token "export GITHUB_TOKEN=$AUTH_TOKEN_VALUE; sb_gh_latest_tag example/sample >/dev/null" \
+	&& grep -qxF "https://api.test/repos/example/sample/releases/latest|$auth_header_line" "$TMP/auth-github-token/requests.log" \
+	&& [ ! -e "$TMP/auth-github-token/gh.log" ]; then
+	ok "GITHUB_TOKEN authenticates when GH_TOKEN is unset"
+else not_ok "GITHUB_TOKEN authenticates when GH_TOKEN is unset"; fi
+
+if run_auth_case no-token "sb_gh_latest_tag example/sample >/dev/null" \
+	&& grep -qxF 'https://api.test/repos/example/sample/releases/latest|none' "$TMP/auth-no-token/requests.log" \
+	&& ! grep -qx -- '-K' "$TMP/auth-no-token/argv.log" \
+	&& [ ! -e "$TMP/auth-no-token/gh.log" ]; then
+	ok "without a token no Authorization header is sent and gh is not consulted for a custom API base"
+else not_ok "without a token no Authorization header is sent and gh is not consulted for a custom API base"; fi
+
+if run_auth_case plain-http "export GH_TOKEN=$AUTH_TOKEN_VALUE SB_GITHUB_API_BASE=http://api.test; sb_gh_latest_tag example/sample >/dev/null" \
+	&& grep -qxF 'http://api.test/repos/example/sample/releases/latest|none' "$TMP/auth-plain-http/requests.log"; then
+	ok "GitHub token is withheld from a non-HTTPS API base"
+else not_ok "GitHub token is withheld from a non-HTTPS API base"; fi
+
+if run_auth_case fallback-401 "export GH_TOKEN=$AUTH_TOKEN_VALUE AUTH_STATUS_WITH_TOKEN=401
+	sb_gh_latest_tag example/sample >/dev/null && sb_gh_latest_tag example/packed >/dev/null" \
+	&& [ "$(sed -n 1p "$TMP/auth-fallback-401/requests.log")" = "https://api.test/repos/example/sample/releases/latest|$auth_header_line" ] \
+	&& [ "$(sed -n 2p "$TMP/auth-fallback-401/requests.log")" = 'https://api.test/repos/example/sample/releases/latest|none' ] \
+	&& [ "$(sed -n 3p "$TMP/auth-fallback-401/requests.log")" = 'https://api.test/repos/example/packed/releases/latest|none' ] \
+	&& [ "$(wc -l < "$TMP/auth-fallback-401/requests.log")" -eq 3 ] \
+	&& grep -q 'rejected the configured token (HTTP 401).*retrying unauthenticated' "$TMP/auth-fallback-401/err" \
+	&& ! token_leaked "$TMP/auth-fallback-401"; then
+	ok "HTTP 401 with a token retries once unauthenticated, warns, and drops the token"
+else not_ok "HTTP 401 with a token retries once unauthenticated, warns, and drops the token"; fi
+
+if ! run_auth_case rate-limit "export API_STATUS=403; sb_gh_latest_tag example/sample >/dev/null" \
+	&& grep -q "HTTP 403.*set GH_TOKEN or run 'gh auth login'" "$TMP/auth-rate-limit/err"; then
+	ok "unauthenticated HTTP 403 fails closed and suggests GH_TOKEN or gh auth login"
+else not_ok "unauthenticated HTTP 403 fails closed and suggests GH_TOKEN or gh auth login"; fi
+
+if run_auth_case gh-cli "export SB_GITHUB_API_BASE=https://api.github.com
+	gh() { printf 'gh %s\n' \"\$*\" >> \"\$CASE_DIR/gh.log\"; [ \"\$1 \$2\" = 'auth token' ] && printf '%s\n' $AUTH_TOKEN_VALUE; }
+	sb_gh_latest_tag example/sample >/dev/null && sb_gh_latest_tag example/packed >/dev/null" \
+	&& [ "$(wc -l < "$TMP/auth-gh-cli/gh.log")" -eq 1 ] \
+	&& [ "$(grep -cF "|$auth_header_line" "$TMP/auth-gh-cli/requests.log")" -eq 2 ] \
+	&& ! token_leaked "$TMP/auth-gh-cli"; then
+	ok "authenticated gh CLI token is resolved lazily once for the default API base"
+else not_ok "authenticated gh CLI token is resolved lazily once for the default API base"; fi
+
+if run_auth_case malformed-token "export GH_TOKEN='bad\"token'; sb_gh_latest_tag example/sample >/dev/null" \
+	&& grep -qxF 'https://api.test/repos/example/sample/releases/latest|none' "$TMP/auth-malformed-token/requests.log" \
+	&& grep -q 'ignoring malformed GitHub token from GH_TOKEN' "$TMP/auth-malformed-token/err" \
+	&& ! grep -qF 'bad"token' "$TMP/auth-malformed-token/err"; then
+	ok "malformed token is ignored without being printed"
+else not_ok "malformed token is ignored without being printed"; fi
+
 BAD_REGISTRY="$TMP/bad-tools.yaml"
 cp "$REGISTRY" "$BAD_REGISTRY"
 sed -i '0,/method: binary/s//method: shell-pipe/' "$BAD_REGISTRY"
