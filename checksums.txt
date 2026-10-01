@@ -5,24 +5,24 @@
 # Delta 0.19.2
 ea4f0222950ee750a3d38dd80d03bce4cee07a3f63928fc47548383bcaf23093  git-delta_0.19.2_amd64.deb
 0edc36cf514f1bd84becac3e94ee8ae9f8818c6a1f99f7b2ee67b362afa253d3  git-delta_0.19.2_arm64.deb
-# Yq 4.53.3
-fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4  yq_linux_amd64
-578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea  yq_linux_arm64
+# Yq 4.54.1
+8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f  yq_linux_amd64
+189088da0c6429ec5178dfaab1a114805f6cab0b61b165ab236efedf1d57a71b  yq_linux_arm64
 # Xh 0.26.2
 8c53b6a23435754f9e2ea8ab8c0d0296a1921404b88132cf9b364ff6e8c22a6e  xh-v0.26.2-x86_64-unknown-linux-musl.tar.gz
 3a44900a8ac53f614aa0cd1d2e54ecf4e93584384c1ad091aa18d7992686d7eb  xh-v0.26.2-aarch64-unknown-linux-musl.tar.gz
-# Glow 2.1.2
-6063d4f2af8a82a5f4bba0831e165de9381660aa8b41df4816d0106a265b07d5  glow_2.1.2_Linux_x86_64.tar.gz
-cf63abebcb50b72909db965d78290e7cecbf17a900e84705dc84addbb6952099  glow_2.1.2_Linux_arm64.tar.gz
+# Glow 3.0.0
+13e05e4b2acc18d2aee44291aefe6325b077ec321b631a0cfa780e8e3bc33f78  glow_3.0.0_Linux_x86_64.tar.gz
+810c39f4691feb75e675a5f5f54b9fa091354e7599d9cf9c9fc9b97e47a99759  glow_3.0.0_Linux_arm64.tar.gz
 # Starship 1.26.0
 b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3  starship-x86_64-unknown-linux-musl.tar.gz
 dc30189378d2f2e287384e8a692d3f95ad1df64cf0e8c36aa9201516028aed6b  starship-aarch64-unknown-linux-musl.tar.gz
-# Just 1.57.0
-45b548094283cb9739af8f13273b8cddeee869f5b4ef2bb631b1f311cb566155  just-1.57.0-x86_64-unknown-linux-musl.tar.gz
-f225044a81adea6e0b3a8b9370aaf374e6af76c8735ae263ac993df55fd137ec  just-1.57.0-aarch64-unknown-linux-musl.tar.gz
-# Difftastic 0.69.0
+# Just 1.58.0
+4a5cc2f53e6f0f8c59092a6cc38291eb729d46a7dd95d3ae582008881b84931d  just-1.58.0-x86_64-unknown-linux-musl.tar.gz
+748237128c4c40cbdabc65e841d05ceba13cc23a91eaba395495894c1d9764df  just-1.58.0-aarch64-unknown-linux-musl.tar.gz
+# Difftastic 0.71.0
 61aea5394a53c56f144637cf39b3a0c0dafa27769731745e5851ff276e6478da  difft-0.71.0-x86_64-unknown-linux-gnu.tar.gz
 5f046098b36ff985d0f99fec6f22cf74961db60386ff9d40df39fd99660aae2c  difft-0.71.0-aarch64-unknown-linux-gnu.tar.gz
-# Mise 2026.7.18
-e1fc2899f2bc7dfe9a3553f4c2d5944cf69d11b5f561545504a20f1e11cd6cc5  mise-v2026.7.18-linux-x64
-7d96bad004ba706d7ce4e999113f61296ff317ad23754471743be883817e8a75  mise-v2026.7.18-linux-arm64
+# Mise 2026.9.18
+d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4  mise-v2026.9.18-linux-x64
+2142433ae70decffc5fa24bd160e47931e33f55eb031d128beb97cbae634d168  mise-v2026.9.18-linux-arm64
