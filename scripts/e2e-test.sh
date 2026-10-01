@@ -116,7 +116,7 @@ suite_tools() {
 	run_test "5.16 Candidate checksum manifest present" \
 		test -s /usr/local/lib/squarebox/checksums.txt
 
-	# Learn mode is intentionally excluded from the default v1.1 Box.
+	# sqrbx-learn and its command logger were removed in v1.3; guard against reintroduction.
 	run_test "learn.not-shipped Disabled learn commands and hooks are absent from the default image" bash -c \
 		'! command -v sqrbx-learn >/dev/null && ! command -v sqrbx-agent-tool-log >/dev/null'
 }
