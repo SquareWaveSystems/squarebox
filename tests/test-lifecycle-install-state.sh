@@ -410,6 +410,91 @@ EOF
 "$ROOT/install.sh" --adopt </dev/null
 grep -qxE '[0-9a-f]{40}' "$SQUAREBOX_DIR/.squarebox/managed-config/starship.toml.blob"
 grep -qxE '[0-9a-f]{40}' "$SQUAREBOX_DIR/.squarebox/managed-config/lazygit-config.yml.blob"
+
+# Host ~/.ssh holds private keys, and unattended AI agents run inside the Box,
+# so the directory mount is an explicit opt-in persisted for rebuilds. Agent
+# forwarding and its key-free config/known_hosts mounts are unaffected.
+export HOME="$TMP/ssh-home"; mkdir -p "$HOME/.ssh"
+printf 'Host example\n' >"$HOME/.ssh/config"
+printf 'example.test ssh-ed25519 AAAA\n' >"$HOME/.ssh/known_hosts"
+printf 'PRIVATE KEY\n' >"$HOME/.ssh/id_ed25519"
+export MOCK_RUNTIME="$TMP/runtime-ssh"; mkdir -p "$MOCK_RUNTIME"
+export SQUAREBOX_DIR="$TMP/ssh-install" SQUAREBOX_RUNTIME=docker SQUAREBOX_TAG=v1.1.0
+SSH_STATE="$SQUAREBOX_DIR/.squarebox/install-state"
+SSH_DIR_MOUNT="-v $HOME/.ssh:/home/dev/.ssh:ro"
+SSH_AGENT_SOCKET="$TMP/ssh-agent.sock"
+python3 -c 'import socket, sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' "$SSH_AGENT_SOCKET"
+test -S "$SSH_AGENT_SOCKET"
+ssh_create_call() { grep '^create ' "$MOCK_RUNTIME/calls" | tail -1; }
+assert_no_ssh_dir_mount() {
+  ! ssh_create_call | grep -Eq ':/home/dev/\.ssh(:ro)?( |$)'
+}
+
+env -u SSH_AUTH_SOCK -u SQUAREBOX_MOUNT_SSH "$ROOT/install.sh" </dev/null >"$TMP/ssh-default.out" 2>&1
+grep -qxF 'FORMAT=2' "$SSH_STATE"
+grep -qxF 'MOUNT_SSH=0' "$SSH_STATE"
+assert_no_ssh_dir_mount
+! ssh_create_call | grep -qF '/home/dev/.ssh/' || exit 1
+grep -q 'SSH agent unavailable and ~/.ssh is not mounted.*SQUAREBOX_MOUNT_SSH=1' "$TMP/ssh-default.out"
+
+: >"$MOCK_RUNTIME/calls"
+env -u SSH_AUTH_SOCK SQUAREBOX_MOUNT_SSH=1 "$SQUAREBOX_DIR/install.sh" </dev/null >"$TMP/ssh-opt-in.out" 2>&1
+ssh_create_call | grep -qF -- "$SSH_DIR_MOUNT"
+grep -qxF 'MOUNT_SSH=1' "$SSH_STATE"
+grep -q 'mounting ~/.ssh read-only (SQUAREBOX_MOUNT_SSH=1)' "$TMP/ssh-opt-in.out"
+
+# A rebuild with no SQUAREBOX_MOUNT_SSH reuses the recorded opt-in.
+: >"$MOCK_RUNTIME/calls"
+env -u SSH_AUTH_SOCK -u SQUAREBOX_MOUNT_SSH "$SQUAREBOX_DIR/install.sh" </dev/null >/dev/null 2>&1
+ssh_create_call | grep -qF -- "$SSH_DIR_MOUNT"
+grep -qxF 'MOUNT_SSH=1' "$SSH_STATE"
+
+# An available agent wins even when opted in; only key-free files are mounted.
+: >"$MOCK_RUNTIME/calls"
+SSH_AUTH_SOCK="$SSH_AGENT_SOCKET" env -u SQUAREBOX_MOUNT_SSH "$SQUAREBOX_DIR/install.sh" </dev/null >/dev/null 2>&1
+ssh_create_call | grep -qF -- "-v $SSH_AGENT_SOCKET:/tmp/ssh-agent.sock"
+ssh_create_call | grep -qF -- "-v $HOME/.ssh/config:/home/dev/.ssh/config:ro"
+ssh_create_call | grep -qF -- "-v $HOME/.ssh/known_hosts:/home/dev/.ssh/known_hosts:ro"
+assert_no_ssh_dir_mount
+grep -qxF 'MOUNT_SSH=1' "$SSH_STATE"
+
+# SQUAREBOX_MOUNT_SSH=0 turns the recorded opt-in back off; agent forwarding
+# and its config/known_hosts mounts remain the default path.
+: >"$MOCK_RUNTIME/calls"
+SSH_AUTH_SOCK="$SSH_AGENT_SOCKET" SQUAREBOX_MOUNT_SSH=0 "$SQUAREBOX_DIR/install.sh" </dev/null >/dev/null 2>&1
+ssh_create_call | grep -qF -- "-v $SSH_AGENT_SOCKET:/tmp/ssh-agent.sock"
+ssh_create_call | grep -qF -- "-v $HOME/.ssh/known_hosts:/home/dev/.ssh/known_hosts:ro"
+assert_no_ssh_dir_mount
+grep -qxF 'MOUNT_SSH=0' "$SSH_STATE"
+: >"$MOCK_RUNTIME/calls"
+env -u SSH_AUTH_SOCK -u SQUAREBOX_MOUNT_SSH "$SQUAREBOX_DIR/install.sh" </dev/null >/dev/null 2>&1
+assert_no_ssh_dir_mount
+grep -qxF 'MOUNT_SSH=0' "$SSH_STATE"
+
+cp "$SSH_STATE" "$TMP/ssh-state.before-invalid"
+: >"$MOCK_RUNTIME/calls"
+set +e
+env -u SSH_AUTH_SOCK SQUAREBOX_MOUNT_SSH=yes "$SQUAREBOX_DIR/install.sh" </dev/null >"$TMP/ssh-invalid.out" 2>&1
+ssh_invalid_rc=$?
+set -e
+test "$ssh_invalid_rc" -eq 64
+grep -q 'SQUAREBOX_MOUNT_SSH must be 0 or 1' "$TMP/ssh-invalid.out"
+cmp -s "$SSH_STATE" "$TMP/ssh-state.before-invalid"
+! grep -q '^create ' "$MOCK_RUNTIME/calls" || exit 1
+
+# A pre-MOUNT_SSH FORMAT=1 identity still loads as opted out, and the next
+# rebuild republishes it as FORMAT=2 without mounting ~/.ssh.
+sed -i '/^MOUNT_SSH=/d; s/^FORMAT=2$/FORMAT=1/' "$SSH_STATE"
+: >"$MOCK_RUNTIME/calls"
+env -u SSH_AUTH_SOCK -u SQUAREBOX_MOUNT_SSH "$SQUAREBOX_DIR/install.sh" </dev/null >/dev/null 2>&1
+assert_no_ssh_dir_mount
+grep -qxF 'FORMAT=2' "$SSH_STATE"
+grep -qxF 'MOUNT_SSH=0' "$SSH_STATE"
+sed -i '/^MOUNT_SSH=/d; s/^FORMAT=2$/FORMAT=1/' "$SSH_STATE"
+env -u SSH_AUTH_SOCK -u SQUAREBOX_MOUNT_SSH "$SQUAREBOX_DIR/uninstall.sh" --yes >/dev/null
+test ! -e "$MOCK_RUNTIME/container"
+unset SQUAREBOX_RUNTIME SQUAREBOX_TAG
+
 export HOME="$PRIMARY_HOME" MOCK_RUNTIME="$TMP/runtime"
 
 export SQUAREBOX_DIR="$INSTALL" SQUAREBOX_RUNTIME=docker SQUAREBOX_TAG=v1.1.0 SQUAREBOX_AI=codex
@@ -428,10 +513,10 @@ grep -qxF 'IMAGE_DIGEST=ghcr.io/squarewavesystems/squarebox@sha256:bbbbbbbbbbbbb
 grep -qxE 'INSTALL_ID=[A-Za-z0-9._-]{8,128}' "$STATE"
 grep -qxF "PUID=$EXPECTED_PUID" "$STATE"
 grep -qxF "PGID=$EXPECTED_PGID" "$STATE"
-EXPECTED_KEYS='BUILD CONTAINER_NAME EDGE FORMAT GIT_CONFIG_DIR HOME_VOLUME HOME_VOLUME_ADOPTED IMAGE_ALIAS IMAGE_DIGEST IMAGE_ID IMAGE_REF IMAGE_REPOSITORY INSTALL_DIR INSTALL_ID ORIGIN PGID PUID RELEASE_TAG REQUESTED_TAG RUNTIME SHELL_INIT SHELL_RC SOURCE_COMMIT SOURCE_REF WORKSPACE_DIR'
+EXPECTED_KEYS='BUILD CONTAINER_NAME EDGE FORMAT GIT_CONFIG_DIR HOME_VOLUME HOME_VOLUME_ADOPTED IMAGE_ALIAS IMAGE_DIGEST IMAGE_ID IMAGE_REF IMAGE_REPOSITORY INSTALL_DIR INSTALL_ID MOUNT_SSH ORIGIN PGID PUID RELEASE_TAG REQUESTED_TAG RUNTIME SHELL_INIT SHELL_RC SOURCE_COMMIT SOURCE_REF WORKSPACE_DIR'
 ACTUAL_KEYS=$(cut -d= -f1 "$STATE" | sort | tr '\n' ' ' | sed 's/ $//')
 [ "$ACTUAL_KEYS" = "$EXPECTED_KEYS" ]
-[ "$(wc -l <"$STATE" | tr -d ' ')" = 25 ]
+[ "$(wc -l <"$STATE" | tr -d ' ')" = 26 ]
 test -f "$INSTALL/.squarebox/identity/git/config"
 grep -q 'user.name=Lifecycle Test' "$INSTALL/.squarebox/identity/git/config"
 test ! -e "$HOME/.config/git"

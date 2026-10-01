@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when a FORMAT=1 lifecycle adapter drifts from its schema contract."""
+"""Fail when a lifecycle adapter drifts from its Install identity schema contract."""
 
 import json
 import re
@@ -9,6 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "scripts/lib/install-state-schema.json").read_text())
 EXPECTED = SCHEMA["fields"]
+FORMAT = SCHEMA["format"]
+LEGACY_ABSENT = SCHEMA["readable_formats"]["1"]["absent_fields"]
 
 
 def require(condition: bool, message: str) -> None:
@@ -68,4 +70,23 @@ for name in ("install.ps1", "uninstall.ps1"):
     require("$State.EDGE -eq '1' -and $State.BUILD -ne '1'" in text,
             f"{name} does not enforce EDGE requires BUILD")
 
-print("ok - Install identity adapters match the authoritative FORMAT=1 schema")
+require(LEGACY_ABSENT == {"MOUNT_SSH": "0"}, "FORMAT=1 compatibility defaults changed")
+require(f"printf 'FORMAT={FORMAT}\\n" in bash_writer, f"install.sh does not write FORMAT={FORMAT}")
+require(f"'FORMAT={FORMAT}'" in ps_writer, f"install.ps1 does not write FORMAT={FORMAT}")
+for name in ("install.sh", "uninstall.sh"):
+    text = texts[name]
+    require('case "$STATE_FORMAT" in 1|2) ;;' in text, f"{name} does not accept exactly FORMAT 1 and 2")
+    require('[ "$expected" = MOUNT_SSH ] && [ "$STATE_FORMAT" = 1 ] && continue' in text
+            and "MOUNT_SSH requires FORMAT=2" in text,
+            f"{name} does not apply FORMAT=1 MOUNT_SSH compatibility")
+    require("in 0|1) ;; *) invalid_state" in text and "invalid MOUNT_SSH flag" in text,
+            f"{name} does not enforce the MOUNT_SSH flag")
+for name in ("install.ps1", "uninstall.ps1"):
+    text = texts[name]
+    require("$State.FORMAT -cnotin @('1', '2')" in text, f"{name} does not accept exactly FORMAT 1 and 2")
+    require("$state.FORMAT -ceq '1'" in text and "requires FORMAT=2" in text
+            and "$state.Add('MOUNT_SSH', '0')" in text,
+            f"{name} does not apply FORMAT=1 MOUNT_SSH compatibility")
+    require("$State.MOUNT_SSH -cnotin @('0', '1')" in text, f"{name} does not enforce the MOUNT_SSH flag")
+
+print(f"ok - Install identity adapters match the authoritative FORMAT={FORMAT} schema")

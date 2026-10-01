@@ -57,6 +57,15 @@ $uninstall = [IO.File]::ReadAllText((Join-Path $Root 'uninstall.ps1'))
 Assert-True ($install.Contains('--userns=keep-id:uid=1000,gid=1000')) 'rootless Podman does not map host identity to dev'
 Assert-True ($install.Contains("'--security-opt', 'label=disable'")) 'Podman does not disable private SELinux relabeling'
 Assert-True ($install.Contains("'--pids-limit=4096'")) 'installer does not bound Box PID exhaustion'
+# Host .ssh (private keys) is an explicit, persisted opt-in on the native adapter.
+Assert-True ($install.Contains('[switch]$MountSsh')) 'installer has no -MountSsh opt-in switch'
+Assert-True ($install.Contains("`$env:SQUAREBOX_MOUNT_SSH -cnotin @('0', '1')")) 'installer does not validate SQUAREBOX_MOUNT_SSH'
+Assert-True ($install.Contains("elseif (`$State) { `$MountSsh = `$State.MOUNT_SSH -ceq '1' }")) 'rebuild does not reuse the recorded MOUNT_SSH choice'
+Assert-True ($install.Contains('if ((Test-Path $SshDir) -and $MountSsh) {')) '.ssh mount is not gated on the opt-in'
+Assert-True (-not ($install -match 'if \(Test-Path \$SshDir\) \{ \$RuntimeVolumes')) 'installer still mounts .ssh unconditionally'
+Assert-True (@([regex]::Matches($install, '/home/dev/\.ssh')).Count -eq 1) 'installer has an ungated .ssh mount path'
+Assert-True ($install.Contains('Rebuild with -MountSsh or SQUAREBOX_MOUNT_SSH=1')) 'installer does not explain how to opt in to the .ssh mount'
+Assert-True ($install.Contains('"MOUNT_SSH=$([int][bool]$MountSsh)"')) 'installer does not persist the MOUNT_SSH choice'
 Assert-True (-not ($install -match ':ro,Z|BindSuffix.*:Z')) 'PowerShell adapter still emits private :Z binds'
 Assert-True ($install.Contains('$HomeVolume -cne $State.HOME_VOLUME')) 'Managed-home identity comparison is not case-sensitive'
 Assert-True ($install.Contains('$owner.Trim() -cne ''__INSTALL_ID__''')) 'generated adapter case-folds Install identity'
@@ -179,7 +188,7 @@ try {
         }
         foreach ($case in $cases) {
             $values = [ordered]@{
-                FORMAT = '1'; INSTALL_ID = 'test-install-123'; RUNTIME = 'docker'
+                FORMAT = '2'; INSTALL_ID = 'test-install-123'; RUNTIME = 'docker'
                 INSTALL_DIR = $fixtureInstall; WORKSPACE_DIR = (Join-Path $fixtureRoot 'workspace')
                 GIT_CONFIG_DIR = (Join-Path $fixtureInstall '.squarebox/identity/git')
                 HOME_VOLUME = 'squarebox-home'; CONTAINER_NAME = 'squarebox'; IMAGE_ALIAS = 'squarebox'
@@ -190,7 +199,7 @@ try {
                 SOURCE_REF = 'v1.2.3'; SOURCE_COMMIT = 'a' * 40; RELEASE_TAG = 'v1.2.3'
                 REQUESTED_TAG = 'latest'; PUID = '1000'; PGID = '1000'; BUILD = '0'; EDGE = '0'
                 SHELL_INIT = $PROFILE.CurrentUserAllHosts; SHELL_RC = $PROFILE.CurrentUserAllHosts
-                ORIGIN = $Repo; HOME_VOLUME_ADOPTED = '0'
+                ORIGIN = $Repo; HOME_VOLUME_ADOPTED = '0'; MOUNT_SSH = '0'
             }
             foreach ($property in $case.set.PSObject.Properties) {
                 $fixtureValue = [string]$property.Value
@@ -259,7 +268,8 @@ $migrationValues = [ordered]@{
     RELEASE_TAG='v1.2.3'; REQUESTED_TAG='latest'; PUID='1000'; PGID='1000'; BUILD='0'; EDGE='0'
     SHELL_INIT=$gitBashInit; SHELL_RC=$gitBashRc; ORIGIN='https://github.com/SquareWaveSystems/squarebox.git'; HOME_VOLUME_ADOPTED='0'
 }
-[IO.File]::WriteAllLines($migrationState, @($StateFields | ForEach-Object { "$_=$($migrationValues[$_])" }), [Text.UTF8Encoding]::new($false))
+# Start from a pre-MOUNT_SSH FORMAT=1 record; migration publishes FORMAT=2.
+[IO.File]::WriteAllLines($migrationState, @($StateFields | Where-Object { $_ -cne 'MOUNT_SSH' } | ForEach-Object { "$_=$($migrationValues[$_])" }), [Text.UTF8Encoding]::new($false))
 $oldPath = $env:PATH
 try {
     $env:PATH = "$mockBin$([IO.Path]::PathSeparator)$oldPath"
@@ -269,6 +279,7 @@ try {
     $powerState = @{}; Get-Content $migrationState | ForEach-Object { $key, $value = $_ -split '=', 2; $powerState[$key] = $value }
     Assert-True ($powerState.SHELL_INIT -ceq $profileAll) 'PowerShell migration published the wrong profile identity'
     Assert-True ($powerState.INSTALL_DIR -ceq [IO.Path]::GetFullPath($migrationInstall)) 'PowerShell migration did not normalize INSTALL_DIR'
+    Assert-True ($powerState.FORMAT -ceq '2' -and $powerState.MOUNT_SSH -ceq '0') 'FORMAT=1 migration did not publish the default-off FORMAT=2 record'
     Assert-True ((Get-Content $profileAll) -ccontains '# squarebox-install-id=test-install-123') 'PowerShell profile ownership was not installed'
     Assert-True (-not (Test-Path $gitBashInit)) 'source Git Bash adapter survived migration'
 

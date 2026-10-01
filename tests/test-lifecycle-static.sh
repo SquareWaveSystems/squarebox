@@ -94,7 +94,7 @@ grep -q 'DeleteWorkspace' uninstall.ps1
 grep -q 'Workspace inside install directory' uninstall.sh
 grep -q 'Workspace inside install directory' uninstall.ps1
 
-# FORMAT=1 is deliberately adapter-native. Both readers accept CRLF, but a
+# Install identity state is deliberately adapter-native. Both readers accept CRLF, but a
 # Git-Bash C:/... path is not promised to be interchangeable with a native
 # PowerShell C:\\... path; each lifecycle adapter must consume its own state.
 grep -q 'ReadAllLines' install.ps1

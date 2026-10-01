@@ -64,8 +64,8 @@ STATE_FORMAT=""; INSTALL_ID=""; RUNTIME=""; STATE_INSTALL_DIR=""; WORKSPACE_DIR=
 GIT_CONFIG_DIR=""; HOME_VOLUME=""; CONTAINER_NAME=""; IMAGE_ALIAS=""; IMAGE_REF=""
 IMAGE_REPOSITORY=""; IMAGE_ID=""; IMAGE_DIGEST=""; SOURCE_REF=""; SOURCE_COMMIT=""
 RELEASE_TAG=""; REQUESTED_TAG=""; PUID=""; PGID=""; BUILD=""; EDGE=""
-SHELL_INIT=""; SHELL_RC=""; ORIGIN=""; HOME_VOLUME_ADOPTED=0
-STATE_KEYS="FORMAT INSTALL_ID RUNTIME INSTALL_DIR WORKSPACE_DIR GIT_CONFIG_DIR HOME_VOLUME CONTAINER_NAME IMAGE_ALIAS IMAGE_REPOSITORY IMAGE_REF IMAGE_ID IMAGE_DIGEST SOURCE_REF SOURCE_COMMIT RELEASE_TAG REQUESTED_TAG PUID PGID BUILD EDGE SHELL_INIT SHELL_RC ORIGIN HOME_VOLUME_ADOPTED"
+SHELL_INIT=""; SHELL_RC=""; ORIGIN=""; HOME_VOLUME_ADOPTED=0; MOUNT_SSH=0
+STATE_KEYS="FORMAT INSTALL_ID RUNTIME INSTALL_DIR WORKSPACE_DIR GIT_CONFIG_DIR HOME_VOLUME CONTAINER_NAME IMAGE_ALIAS IMAGE_REPOSITORY IMAGE_REF IMAGE_ID IMAGE_DIGEST SOURCE_REF SOURCE_COMMIT RELEASE_TAG REQUESTED_TAG PUID PGID BUILD EDGE SHELL_INIT SHELL_RC ORIGIN HOME_VOLUME_ADOPTED MOUNT_SSH"
 STATE_SCHEMA_VALID=1
 invalid_state() {
 	echo "Error: invalid Install identity: $STATE_FILE${1:+ ($1)}" >&2
@@ -102,7 +102,7 @@ valid_state_id() {
 }
 validate_state_schema() {
 	STATE_SCHEMA_VALID=1
-	[ "$STATE_FORMAT" = 1 ] || invalid_state 'FORMAT must be 1'
+	case "$STATE_FORMAT" in 1|2) ;; *) invalid_state 'FORMAT must be 1 or 2' ;; esac
 	[[ "$INSTALL_ID" =~ ^[A-Za-z0-9._-]{8,128}$ ]] || invalid_state 'invalid INSTALL_ID'
 	case "$RUNTIME" in docker|podman) ;; *) invalid_state 'invalid RUNTIME' ;; esac
 	same_state_path "$STATE_INSTALL_DIR" "$INSTALL_DIR" || invalid_state 'INSTALL_DIR path mismatch'
@@ -132,6 +132,7 @@ validate_state_schema() {
 		0:0:0|0:0:1|1:0:0|1:0:1|1:1:0|1:1:1) ;;
 		*) invalid_state 'invalid BUILD, EDGE, or HOME_VOLUME_ADOPTED flag' ;;
 	esac
+	case "$MOUNT_SSH" in 0|1) ;; *) invalid_state 'invalid MOUNT_SSH flag' ;; esac
 	[ "$ORIGIN" = "$REPO" ] || invalid_state 'noncanonical ORIGIN'
 	if [ "$EDGE" = 1 ]; then
 		[ -z "$RELEASE_TAG" ] && [ -z "$REQUESTED_TAG" ] && [ "$SOURCE_REF" = refs/remotes/origin/main ] \
@@ -164,7 +165,7 @@ load_state() {
 		case "$line" in *$'\r'*) echo "Error: malformed Install identity: $STATE_FILE" >&2; return 1 ;; esac
 		key="${line%%=*}"; value="${line#*=}"; [ "$key" != "$line" ] || return 1
 		case "$key" in
-			FORMAT|INSTALL_ID|RUNTIME|INSTALL_DIR|WORKSPACE_DIR|GIT_CONFIG_DIR|HOME_VOLUME|CONTAINER_NAME|IMAGE_ALIAS|IMAGE_REPOSITORY|IMAGE_REF|IMAGE_ID|IMAGE_DIGEST|SOURCE_REF|SOURCE_COMMIT|RELEASE_TAG|REQUESTED_TAG|PUID|PGID|BUILD|EDGE|SHELL_INIT|SHELL_RC|ORIGIN|HOME_VOLUME_ADOPTED) ;;
+			FORMAT|INSTALL_ID|RUNTIME|INSTALL_DIR|WORKSPACE_DIR|GIT_CONFIG_DIR|HOME_VOLUME|CONTAINER_NAME|IMAGE_ALIAS|IMAGE_REPOSITORY|IMAGE_REF|IMAGE_ID|IMAGE_DIGEST|SOURCE_REF|SOURCE_COMMIT|RELEASE_TAG|REQUESTED_TAG|PUID|PGID|BUILD|EDGE|SHELL_INIT|SHELL_RC|ORIGIN|HOME_VOLUME_ADOPTED|MOUNT_SSH) ;;
 			*) echo "Error: malformed Install identity: $STATE_FILE (unknown field '$key')" >&2; return 1 ;;
 		esac
 		case "|$seen|" in *"|$key|"*) echo "Error: malformed Install identity: $STATE_FILE (duplicate field '$key')" >&2; return 1 ;; esac
@@ -181,11 +182,18 @@ load_state() {
 			PUID) PUID="$value" ;; PGID) PGID="$value" ;; BUILD) BUILD="$value" ;; EDGE) EDGE="$value" ;;
 			SHELL_INIT) SHELL_INIT="$value" ;; SHELL_RC) SHELL_RC="$value" ;;
 			ORIGIN) ORIGIN="$value" ;; HOME_VOLUME_ADOPTED) HOME_VOLUME_ADOPTED="$value" ;;
+			MOUNT_SSH) MOUNT_SSH="$value" ;;
 		esac
 	done <"$STATE_FILE"
 	for expected in $STATE_KEYS; do
+		# FORMAT=1 predates MOUNT_SSH; its absence there is the default opt-out.
+		[ "$expected" = MOUNT_SSH ] && [ "$STATE_FORMAT" = 1 ] && continue
 		case "|$seen|" in *"|$expected|"*) ;; *) echo "Error: malformed Install identity: $STATE_FILE (missing field '$expected')" >&2; return 1 ;; esac
 	done
+	if [ "$STATE_FORMAT" = 1 ]; then
+		case "|$seen|" in *"|MOUNT_SSH|"*) echo "Error: malformed Install identity: $STATE_FILE (MOUNT_SSH requires FORMAT=2)" >&2; return 1 ;; esac
+		MOUNT_SSH=0
+	fi
 	validate_state_schema
 }
 

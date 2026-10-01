@@ -22,7 +22,7 @@ $StateFields = @(
     'HOME_VOLUME', 'CONTAINER_NAME', 'IMAGE_ALIAS', 'IMAGE_REPOSITORY', 'IMAGE_REF',
     'IMAGE_ID', 'IMAGE_DIGEST', 'SOURCE_REF', 'SOURCE_COMMIT', 'RELEASE_TAG',
     'REQUESTED_TAG', 'PUID', 'PGID', 'BUILD', 'EDGE', 'SHELL_INIT', 'SHELL_RC',
-    'ORIGIN', 'HOME_VOLUME_ADOPTED'
+    'ORIGIN', 'HOME_VOLUME_ADOPTED', 'MOUNT_SSH'
 )
 function Test-ReleaseTag([string]$Value) {
     return $Value.Length -le 128 -and $Value -cmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?$'
@@ -47,7 +47,7 @@ function Test-StateId([string]$Value) {
     return $Value -cmatch '^[0-9]{1,10}$' -and [long]::TryParse($Value, [ref]$parsed) -and $parsed -ge 1 -and $parsed -le 2147483647
 }
 function Assert-InstallState([hashtable]$State, [string]$Path, [string]$ExpectedInstallDir) {
-    if ($State.FORMAT -ne '1' -or $State.INSTALL_ID -cnotmatch '^[A-Za-z0-9._-]{8,128}$') { Abort "Invalid Install identity: $Path" }
+    if ($State.FORMAT -cnotin @('1', '2') -or $State.INSTALL_ID -cnotmatch '^[A-Za-z0-9._-]{8,128}$') { Abort "Invalid Install identity: $Path" }
     if ($State.RUNTIME -cnotin @('docker', 'podman')) { Abort "Invalid Install identity: $Path (invalid RUNTIME)" }
     foreach ($name in @('INSTALL_DIR', 'WORKSPACE_DIR', 'GIT_CONFIG_DIR', 'SHELL_INIT', 'SHELL_RC')) {
         if (-not (Test-StatePath $State[$name])) { Abort "Invalid Install identity: $Path (invalid $name path)" }
@@ -83,6 +83,7 @@ function Assert-InstallState([hashtable]$State, [string]$Path, [string]$Expected
         ($State.EDGE -eq '1' -and $State.BUILD -ne '1')) {
         Abort "Invalid Install identity: $Path (BUILD, EDGE, and HOME_VOLUME_ADOPTED must be 0 or 1)"
     }
+    if ($State.MOUNT_SSH -cnotin @('0', '1')) { Abort "Invalid Install identity: $Path (MOUNT_SSH must be 0 or 1)" }
     if ($State.ORIGIN -cne $Repo) { Abort "Invalid Install identity: $Path (noncanonical ORIGIN)" }
     if ($State.EDGE -eq '1') {
         if ($State.RELEASE_TAG -or $State.REQUESTED_TAG -or $State.SOURCE_REF -cne 'refs/remotes/origin/main') {
@@ -120,6 +121,11 @@ function Read-InstallState([string]$Path, [string]$ExpectedInstallDir) {
         $value = $line.Substring($at + 1)
         if ($value -match "[`r`n]") { Abort "Malformed Install identity: $Path" }
         $state.Add($key, $value)
+    }
+    if ($state.FORMAT -ceq '1') {
+        # FORMAT=1 predates MOUNT_SSH; its absence there is the default opt-out.
+        if ($state.ContainsKey('MOUNT_SSH')) { Abort "Install identity field 'MOUNT_SSH' requires FORMAT=2: $Path" }
+        $state.Add('MOUNT_SSH', '0')
     }
     foreach ($key in $StateFields) {
         if (-not $state.ContainsKey($key)) { Abort "Missing Install identity field '$key': $Path" }

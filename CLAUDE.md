@@ -67,9 +67,11 @@ Publishable versions are `vMAJOR.MINOR.PATCH[-prerelease]`; build metadata is
 excluded so the GitHub Release and OCI aliases share one unambiguous identity.
 
 Both adapters persist effective settings. Rebuild functions locate adjacent
-state and reuse paths/runtime/volume/UID/GID/build/channel choices. Uninstallers
-parse that state, verify resource labels, and refuse unrelated fixed-name
-resources. On Windows, `FORMAT=1` has an aligned closed field set but native
+state and reuse paths/runtime/volume/UID/GID/build/channel/SSH-mount choices.
+Uninstallers parse that state, verify resource labels, and refuse unrelated
+fixed-name resources. Writers emit `FORMAT=2`; readers also accept `FORMAT=1`,
+which lacks `MOUNT_SSH` (read as `0`). See ADR 0010 before adding a field.
+On Windows, the format has an aligned closed field set but native
 PowerShell and Git Bash path/profile values are adapter-native; only the creating
 adapter may consume that state. Pre-v1.1 installs need explicit adoption; an
 adopted unlabeled volume also needs force before purge.
@@ -154,8 +156,11 @@ artifact, signing, and reporting details.
 
 PowerShell 7 is the supported native Windows adapter. Use
 CurrentUserAllHosts-compatible integration and validate the final Box start.
-It mounts the native user's `.ssh` directory read-only when present and does not
-forward `SSH_AUTH_SOCK`. Git Bash uses the separate Bash adapter and owns its
+It does not forward `SSH_AUTH_SOCK` and mounts the native user's `.ssh`
+directory read-only only on explicit opt-in (`-MountSsh` or
+`SQUAREBOX_MOUNT_SSH=1`, persisted as `MOUNT_SSH`). Both adapters default to no
+`.ssh` directory mount; the Bash adapter's agent forwarding mounts only
+`config`/`known_hosts`. Git Bash uses the separate Bash adapter and owns its
 MSYS shell integration and agent-socket translation. Keep the shared state field
 names and semantic intent aligned, but fail closed rather than cross-consuming
 adapter-native lifecycle state.
