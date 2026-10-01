@@ -200,6 +200,54 @@ fi
 grep -q -- '--force is required' "$TMP/force.out"
 test -d "$TMP/custom"
 
+# Purge must not silently delete a non-empty Workspace nested in the install
+# directory. Unattended purge refuses before any destructive operation unless
+# --delete-workspace is explicit; an empty nested Workspace needs no flag.
+STATE="$TMP/custom/.squarebox/install-state"
+reset_host_adapters() {
+  printf '# >>> squarebox >>>\nmanaged\n# <<< squarebox <<<\n' >"$TMP/home/.bashrc"
+  printf '# squarebox-install-id=test-install-123\nmanaged\n' >"$TMP/home/.squarebox-shell-init"
+  rm -f "$MOCK_STATE/"* "$MOCK_LOG"
+}
+cp -a "$TMP/custom" "$TMP/custom.pristine"
+sed -i "s#^WORKSPACE_DIR=.*#WORKSPACE_DIR=$TMP/custom/workspace#" "$STATE"
+mkdir -p "$TMP/custom/workspace"
+printf code >"$TMP/custom/workspace/project.txt"
+printf hidden >"$TMP/custom/workspace/.env"
+reset_host_adapters
+status=0
+"$ROOT/uninstall.sh" --purge --yes --force >"$TMP/workspace-guard.out" 2>&1 || status=$?
+[ "$status" = 1 ] || { echo "unattended purge did not refuse a non-empty nested Workspace (status $status)" >&2; exit 1; }
+grep -qF "Workspace inside install directory (2 item(s)): $TMP/custom/workspace" "$TMP/workspace-guard.out"
+grep -q -- 'Pass --delete-workspace' "$TMP/workspace-guard.out"
+test -f "$TMP/custom/workspace/project.txt"
+test -f "$TMP/custom/.squarebox/install-state"
+test -f "$TMP/home/.squarebox-shell-init"
+grep -qF '# >>> squarebox >>>' "$TMP/home/.bashrc"
+! grep -q '^rm \|^rmi \|^volume rm ' "$MOCK_LOG" 2>/dev/null
+
+status=0
+"$ROOT/uninstall.sh" --yes --delete-workspace >"$TMP/workspace-flag.out" 2>&1 || status=$?
+[ "$status" = 64 ] || { echo '--delete-workspace was accepted without --purge' >&2; exit 1; }
+grep -q -- '--delete-workspace requires --purge' "$TMP/workspace-flag.out"
+test -f "$TMP/home/.squarebox-shell-init"
+
+reset_host_adapters
+"$ROOT/uninstall.sh" --purge --yes --force --delete-workspace >"$TMP/workspace-delete.out"
+test ! -e "$TMP/custom"
+grep -q '^volume rm custom-home$' "$MOCK_LOG"
+
+cp -a "$TMP/custom.pristine" "$TMP/custom"
+sed -i "s#^WORKSPACE_DIR=.*#WORKSPACE_DIR=$TMP/custom/workspace#" "$STATE"
+mkdir -p "$TMP/custom/workspace"
+reset_host_adapters
+"$ROOT/uninstall.sh" --purge --yes --force >"$TMP/workspace-empty.out"
+test ! -e "$TMP/custom"
+! grep -q 'Workspace inside install directory' "$TMP/workspace-empty.out"
+
+mv "$TMP/custom.pristine" "$TMP/custom"
+reset_host_adapters
+
 export FAIL_SHARED_RELEASE_REMOVE=1
 "$ROOT/uninstall.sh" --purge --yes --force >"$TMP/purge.out"
 test ! -e "$TMP/custom"

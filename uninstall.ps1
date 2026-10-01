@@ -4,6 +4,7 @@
 [CmdletBinding()]
 param(
     [switch]$Purge,
+    [switch]$DeleteWorkspace,
     [Alias('y')][switch]$Yes,
     [switch]$Adopt,
     [switch]$Force,
@@ -15,6 +16,7 @@ $ErrorActionPreference = 'Stop'
 $Repo = 'https://github.com/SquareWaveSystems/squarebox.git'
 $UserHome = if ($IsWindows -and $env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
 function Abort([string]$Message) { Write-Host "Error: $Message" -ForegroundColor Red; exit 1 }
+if ($DeleteWorkspace -and -not $Purge) { Abort '-DeleteWorkspace requires -Purge.' }
 $StateFields = @(
     'FORMAT', 'INSTALL_ID', 'RUNTIME', 'INSTALL_DIR', 'WORKSPACE_DIR', 'GIT_CONFIG_DIR',
     'HOME_VOLUME', 'CONTAINER_NAME', 'IMAGE_ALIAS', 'IMAGE_REPOSITORY', 'IMAGE_REF',
@@ -275,6 +277,16 @@ foreach ($path in $ProfilePaths) {
     }
 }
 $HasProfile = $ProfileBlocks.Count -gt 0
+# A Workspace nested in the install directory is deleted by purge. Count it
+# once so the summary, the -Yes guard, and the interactive prompt agree.
+$PathComparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+$WorkspaceInside = ($WorkspaceDir + [IO.Path]::DirectorySeparatorChar).StartsWith(
+    $InstallDir + [IO.Path]::DirectorySeparatorChar, $PathComparison)
+$WorkspaceCount = 0
+if ($Purge -and (Test-Path -LiteralPath $WorkspaceDir -PathType Container)) {
+    try { $WorkspaceCount = @(Get-ChildItem -Force -LiteralPath $WorkspaceDir -ErrorAction Stop).Count }
+    catch { Abort "Unable to inspect recorded Workspace '$WorkspaceDir'; nothing was removed." }
+}
 Write-Host 'squarebox uninstall'
 Write-Host '==================='
 Write-Host "Install identity: $(if ($InstallId) { $InstallId } else { 'legacy adoption' })"
@@ -287,8 +299,15 @@ if ($ContainerOwned) { Write-Host "  - Managed Box: $ContainerName"; $Anything =
 if ($ImageOwned) { Write-Host "  - Recorded image alias: $ImageAlias"; $Anything = $true }
 if ($HasProfile) { Write-Host "  - PowerShell adapter(s): $($ProfilePaths -join ', ')"; $Anything = $true }
 if ($Purge -and (Test-Path $InstallDir)) { Write-Host "  - Recorded install directory: $InstallDir"; $Anything = $true }
+if ($WorkspaceInside -and $WorkspaceCount -gt 0) { Write-Host "  - Workspace inside install directory ($WorkspaceCount item(s)): $WorkspaceDir" }
 if ($Purge -and $VolumeOwned) { Write-Host "  - Managed home: $HomeVolume"; $Anything = $true }
 if (-not $Anything) { Write-Host '  (nothing)'; exit 0 }
+
+# Unattended purge must never silently delete user project files. Refuse before
+# any destructive operation unless deletion was requested explicitly.
+if ($WorkspaceInside -and $WorkspaceCount -gt 0 -and $Yes -and -not $DeleteWorkspace) {
+    Abort "-Purge would delete the Workspace at $WorkspaceDir ($WorkspaceCount item(s)). Pass -DeleteWorkspace to delete it, or move it outside $InstallDir first. Nothing was removed."
+}
 
 if ($Purge -and $VolumeOwned -and ($HomeVolumeAdopted -or -not $State) -and -not $Force) {
     Abort "'$HomeVolume' is an adopted unlabeled volume; -Force is required to purge it."
@@ -301,16 +320,12 @@ if (-not $Yes) {
     if ([Console]::IsInputRedirected) { Abort 'stdin is not a terminal; pass -Yes.' }
     if ((Read-Host 'Proceed? [y/N]') -notmatch '^[yY]([eE][sS])?$') { Write-Host 'Aborted.'; exit 1 }
 }
-if ($Purge -and -not $Yes -and (Test-Path -LiteralPath $WorkspaceDir -PathType Container)) {
-    $workspaceCount = @(Get-ChildItem -Force -LiteralPath $WorkspaceDir -ErrorAction Stop).Count
-    if ($workspaceCount -gt 0) {
-        Write-Warning "Recorded Workspace contains $workspaceCount item(s): $WorkspaceDir"
-        $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
-        if ($WorkspaceDir.StartsWith($InstallDir + [IO.Path]::DirectorySeparatorChar, $comparison)) {
-            Write-Host 'It will be removed with the install directory.'
-        } else { Write-Host 'It is outside the install directory and will be preserved.' }
-        if ((Read-Host 'Continue? [y/N]') -notmatch '^[yY]([eE][sS])?$') { Write-Host 'Aborted.'; exit 1 }
-    }
+if ($WorkspaceCount -gt 0 -and -not $Yes) {
+    Write-Warning "Recorded Workspace contains $WorkspaceCount item(s): $WorkspaceDir"
+    if ($WorkspaceInside) {
+        Write-Host 'It will be removed with the install directory.'
+    } else { Write-Host 'It is outside the install directory and will be preserved.' }
+    if ((Read-Host 'Continue? [y/N]') -notmatch '^[yY]([eE][sS])?$') { Write-Host 'Aborted.'; exit 1 }
 }
 
 if ($Purge) { Assert-PurgeCheckout }
@@ -362,7 +377,7 @@ Write-Host 'Uninstall complete.'
 if (-not $Purge) {
     Write-Host "Preserved install identity and Workspace at $InstallDir."
     if ($VolumeOwned) { Write-Host "Preserved Managed home $HomeVolume." }
-} elseif ((Test-Path $WorkspaceDir) -and -not $WorkspaceDir.StartsWith($InstallDir + [IO.Path]::DirectorySeparatorChar)) {
+} elseif ((Test-Path $WorkspaceDir) -and -not $WorkspaceInside) {
     Write-Host "Preserved external Workspace $WorkspaceDir."
 }
 Write-Host 'Start a new PowerShell session to drop loaded functions.'

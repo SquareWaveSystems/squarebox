@@ -73,6 +73,7 @@ foreach ($boundary in @('checkout', 'image-alias', 'managed-home-create', 'manag
 Assert-True ($install.Contains('Malformed squarebox marker block') -and $uninstall.Contains('Malformed squarebox marker block')) 'profile marker validation is absent'
 Assert-True ($install.Contains('[regex]::Replace($profileBlock')) 'profile interpolation can rescan inserted path placeholders'
 Assert-True ($uninstall.Contains('Assert-PurgeCheckout')) 'purge does not revalidate checkout identity'
+Assert-True ($uninstall.Contains('[switch]$DeleteWorkspace') -and $uninstall.Contains('$Yes -and -not $DeleteWorkspace')) 'unattended purge can delete a nested Workspace without -DeleteWorkspace'
 Assert-True ($install.Contains('Get-BoundedJson') -and $install.Contains('MaximumRetryCount 3')) 'release metadata HTTP is unbounded or lacks retries'
 Assert-True ($install.Contains('{{range .RepoDigests}}{{println .}}{{end}}') -and -not $install.Contains('index .RepoDigests 0')) 'PowerShell trusts the first repository digest instead of enumerating identities'
 Assert-True ($install -match '\$repoDigestOutput = @\(\)\s+if \(-not \$Build\)') 'local builds still derive identity from unordered RepoDigests'
@@ -233,6 +234,7 @@ $mockBin = Join-Path $migrationRoot 'bin'
 $mockRuntime = Join-Path $mockBin 'mock-runtime.ps1'
 [IO.File]::WriteAllText($mockRuntime, @'
 $command = $args -join ' '
+if ($env:SQUAREBOX_TEST_RUNTIME_LOG) { Add-Content -LiteralPath $env:SQUAREBOX_TEST_RUNTIME_LOG -Value $command }
 if ($command.Contains('{{.Id}}')) { Write-Output ('sha256:' + ('c' * 64)) }
 elseif ($command.Contains('io.squarebox.install-id')) { Write-Output 'test-install-123' }
 exit 0
@@ -302,7 +304,9 @@ try {
     [IO.File]::WriteAllText($uninstallHarness, @'
 $PROFILE.CurrentUserAllHosts = $env:SQUAREBOX_TEST_PROFILE_ALL
 $PROFILE.CurrentUserCurrentHost = $env:SQUAREBOX_TEST_PROFILE_HOST
-& $env:SQUAREBOX_TEST_UNINSTALL -InstallDir $env:SQUAREBOX_TEST_INSTALL_DIR -Yes
+$purge = $env:SQUAREBOX_TEST_PURGE -ceq '1'
+$deleteWorkspace = $env:SQUAREBOX_TEST_DELETE_WORKSPACE -ceq '1'
+& $env:SQUAREBOX_TEST_UNINSTALL -InstallDir $env:SQUAREBOX_TEST_INSTALL_DIR -Yes -Purge:$purge -DeleteWorkspace:$deleteWorkspace
 exit $LASTEXITCODE
 '@, [Text.UTF8Encoding]::new($false))
     $oldUserProfile = $env:USERPROFILE
@@ -315,9 +319,39 @@ exit $LASTEXITCODE
         & pwsh -NoProfile -File $uninstallHarness
         Assert-True ($LASTEXITCODE -eq 0) 'PowerShell uninstaller rejected migrated Install state'
         Assert-True (-not ((Get-Content $profileAll) -ccontains '# squarebox-install-id=test-install-123')) 'target uninstaller did not remove migrated adapter'
+
+        # Unattended purge must refuse a non-empty nested Workspace before any
+        # destructive operation unless -DeleteWorkspace is explicit.
+        $finalState = @{}; Get-Content $migrationState | ForEach-Object { $key, $value = $_ -split '=', 2; $finalState[$key] = $value }
+        $nestedWorkspace = $finalState.WORKSPACE_DIR
+        [IO.Directory]::CreateDirectory($nestedWorkspace) | Out-Null
+        $projectFile = Join-Path $nestedWorkspace 'project.txt'
+        [IO.File]::WriteAllText($projectFile, 'code', [Text.UTF8Encoding]::new($false))
+        $runtimeLog = Join-Path $migrationRoot 'runtime.log'
+        $env:SQUAREBOX_TEST_RUNTIME_LOG = $runtimeLog
+        $env:SQUAREBOX_TEST_PURGE = '1'
+        $guardOutput = (& pwsh -NoProfile -File $uninstallHarness *>&1) -join "`n"
+        Assert-True ($LASTEXITCODE -ne 0) 'unattended purge deleted a non-empty nested Workspace without -DeleteWorkspace'
+        Assert-True ($guardOutput.Contains('Workspace inside install directory (1 item(s))')) 'purge summary does not list the nested Workspace'
+        Assert-True ($guardOutput.Contains('Pass -DeleteWorkspace')) 'Workspace refusal does not name -DeleteWorkspace'
+        Assert-True (Test-Path -LiteralPath $projectFile -PathType Leaf) 'Workspace refusal removed project files'
+        Assert-True (Test-Path -LiteralPath $migrationState -PathType Leaf) 'Workspace refusal removed Install identity'
+        $guardCalls = if (Test-Path -LiteralPath $runtimeLog) { @(Get-Content -LiteralPath $runtimeLog) } else { @() }
+        Assert-True (-not ($guardCalls | Where-Object { $_ -match '^(rm|rmi|volume rm) ' })) 'Workspace refusal ran a destructive runtime command'
+
+        & git -C $migrationInstall init -q
+        Assert-True ($LASTEXITCODE -eq 0) 'unable to initialize purge checkout fixture'
+        & git -C $migrationInstall remote add origin 'https://github.com/SquareWaveSystems/squarebox.git'
+        Assert-True ($LASTEXITCODE -eq 0) 'unable to set purge checkout fixture origin'
+        $env:SQUAREBOX_TEST_DELETE_WORKSPACE = '1'
+        & pwsh -NoProfile -File $uninstallHarness
+        Assert-True ($LASTEXITCODE -eq 0) 'purge with -DeleteWorkspace failed'
+        Assert-True (-not (Test-Path -LiteralPath $migrationInstall)) 'purge with -DeleteWorkspace kept the install directory'
+        Assert-True (@(Get-Content -LiteralPath $runtimeLog) -ccontains 'volume rm custom-home') 'purge with -DeleteWorkspace kept the Managed home'
     } finally {
         $env:USERPROFILE = $oldUserProfile
         Remove-Item Env:SQUAREBOX_TEST_PROFILE_ALL, Env:SQUAREBOX_TEST_PROFILE_HOST, Env:SQUAREBOX_TEST_UNINSTALL, Env:SQUAREBOX_TEST_INSTALL_DIR -ErrorAction SilentlyContinue
+        Remove-Item Env:SQUAREBOX_TEST_RUNTIME_LOG, Env:SQUAREBOX_TEST_PURGE, Env:SQUAREBOX_TEST_DELETE_WORKSPACE -ErrorAction SilentlyContinue
     }
     $global:LASTEXITCODE = 0
 } finally {
