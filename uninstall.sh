@@ -5,10 +5,13 @@ IDENTITY_LABEL=io.squarebox.install-id
 REPO=https://github.com/SquareWaveSystems/squarebox.git
 usage() {
 	cat <<'EOF'
-Usage: uninstall.sh [--purge] [-y|--yes] [--runtime docker|podman]
-                    [--adopt] [--force]
+Usage: uninstall.sh [--purge [--delete-workspace]] [-y|--yes]
+                    [--runtime docker|podman] [--adopt] [--force]
 
   --purge    Also remove the recorded install directory and Managed home.
+  --delete-workspace
+             With --purge --yes, permit deleting a non-empty Workspace that
+             lies inside the install directory. Without it, --yes refuses.
   --adopt    Explicitly adopt an origin-verified legacy install with no state.
   --force    Permit purge of an explicitly adopted, unlabeled legacy volume.
 
@@ -17,17 +20,21 @@ ownership. A familiar fixed name is never sufficient authority.
 EOF
 }
 
-PURGE=0; YES=0; ADOPT=0; FORCE=0; RUNTIME_OVERRIDE=""
+PURGE=0; YES=0; ADOPT=0; FORCE=0; DELETE_WORKSPACE=0; RUNTIME_OVERRIDE=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--purge) PURGE=1; shift ;; -y|--yes) YES=1; shift ;;
 		--adopt) ADOPT=1; shift ;; --force) FORCE=1; shift ;;
+		--delete-workspace) DELETE_WORKSPACE=1; shift ;;
 		--runtime=*) RUNTIME_OVERRIDE="${1#*=}"; shift ;;
 		--runtime) [ $# -ge 2 ] || { echo "Error: --runtime requires a value." >&2; exit 64; }; RUNTIME_OVERRIDE="$2"; shift 2 ;;
 		-h|--help) usage; exit 0 ;;
 		*) echo "Error: unknown option '$1'" >&2; usage >&2; exit 64 ;;
 	esac
 done
+if [ "$DELETE_WORKSPACE" = 1 ] && [ "$PURGE" != 1 ]; then
+	echo "Error: --delete-workspace requires --purge." >&2; exit 64
+fi
 
 WINDOWS_BASH=0
 [ -n "${MSYSTEM:-}" ] && WINDOWS_BASH=1
@@ -354,6 +361,16 @@ if block_present "$HOME/.bash_profile" '# >>> squarebox bashrc bridge >>>' '# <<
 	has_bridge=1
 fi
 
+# A Workspace nested in the install directory is deleted by purge. Count it
+# once so the summary, the --yes guard, and the interactive prompt agree.
+workspace_inside=0; workspace_count=0
+if [ "$PURGE" = 1 ] && [ -d "$WORKSPACE_DIR" ]; then
+	case "$WORKSPACE_DIR/" in "$INSTALL_DIR"/*) workspace_inside=1 ;; esac
+	workspace_count="$(find "$WORKSPACE_DIR" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" || {
+		echo "Error: unable to inspect recorded Workspace '$WORKSPACE_DIR'; nothing was removed." >&2; exit 1;
+	}
+fi
+
 echo "squarebox uninstall"
 echo "==================="
 echo "Install identity: ${INSTALL_ID:-legacy adoption}"
@@ -369,9 +386,20 @@ for _rc in "${rc_files[@]}"; do echo "  - Shell sentinel: $_rc"; anything=1; don
 [ "$has_bridge" = 1 ] && { echo "  - Git Bash bridge: $HOME/.bash_profile"; anything=1; }
 if [ "$PURGE" = 1 ]; then
 	[ -d "$INSTALL_DIR" ] && { echo "  - Recorded install directory: $INSTALL_DIR"; anything=1; }
+	if [ "$workspace_inside" = 1 ] && [ "$workspace_count" -gt 0 ]; then
+		echo "  - Workspace inside install directory ($workspace_count item(s)): $WORKSPACE_DIR"
+	fi
 	[ "$volume_owned" = 1 ] && { echo "  - Managed home: $HOME_VOLUME"; anything=1; }
 fi
 if [ "$anything" = 0 ]; then echo "  (nothing)"; exit 0; fi
+
+# Unattended purge must never silently delete user project files. Refuse before
+# any destructive operation unless deletion was requested explicitly.
+if [ "$workspace_inside" = 1 ] && [ "$workspace_count" -gt 0 ] && [ "$YES" = 1 ] && [ "$DELETE_WORKSPACE" != 1 ]; then
+	echo "Error: --purge would delete the Workspace at $WORKSPACE_DIR ($workspace_count item(s))." >&2
+	echo "Pass --delete-workspace to delete it, or move it outside $INSTALL_DIR first. Nothing was removed." >&2
+	exit 1
+fi
 
 if [ "$PURGE" = 1 ] && [ "$volume_owned" = 1 ] && { [ "$HOME_VOLUME_ADOPTED" = 1 ] || [ "$HAD_STATE" = 0 ]; } && [ "$FORCE" != 1 ]; then
 	echo "Error: '$HOME_VOLUME' is an explicitly adopted unlabeled volume; --force is required to purge it." >&2; exit 1
@@ -386,14 +414,13 @@ if [ "$YES" != 1 ]; then
 	printf 'Proceed? [y/N]: '; read -r answer
 	case "$answer" in y|Y|yes|YES|Yes) ;; *) echo "Aborted."; exit 1 ;; esac
 fi
-if [ "$PURGE" = 1 ] && [ -d "$WORKSPACE_DIR" ] && [ "$YES" != 1 ]; then
-	_count="$(find "$WORKSPACE_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
-	if [ "$_count" -gt 0 ]; then
-		echo "Warning: recorded Workspace contains $_count item(s): $WORKSPACE_DIR"
-		case "$WORKSPACE_DIR/" in "$INSTALL_DIR"/*) echo "It will be removed with the install directory." ;; *) echo "It is outside the install directory and will be preserved." ;; esac
-		printf 'Continue? [y/N]: '; read -r answer
-		case "$answer" in y|Y|yes|YES|Yes) ;; *) echo "Aborted."; exit 1 ;; esac
+if [ "$workspace_count" -gt 0 ] && [ "$YES" != 1 ]; then
+	echo "Warning: recorded Workspace contains $workspace_count item(s): $WORKSPACE_DIR"
+	if [ "$workspace_inside" = 1 ]; then echo "It will be removed with the install directory."
+	else echo "It is outside the install directory and will be preserved."
 	fi
+	printf 'Continue? [y/N]: '; read -r answer
+	case "$answer" in y|Y|yes|YES|Yes) ;; *) echo "Aborted."; exit 1 ;; esac
 fi
 
 # The summary and Workspace warning may leave an arbitrarily long interactive
