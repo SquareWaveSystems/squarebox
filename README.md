@@ -474,6 +474,13 @@ outputs.
     sqrbx-update lazygit      # update, or explicitly install, one tool
     sqrbx-update --list       # list all tools and current versions
 
+Setup and `sqrbx-update` read GitHub release metadata through the GitHub API,
+which allows only 60 unauthenticated requests per hour per IP address. On a
+shared NAT or CI runner, authenticate those requests to avoid HTTP 403 rate
+limits: export `GH_TOKEN` (or `GITHUB_TOKEN`), or run `gh auth login` inside
+the Box. The token is optional, is sent only to the GitHub API, and a rejected
+token falls back to unauthenticated requests.
+
 ### Full rebuild (from the host)
 
     sqrbx-rebuild
