@@ -495,6 +495,13 @@ outputs.
     sqrbx-update lazygit      # update, or explicitly install, one tool
     sqrbx-update --list       # list all tools and current versions
 
+Setup and `sqrbx-update` read GitHub release metadata through the GitHub API,
+which allows only 60 unauthenticated requests per hour per IP address. On a
+shared NAT or CI runner, authenticate those requests to avoid HTTP 403 rate
+limits: export `GH_TOKEN` (or `GITHUB_TOKEN`), or run `gh auth login` inside
+the Box. The token is optional, is sent only to the GitHub API, and a rejected
+token falls back to unauthenticated requests.
+
 ### Full rebuild (from the host)
 
     sqrbx-rebuild
@@ -632,8 +639,16 @@ it; a custom external Workspace is always preserved:
 
     sqrbx-uninstall --purge
 
-A second confirmation is required if the recorded Workspace is non-empty.
-Pass `-y` (or `-Yes` on PowerShell) to skip all prompts for scripting.
+The confirmation summary lists a non-empty nested Workspace, with its item count,
+as something that will be deleted, and a second confirmation is required.
+Pass `-y` (or `-Yes` on PowerShell) to skip prompts for scripting. Unattended
+purge refuses, before removing anything, to delete a non-empty nested
+Workspace unless you also pass `--delete-workspace` (`-DeleteWorkspace` on
+PowerShell):
+
+    sqrbx-uninstall --purge --yes --delete-workspace
+
+An empty Workspace or an external Workspace needs no extra flag.
 Idempotent for a valid Install identity. Legacy resources require `--adopt`;
 purging an adopted, unlabeled volume additionally requires `--force`.
 
@@ -642,6 +657,7 @@ purging an adopted, unlabeled volume additionally requires `--force`.
     sqrbx-uninstall                # keep ~/squarebox
     sqrbx-uninstall -Purge         # also remove ~/squarebox
     sqrbx-uninstall -Yes           # skip confirmations
+    sqrbx-uninstall -Purge -Yes -DeleteWorkspace  # also delete a non-empty nested Workspace
 
 **Broken-state recovery** (e.g. shell functions are missing, or after partial
 install): run the script matching the adapter that created the Install identity

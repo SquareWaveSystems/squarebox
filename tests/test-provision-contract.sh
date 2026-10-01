@@ -34,9 +34,9 @@ assert grep -q 'rm -f /etc/apt/sources.list.d/github-cli.list' "$ROOT/Dockerfile
 assert grep -q 'COPY checksums.txt /usr/local/lib/squarebox/checksums.txt' "$ROOT/Dockerfile"
 
 if grep -Eq 'sqrbx-learn|sqrbx-agent-tool-log|should_run learn' "$ROOT/Dockerfile" "$ROOT/setup.sh" "$ROOT/dotfiles/bashrc"; then
-	not_ok "disabled learn command and hook are absent from the default image/setup path"
+	not_ok "removed learn command and hook are absent from the default image/setup path"
 else
-	ok "disabled learn command and hook are absent from the default image/setup path"
+	ok "removed learn command and hook are absent from the default image/setup path"
 fi
 
 assert grep -q '\$HOME/.squarebox-gh-skip' "$ROOT/scripts/squarebox-setup.sh"

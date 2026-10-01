@@ -89,6 +89,10 @@ grep -q '\$LegacyStarshipBlob' install.ps1
 grep -Fq '.install-state.$([guid]::NewGuid' install.ps1
 grep -q 'Recorded Workspace contains' uninstall.ps1
 grep -q "Read-Host 'Continue? \[y/N\]'" uninstall.ps1
+grep -q -- '--delete-workspace' uninstall.sh
+grep -q 'DeleteWorkspace' uninstall.ps1
+grep -q 'Workspace inside install directory' uninstall.sh
+grep -q 'Workspace inside install directory' uninstall.ps1
 
 # Install identity state is deliberately adapter-native. Both readers accept CRLF, but a
 # Git-Bash C:/... path is not promised to be interchangeable with a native
