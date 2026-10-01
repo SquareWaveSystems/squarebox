@@ -96,7 +96,7 @@ tools:
   difftastic:
     repo: Wilfred/difftastic
     version_prefix: ""
-    artifact: difft-{zarch}-unknown-linux-gnu.tar.gz
+    artifact: difft-{version}-{zarch}-unknown-linux-gnu.tar.gz
     method: tar.gz
     binaries: difft
     tar_extract: difft
