@@ -16,6 +16,11 @@
   verified. A managed `~/.config/powershell/profile.ps1` mirrors the bashrc
   (starship, zoxide, mise, aliases) and a `~/.squarebox-use-pwsh` marker hands
   interactive logins off to pwsh, matching the existing Zsh/Fish flow.
+- Optional GitHub API authentication for setup and `sqrbx-update` via
+  `GH_TOKEN`, `GITHUB_TOKEN`, or an existing `gh` login, avoiding the
+  unauthenticated 60 requests/hour limit. The token is sent only to the API
+  host, never on curl's command line, and a rejected token falls back to
+  unauthenticated requests.
 
 ### Changed
 
@@ -25,6 +30,23 @@
 - Lifecycle adapters and Compose bound the Box to 4096 PIDs
   (`--pids-limit=4096` / `pids_limit`), so a runaway Box process cannot
   exhaust the host process table.
+- **Security:** the host `~/.ssh` directory (private keys) is no longer mounted
+  into the Box by default; SSH agent forwarding is unchanged. Opt in with
+  `SQUAREBOX_MOUNT_SSH=1` (or `-MountSsh` on PowerShell). The choice is
+  recorded in a new `FORMAT=2` Install identity; `FORMAT=1` state loads as
+  opted out. Releases before v1.3 cannot read `FORMAT=2` state (ADR 0010).
+- **Security:** the image build verifies the GitHub CLI and Eza APT signing
+  keys against pinned primary-key fingerprints and fetches the Eza key from an
+  immutable commit; a mismatch fails the build.
+- The Dev Container applies the installers' `--cap-drop=ALL` capability set and
+  `--pids-limit=4096`, adding only `SYS_CHROOT` for the SSH server Feature.
+- `--purge --yes` (`-Purge -Yes`) refuses to delete a non-empty Workspace inside
+  the install directory unless `--delete-workspace` (`-DeleteWorkspace`) is
+  passed, and the confirmation summary lists that Workspace.
+
+### Removed
+
+- The unshipped `sqrbx-learn` and `sqrbx-agent-tool-log` scripts.
 
 See the [v1.3 migration guide](docs/releases/v1.3.0.md).
 
