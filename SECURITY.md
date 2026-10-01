@@ -150,7 +150,7 @@ aliases.
 | Tool tier | Source | Integrity policy | Version policy |
 | --- | --- | --- | --- |
 | Image tier binary artifacts | Official GitHub Releases | Squarebox-pinned SHA-256, checked against the exact GitHub release-asset digest during pin refresh; installation fails closed if missing/mismatched | Pinned in the Candidate |
-| Image tier APT packages | Ubuntu and configured signed repositories | APT repository signatures | Distribution/repository version |
+| Image tier APT packages | Ubuntu archive; build-only GitHub CLI and Eza repositories | APT repository signatures; external signing keys pinned by full primary-key fingerprint and verified before they are trusted | Distribution/repository version |
 | Box tier packages | APT inside the Box | APT repository signatures | Reconciled when selected |
 | Managed-home GitHub tools | Official GitHub Releases | Exact release tag and asset name; GitHub release-asset SHA-256 digest; fail closed if missing, duplicate, malformed, or mismatched | Selected latest or explicit release |
 | Managed-home Git sources | Official GitHub repositories (LazyVim, Oh My Zsh, and Zsh plugins) | Default branch resolved through GitHub metadata to a full commit SHA; exact fetch/checkout and HEAD verification before activation | Resolved only during an explicit setup/reconcile action; local changes are preserved by refusal |
@@ -168,6 +168,35 @@ current-user-only directory. A prepared digest is bound to its Tool identity.
 Unsupported architectures and invalid Tool-tier/destination combinations fail
 before network or destination mutation. Extracted archives reject escaping
 links, special files, and ambiguous executable matches before promotion.
+
+GitHub API metadata requests are optionally authenticated to raise the
+unauthenticated rate limit. The token comes from `GH_TOKEN`, then
+`GITHUB_TOKEN`, then an already-authenticated `gh` CLI (`gh auth token`, only
+for the default `https://api.github.com` base; never prompted). It is sent as
+an `Authorization: Bearer` header only to the configured HTTPS API base, never
+to artifact downloads or redirect targets, and reaches curl through a stdin
+config rather than its command line. It is not logged or written to the
+metadata cache. An HTTP 401 drops the token for the rest of that run and
+retries once unauthenticated. Authentication changes only rate limits; it does
+not relax digest verification.
+
+The GitHub CLI and Eza APT repositories are configured only while the image
+builds (then removed). Their signing keys are not trusted on download alone:
+the Dockerfile pins each key's expected full 40-hex primary-key fingerprint set
+in `GH_CLI_KEY_FINGERPRINTS` and `EZA_KEY_FINGERPRINTS`, and the build fails
+unless the downloaded keyring contains exactly that set of primary keys
+(subkeys are not compared). The check runs before any keyring is installed
+under `/etc/apt/keyrings` or any source list refers to it. The Eza key is
+fetched from an immutable eza commit (`EZA_KEY_URL`), not a branch.
+`tests/test-apt-key-policy.sh` asserts this policy statically.
+
+To rotate a key, obtain the new key and confirm its fingerprint out-of-band
+before editing the ARG: compare `gpg --show-keys --with-colons` output with the
+publisher's documentation (GitHub CLI lists its fingerprints in
+`docs/install_linux.md`) and with the issuer fingerprint on the live
+repository's `Release.gpg`/`InRelease` signature. Never copy the value from a
+failed build's "actual" output alone; a mismatch is exactly the signal this
+control exists to raise.
 
 Image-tier runtime updates receive one additional gate: the exact current-arch
 artifact in the Candidate checksum manifest must equal GitHub's digest for the
