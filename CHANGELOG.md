@@ -43,6 +43,8 @@
 - `--purge --yes` (`-Purge -Yes`) refuses to delete a non-empty Workspace inside
   the install directory unless `--delete-workspace` (`-DeleteWorkspace`) is
   passed, and the confirmation summary lists that Workspace.
+- difftastic is pinned to 0.71.0, whose release assets now carry the version
+  in their names; the registry artifact pattern follows that change.
 
 ### Removed
 

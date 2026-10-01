@@ -21,8 +21,8 @@ dc30189378d2f2e287384e8a692d3f95ad1df64cf0e8c36aa9201516028aed6b  starship-aarch
 45b548094283cb9739af8f13273b8cddeee869f5b4ef2bb631b1f311cb566155  just-1.57.0-x86_64-unknown-linux-musl.tar.gz
 f225044a81adea6e0b3a8b9370aaf374e6af76c8735ae263ac993df55fd137ec  just-1.57.0-aarch64-unknown-linux-musl.tar.gz
 # Difftastic 0.69.0
-038db96a0e8fce69f2554e33e04ff75fbf6f96ea45cb4edb9ed6203a2c4750ff  difft-x86_64-unknown-linux-gnu.tar.gz
-abd2f42d2afd424312b4862aa7c7bb0320447670ae22fabcc5159db03e2dccbd  difft-aarch64-unknown-linux-gnu.tar.gz
+61aea5394a53c56f144637cf39b3a0c0dafa27769731745e5851ff276e6478da  difft-0.71.0-x86_64-unknown-linux-gnu.tar.gz
+5f046098b36ff985d0f99fec6f22cf74961db60386ff9d40df39fd99660aae2c  difft-0.71.0-aarch64-unknown-linux-gnu.tar.gz
 # Mise 2026.7.18
 e1fc2899f2bc7dfe9a3553f4c2d5944cf69d11b5f561545504a20f1e11cd6cc5  mise-v2026.7.18-linux-x64
 7d96bad004ba706d7ce4e999113f61296ff317ad23754471743be883817e8a75  mise-v2026.7.18-linux-arm64
