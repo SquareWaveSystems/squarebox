@@ -98,17 +98,51 @@ RUN chmod +x /usr/local/bin/verify-checksum
 SHELL ["/bin/bash", "-c"]
 
 # 2a. External APT repos (GitHub CLI, Eza) — needs gnupg, stays combined
-RUN mkdir -p -m 755 /etc/apt/keyrings \
+#
+# Signing keys are pinned by full primary-key fingerprint. Each downloaded
+# keyring must contain exactly the expected set of primary keys (subkeys are
+# ignored) before it is trusted as an APT signer; any difference fails the
+# build. To rotate, verify the new fingerprint out-of-band (see SECURITY.md)
+# and update the ARG. Values are space-separated, upper-case, 40-hex.
+#   GitHub CLI: https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+#   Eza (deb.gierens.de): key file pinned to an immutable eza commit
+ARG GH_CLI_KEY_FINGERPRINTS="2C6106201985B60E6C7AC87323F3D4EA75716059 7F38BBB59D064DBCB3D84D725612B36462313325"
+ARG EZA_KEY_FINGERPRINTS="1548BC8A4B4D2688F9B0DAF7EC29E2090CE3FD43"
+ARG EZA_KEY_URL=https://raw.githubusercontent.com/eza-community/eza/1cff499fb218f2a133aafa01824ddab090f4389e/deb.asc
+RUN set -euo pipefail \
+	&& mkdir -p -m 755 /etc/apt/keyrings \
 	&& ARCH=$(dpkg --print-architecture) \
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends gnupg \
+	&& KEYDIR=$(mktemp -d) \
+	&& verify_apt_key() { \
+		local name=$1 file=$2 expected=$3 actual want; \
+		want=$(printf '%s\n' $expected | tr '[:lower:]' '[:upper:]' | sort -u | paste -sd' ' -); \
+		[ -n "$want" ] || { echo "Error: no expected fingerprint configured for ${name} APT key" >&2; return 1; }; \
+		actual=$(GNUPGHOME="$KEYDIR/gnupg" gpg --batch --quiet --show-keys --with-colons "$file" 2>/dev/null \
+			| awk -F: '$1 == "pub" { want_fpr = 1; next } want_fpr && $1 == "fpr" { print $10; want_fpr = 0 }' \
+			| sort -u | paste -sd' ' -); \
+		if [ "$actual" != "$want" ]; then \
+			echo "Error: ${name} APT signing key fingerprint mismatch" >&2; \
+			echo "  expected: ${want}" >&2; \
+			echo "  actual:   ${actual:-<none>}" >&2; \
+			return 1; \
+		fi; \
+		echo "Verified ${name} APT signing key: ${actual}"; \
+	} \
+	&& mkdir -m 700 "$KEYDIR/gnupg" \
 	# GitHub CLI
-	&& curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-	&& chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+	&& curl -fsSL -o "$KEYDIR/githubcli.gpg" https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+	&& verify_apt_key "GitHub CLI" "$KEYDIR/githubcli.gpg" "$GH_CLI_KEY_FINGERPRINTS" \
+	&& install -m 644 "$KEYDIR/githubcli.gpg" /etc/apt/keyrings/githubcli-archive-keyring.gpg \
 	&& echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
 	# Eza
-	&& curl -fsSL https://raw.githubusercontent.com/eza-community/eza/main/deb.asc | gpg --dearmor -o /etc/apt/keyrings/gierens.gpg \
+	&& curl -fsSL -o "$KEYDIR/eza.asc" "$EZA_KEY_URL" \
+	&& verify_apt_key "Eza" "$KEYDIR/eza.asc" "$EZA_KEY_FINGERPRINTS" \
+	&& GNUPGHOME="$KEYDIR/gnupg" gpg --batch --dearmor -o /etc/apt/keyrings/gierens.gpg < "$KEYDIR/eza.asc" \
+	&& chmod 644 /etc/apt/keyrings/gierens.gpg \
 	&& echo "deb [signed-by=/etc/apt/keyrings/gierens.gpg] https://deb.gierens.de stable main" | tee /etc/apt/sources.list.d/gierens.list \
+	&& rm -rf "$KEYDIR" \
 	# Install from repos
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends gh eza \
