@@ -206,6 +206,16 @@ tools:
     group: setup
     verification: github-release-digest
 
+  ttt:
+    repo: eugenioenko/ttt
+    version_prefix: v
+    artifact: ttt-linux-{goarch}
+    method: binary
+    binaries: ttt
+    dest: user
+    group: setup
+    verification: github-release-digest
+
   helix:
     repo: helix-editor/helix
     version_prefix: ""

@@ -212,10 +212,10 @@ assert_true "grep -qx 'herdr latest' '$HERDR_CASE/sb-install.calls'" \
 # Audit every adjacent setup-tier sb_install caller, not just the two callers
 # that originally had a successful config write after the failed install.
 EDITORS_CASE="$TMP/editors"
-run_selected_section editors $'micro\nedit\nfresh\nhelix\nnvim' "$EDITORS_CASE"
+run_selected_section editors $'micro\nedit\nfresh\nhelix\nnvim\nttt' "$EDITORS_CASE"
 assert_true "[ \"\$(cat '$EDITORS_CASE/setup.rc')\" -ne 0 ] && [ -z \"\$(cat '$EDITORS_CASE/state/editors')\" ]" \
 	"all editor sb_install failures propagate without committing Selections"
-for editor in micro edit fresh helix nvim; do
+for editor in micro edit fresh helix nvim ttt; do
 	assert_true "grep -qx '$editor latest' '$EDITORS_CASE/sb-install.calls'" \
 		"$editor failure audit exercises its sb_install caller"
 done

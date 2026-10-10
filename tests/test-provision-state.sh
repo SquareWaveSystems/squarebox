@@ -191,6 +191,16 @@ assert_true "grep -qx 'set -g mouse on' '$HOME_DIR/.config/tmux/tmux.conf'" "rec
 assert_true "[ \"\$(cat '$STATE/multiplexer')\" = tmux ]" "successful reconciliation preserves the saved Selection"
 assert_true "[ \"\$(cat '$STATE/editor-default')\" = fresh ] && grep -qx \"export EDITOR='fresh'\" '$HOME_DIR/.squarebox-editor-aliases'" "reconcile preserves a non-first default editor Selection"
 
+# TTT is a valid saved default and remains selected during reconciliation.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/ttt"
+chmod +x "$BIN/ttt"
+printf 'micro,ttt\n' > "$STATE/editors"
+printf 'ttt\n' > "$STATE/editor-default"
+HOME="$HOME_DIR" SQUAREBOX_STATE_DIR="$STATE" \
+	SQUAREBOX_TOOL_LIB="$FIXTURE_LIB" SQUAREBOX_TOOLS_YAML=/dev/null \
+	PATH="$BIN:$PATH" bash "$ROOT/setup.sh" --reconcile-box >"$TMP/ttt-reconcile.out" 2>"$TMP/ttt-reconcile.err"
+assert_true "grep -qx 'micro,ttt' '$STATE/editors' && grep -qx ttt '$STATE/editor-default' && grep -qx \"export EDITOR='ttt'\" '$HOME_DIR/.squarebox-editor-aliases'" "reconcile preserves TTT Selection and default editor"
+
 for ai_binary in copilot gemini codex pi omp; do
 	printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/$ai_binary"
 done
