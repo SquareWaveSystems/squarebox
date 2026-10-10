@@ -10,11 +10,11 @@ fail() {
 }
 
 if grep -E '(@githubnext/github-copilot-cli|github-copilot-cli)' \
-	setup.sh README.md CLAUDE.md Dockerfile >/dev/null; then
+	setup.sh README.md docs/usage.md CLAUDE.md Dockerfile >/dev/null; then
 	fail "production surfaces still reference deprecated Copilot CLI"
 fi
 
-if grep -Eqi 'paseo' setup.sh README.md CLAUDE.md uat-checklist.md \
+if grep -Eqi 'paseo' setup.sh README.md docs/usage.md CLAUDE.md uat-checklist.md \
 	demo/setup-demo.sh scripts/squarebox-setup.sh scripts/e2e-test.sh; then
 	fail "current product surfaces still reference removed Paseo support"
 fi
@@ -98,14 +98,14 @@ grep -Fq 'uninstall.ps1' .github/workflows/e2e.yml \
 	|| fail "PowerShell uninstaller is missing from release assets"
 grep -Fq 'release.json' .github/workflows/e2e.yml \
 	|| fail "release identity is missing from publication"
-grep -Fq 'env SQUAREBOX_AI=' README.md \
+grep -Fq 'env SQUAREBOX_AI=' docs/usage.md \
 	|| fail "noninteractive installer example does not pass variables to Bash"
-if grep -Eq '~370 MB|docker build.+reproducible' README.md SECURITY.md; then
+if grep -Eq '~370 MB|docker build.+reproducible' README.md docs/usage.md SECURITY.md; then
 	fail "stale image-size/reproducibility claim remains"
 fi
 
-grep -Fq 'cross-adapter state consumption is rejected' README.md \
-	|| fail "README promises no Windows lifecycle-adapter boundary"
+grep -Fq 'cross-adapter state consumption is rejected' docs/usage.md \
+	|| fail "usage reference promises no Windows lifecycle-adapter boundary"
 grep -Fq 'adapter may consume that state' CLAUDE.md \
 	|| fail "agent guidance does not enforce adapter-native lifecycle state"
 grep -Fq 'are not cross-consumed' docs/releases/v1.1.0.md \
@@ -113,7 +113,7 @@ grep -Fq 'are not cross-consumed' docs/releases/v1.1.0.md \
 grep -Fq 'does not claim `SSH_AUTH_SOCK` forwarding' uat-checklist.md \
 	|| fail "PowerShell UAT still overclaims SSH-agent forwarding"
 if grep -Fq 'Bash and PowerShell lifecycle state must remain compatible' \
-	README.md CLAUDE.md docs/releases/v1.1.0.md uat-checklist.md; then
+	README.md docs/usage.md CLAUDE.md docs/releases/v1.1.0.md uat-checklist.md; then
 	fail "docs still promise unsupported cross-adapter lifecycle state"
 fi
 

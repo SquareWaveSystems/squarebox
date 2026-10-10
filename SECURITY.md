@@ -28,8 +28,8 @@ The Bash and PowerShell lifecycle adapters:
 6. Mount the Workspace read-write, the private Git identity, optional SSH access,
    and explicitly documented managed configuration. Bash/POSIX and Git Bash
    adapters forward `SSH_AUTH_SOCK` when available and otherwise mount SSH files
-   read-only; native PowerShell currently provides only the read-only SSH-file
-   path.
+   read-only only on explicit opt-in; native PowerShell provides only the
+   opt-in read-only SSH-file path.
 7. Add a sentinel-delimited shell integration block that reads the recorded
    Install identity for launch, rebuild, and uninstall operations.
 
@@ -69,6 +69,23 @@ Before running a downloaded installer, inspect it:
 
 Piping directly to Bash trusts GitHub and TLS to deliver the intended bootstrap
 asset. Download-and-inspect is the safer default.
+
+## SSH access
+
+The Box does not receive your SSH private-key files by default, because anything
+running inside it, including unattended `*-yolo` AI agents, could read them.
+
+- **SSH agent (recommended).** When `SSH_AUTH_SOCK` points at a running agent,
+  the Bash/POSIX and Git Bash adapters forward the agent socket and mount only
+  `~/.ssh/config` and `~/.ssh/known_hosts` read-only. Key files stay on the
+  host, though Box processes can ask the agent to sign while the socket is
+  available.
+- **No agent.** `~/.ssh` is not mounted, and install prints a note. To mount
+  the directory read-only instead, opt in with `SQUAREBOX_MOUNT_SSH=1` (native
+  PowerShell: `.\install.ps1 -MountSsh` or `$env:SQUAREBOX_MOUNT_SSH = '1'`).
+  The choice is recorded in the Install identity and reused by
+  `sqrbx-rebuild`; set `SQUAREBOX_MOUNT_SSH=0` (or `-MountSsh:$false`) on a
+  rebuild to turn it back off.
 
 ## Release identity and verification
 
@@ -217,6 +234,10 @@ has verified both the reported version and every required companion output.
 Post-install mismatch restores the prior complete output set. A broken version
 probe or missing Yazi helper, Helix runtime, or Neovim tree/link is reported as
 repairable incomplete state rather than “up to date.”
+
+Setup installs absent selections; `sqrbx-update --apply` explicitly updates
+already installed registered tools to newer authorized releases. Oh My Pi uses
+its official mise GitHub backend and follows mise’s backend integrity policy.
 
 External installers and package managers are outside this artifact registry.
 That includes npm assistants, Anthropic's Claude installer, mise SDK backends,
