@@ -841,7 +841,7 @@ fi
 if [ -f "$EDITOR_DEFAULT_CONFIG" ]; then
 	editor_default_prev=$(cat "$EDITOR_DEFAULT_CONFIG")
 	case "$editor_default_prev" in
-		nano|micro|edit|fresh|hx|nvim) ;;
+		nano|micro|edit|fresh|hx|nvim|ttt) ;;
 		*) echo "Warning: ignoring invalid saved default editor '$editor_default_prev'." >&2; editor_default_prev="" ;;
 	esac
 fi
@@ -858,6 +858,7 @@ if $INTERACTIVE; then
 				edit)  gum_selected="${gum_selected:+$gum_selected,}edit" ;;
 				fresh) gum_selected="${gum_selected:+$gum_selected,}fresh" ;;
 				helix) gum_selected="${gum_selected:+$gum_selected,}helix" ;;
+				ttt) gum_selected="${gum_selected:+$gum_selected,}ttt" ;;
 				nvim)  gum_selected="${gum_selected:+$gum_selected,}nvim" ;;
 			esac
 		done
@@ -865,7 +866,7 @@ if $INTERACTIVE; then
 		gum_args=(--no-limit --header "Select text editors to install:")
 		[ -n "$gum_selected" ] && gum_args+=(--selected "$gum_selected")
 		if ! selected=$(gum choose "${gum_args[@]}" \
-			"micro" "edit" "fresh" "helix" "nvim"); then
+			"micro" "edit" "fresh" "helix" "nvim" "ttt"); then
 			cancel_setup
 		fi
 		editor_list=""
@@ -876,13 +877,14 @@ if $INTERACTIVE; then
 	else
 		echo "Select text editors to install (comma-separated, or 'all', or press Enter to skip):"
 		echo "  Nano is always available and remains the fallback default unless you choose an installed editor instead."
-		for ed_item in "1:micro:micro" "2:edit:edit" "3:fresh:fresh" "4:helix:helix (hx)" "5:nvim:nvim"; do
+		for ed_item in "1:micro:micro" "2:edit:edit" "3:fresh:fresh" "4:helix:helix (hx)" "5:nvim:nvim" "6:ttt:ttt"; do
 			num="${ed_item%%:*}"; rest="${ed_item#*:}"; key="${rest%%:*}"; label="${rest#*:}"
 			case "$key" in
 				micro) desc="modern, intuitive terminal editor" ;;
 				edit)  desc="terminal text editor (Microsoft)" ;;
 				fresh) desc="modern terminal text editor" ;;
 				helix) desc="modal editor (Kakoune-inspired)" ;;
+				ttt) desc="Terminal Text Tool" ;;
 				nvim)  desc="Neovim" ;;
 			esac
 			if [[ ",$editor_prev," == *",${key},"* ]]; then
@@ -891,13 +893,13 @@ if $INTERACTIVE; then
 				echo "  ${num}) ${label} — ${desc}"
 			fi
 		done
-		read -rp "Selection [1,2,3,4,5/all/skip]: " editor_selection
+		read -rp "Selection [1,2,3,4,5,6/all/skip]: " editor_selection
 		if [ -z "$editor_selection" ] && [ -n "$editor_prev" ]; then
 			editor_list="$editor_prev"
 		else
 			editor_list=""
 			if [ "$editor_selection" = "all" ]; then
-				editor_list="micro,edit,fresh,helix,nvim"
+				editor_list="micro,edit,fresh,helix,nvim,ttt"
 			elif [ -n "$editor_selection" ]; then
 				for item in $(echo "$editor_selection" | tr ',' ' '); do
 					case "$item" in
@@ -905,6 +907,7 @@ if $INTERACTIVE; then
 						2) editor_list="${editor_list:+$editor_list,}edit" ;;
 						3) editor_list="${editor_list:+$editor_list,}fresh" ;;
 						4) editor_list="${editor_list:+$editor_list,}helix" ;;
+						6) editor_list="${editor_list:+$editor_list,}ttt" ;;
 						5) editor_list="${editor_list:+$editor_list,}nvim" ;;
 					esac
 				done
@@ -973,6 +976,12 @@ install_fresh() {
 	if command -v fresh &>/dev/null; then echo "Fresh already installed, skipping."; return 0; fi
 	run_with_spinner "Installing Fresh..." sb_install fresh latest || return 1
 	command -v fresh >/dev/null 2>&1
+}
+
+install_ttt() {
+	if command -v ttt &>/dev/null; then echo "TTT already installed, skipping."; return 0; fi
+	run_with_spinner "Installing TTT..." sb_install ttt latest || return 1
+	command -v ttt >/dev/null 2>&1
 }
 
 install_helix() {
@@ -1082,6 +1091,9 @@ for editor in $(echo "$editor_list" | tr ',' ' '); do
 		fresh)
 			if install_fresh; then installed_editors+=("fresh"); committed_editors+=("fresh")
 			else record_failure "Fresh installation failed; new Selection was not committed"; [[ ",$editor_prev," == *",fresh,"* ]] && committed_editors+=("fresh"); fi ;;
+		ttt)
+			if install_ttt; then installed_editors+=("ttt"); committed_editors+=("ttt")
+			else record_failure "TTT installation failed; new Selection was not committed"; [[ ",$editor_prev," == *",ttt,"* ]] && committed_editors+=("ttt"); fi ;;
 		helix)
 			if install_helix; then installed_editors+=("hx"); committed_editors+=("helix")
 			else record_failure "Helix installation failed; new Selection was not committed"; [[ ",$editor_prev," == *",helix,"* ]] && committed_editors+=("helix"); fi ;;

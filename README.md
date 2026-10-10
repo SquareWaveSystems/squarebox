@@ -115,7 +115,7 @@ scripted installs). Values use the same keys as `sqrbx-setup`:
 |----------|---------|
 | `SQUAREBOX_AI` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,omp`) |
 | `SQUAREBOX_SDKS` | language SDKs (`node,python,go,dotnet,rust`) |
-| `SQUAREBOX_EDITORS` | editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
+| `SQUAREBOX_EDITORS` | editors (`micro,edit,fresh,helix,nvim,ttt`; Helix launches as `hx`) |
 | `SQUAREBOX_TUIS` | TUI tools (`lazygit,gh-dash,yazi,elio`) |
 | `SQUAREBOX_MULTIPLEXERS` | multiplexers (`tmux,zellij,herdr`) |
 | `SQUAREBOX_GIT_NAME` / `SQUAREBOX_GIT_EMAIL` | git identity (when no host gitconfig) |
@@ -294,6 +294,7 @@ installed editor instead.
 |------|----------|-------------|
 | [micro](https://github.com/micro-editor/micro) | Go | Modern, intuitive terminal editor |
 | [edit](https://github.com/microsoft/edit) | Rust | Terminal text editor (Microsoft) |
+| [ttt](https://github.com/eugenioenko/ttt) | Go | Terminal Text Tool |
 | [fresh](https://github.com/sinelaw/fresh) | Rust | Modern terminal text editor |
 | [helix](https://github.com/helix-editor/helix) | Rust | Modal editor (Kakoune-inspired) |
 | [nvim](https://github.com/neovim/neovim) | C/Lua | Neovim |
@@ -612,7 +613,7 @@ container environment variables (set to an empty string to opt out of a tier):
 |----------|---------|---------|
 | `SQUAREBOX_DC_AI` | `claude` | AI assistants (`claude,copilot,gemini,codex,opencode,pi,omp`) |
 | `SQUAREBOX_DC_SDKS` | `node` | SDKs (`node,python,go,dotnet,rust`) |
-| `SQUAREBOX_DC_EDITORS` | _(none)_ | Editors (`micro,edit,fresh,helix,nvim`; Helix launches as `hx`) |
+| `SQUAREBOX_DC_EDITORS` | _(none)_ | Editors (`micro,edit,fresh,helix,nvim,ttt`; Helix launches as `hx`) |
 | `SQUAREBOX_DC_TUIS` | _(none)_ | TUI tools (`lazygit,gh-dash,yazi,elio`) |
 | `SQUAREBOX_DC_MULTIPLEXERS` | _(none)_ | Multiplexers (`tmux,zellij,herdr`) |
 
