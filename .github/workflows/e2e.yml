@@ -88,13 +88,13 @@ jobs:
           scripts/e2e-evidence.sh pass build.arm64 "Candidate image builds for arm64"
           scripts/e2e-evidence.sh pass release.identity "Candidate source and image digest share one validated identity"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: candidate-identity
           path: release.json
           retention-days: 14
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: evidence-candidate
           path: evidence
@@ -151,7 +151,7 @@ jobs:
           scripts/e2e-evidence.sh pass devcontainer.postcreate-noninteractive \
             "Dev Container post-create defaults reconcile without prompts even when the orchestrator allocates a pseudo-TTY"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: evidence-modules
@@ -209,7 +209,7 @@ jobs:
               "Trivy reported a fixable critical vulnerability for linux/$ARCH"
           fi
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: evidence-security-${{ matrix.arch }}
@@ -372,7 +372,7 @@ jobs:
           scripts/e2e-evidence.sh pass lifecycle.recreate \
             "A saved tmux Selection is reconciled after Box replacement"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: evidence-image
@@ -409,7 +409,7 @@ jobs:
           '
           scripts/e2e-evidence.sh pass image.arm64-smoke \
             "The exact Candidate starts and exposes pinned tools on arm64"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: evidence-arm64
@@ -483,7 +483,7 @@ jobs:
           test "$(stat -c %u "$SQUAREBOX_WORKSPACE/from-compose")" = "$PUID"
           scripts/e2e-evidence.sh pass compose.lifecycle \
             "Compose force-recreates the exact Candidate while Managed home and Workspace state persist"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: evidence-compose
@@ -549,7 +549,7 @@ jobs:
             'grep -qx home-ok ~/.squarebox-podman-e2e && command -v tmux >/dev/null'
           scripts/e2e-evidence.sh pass podman.rootless \
             "Rootless Podman maps the host user to dev, provisions Box-tier tools, and preserves Workspace and Managed-home state"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: evidence-podman
@@ -585,7 +585,7 @@ jobs:
         env:
           SQUAREBOX_EVIDENCE_DIR: evidence
         run: scripts/e2e-evidence.sh pass powershell.lifecycle "PowerShell lifecycle adapters parse and pass executable safety fixtures natively on Windows"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: evidence-powershell
@@ -599,7 +599,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: evidence-*
           path: evidence
@@ -609,7 +609,7 @@ jobs:
       - name: Display report
         if: always()
         run: cat e2e-report.md
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: e2e-evidence-report
@@ -628,11 +628,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: candidate-identity
           path: release-assets
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: e2e-evidence-report
           path: release-assets
