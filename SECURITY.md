@@ -270,6 +270,25 @@ The `dev` user can invoke passwordless package-management/install commands.
 inside the Box, so the sudo allowlist is an operational control, not a security
 barrier against a malicious Box user.
 
+### Runtime controls at a glance
+
+Each row is a control that shapes what code running in the Box can reach. The
+sections below give the details.
+
+| Control | Default | What you can change | Risk if relaxed or misused | Recommendation |
+| --- | --- | --- | --- | --- |
+| Linux capabilities | All dropped, then `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`, `KILL` re-added (Dev Container also adds `SYS_CHROOT`). | Only by editing Compose, `devcontainer.json`, or the runtime command yourself. The adapters expose no setting for this. | Extra capabilities such as `SYS_ADMIN` or `NET_ADMIN` widen the host kernel surface that container root can reach. | Keep the default set. |
+| PID limit | `4096`. | Same as capabilities. | Without a limit, a fork bomb in the Box can exhaust the host's process table. | Keep the limit. |
+| Package-management sudo | Passwordless `apt-get`, `apt-mark`, `dpkg`, `chown`, and `install` for `dev`, plus narrow `mv`/`rm` forms for staged `/usr/local/bin` promotion. | Not configurable. | This is effectively root inside the Box. It is not a barrier. | Treat every Box process as able to become root inside the Box. |
+| Workspace mount | Read-write at `/workspace`. | Choose the host directory at install time. | Box processes can modify or delete project files, including `.git/hooks` and other config that host tools later run. | Push work regularly, and check `.git/hooks` and build scripts before running them on the host after an unattended session. |
+| Managed home | Persistent volume holding history, `gh` auth, assistant logins, and SDKs. | Not configurable. | Any Box process can read every persisted token. | Use fine-grained, narrowly scoped tokens. Revoke them if the Box may be compromised. |
+| Git identity | Private name/email config only. The host's Git config and credential helpers are never mounted. | Not configurable. | — | — |
+| SSH access | Agent socket plus read-only `config`/`known_hosts` when an agent is available (Bash adapters). Otherwise none. | `SQUAREBOX_MOUNT_SSH=1` / `-MountSsh` mounts `~/.ssh` read-only when no agent is forwarded. | The opt-in exposes private keys to every Box process. A forwarded agent signs for any Box process while it is available. | Use an agent with per-use confirmation, or a dedicated narrow-scope key. Leave the directory mount off. |
+| Network egress | Unrestricted outbound. The Box publishes no ports. | Not yet. An opt-in allowlist is proposed in [ADR 0011](docs/adr/0011-opt-in-egress-allowlist.md). | Any reachable host can receive Workspace content or tokens. On cloud VMs, `169.254.169.254` can hand out instance credentials. | Don't give unattended assistants credentials or Workspace content you couldn't afford to have exfiltrated. |
+| Unattended assistants | Off. The `*-yolo` aliases skip approval prompts only when you invoke them. | Use them or not, per invocation. | They combine every exposure in this table with no human in the loop. | Prefer approval modes. Use `*-yolo` only in a Box whose Workspace, tokens, and SSH access are scoped for it. |
+| Rootless Podman SELinux | `--security-opt label=disable` for the Box. | Not configurable. | SELinux container separation is off. Host file permissions and the declared mounts are the only boundary. | Validate on the target host before using sensitive credentials. |
+| Additional mounts | None beyond those listed above. | Add your own through Compose, Dev Container config, or the runtime command. | Every added mount is fully exposed to Box processes. | Mount the narrowest path you can, and read-only where possible. |
+
 Dev Container and Codespaces builds add the digest-locked official SSH server
 Feature to the derived development image; the published Squarebox Candidate
 does not contain that server. The upstream Feature enables root login in its
